@@ -1,10 +1,10 @@
 let elt = document.getElementById('calculator');
 let calculator = Desmos.GraphingCalculator(elt);
 
-// training_x and training_y are sourced from ./out.js
-
+// some variables are sourced from ./out.js
+training_x = training_x;
 training_y = training_y.replace(/e(.[0-9]+)/g, "*10^{$1}")
-
+iterations = iterations;
 
 const setFolder = folder => {
     const { id, title, children } = folder;
@@ -25,15 +25,19 @@ setFolder({
         { id: 'training_x', latex: 'X=' + training_x },
         { id: 'training_y', latex: 'Y=' + training_y },
         { id: 'training_pairs', latex: '(X,Y)' },
+        //{ type: 'text', text: 'No Training' },
     ],
 })
 
-setFolder({
-    id: 'iter0_folder',
-    title: 'Iteration 0',
-    children: [
-        { type: 'text', text: 'No Training' },
-        { id: 'iter0', latex: 'I_0=' + iter0_training_y },
-        { id: 'iter0_pairs', latex: '(X,I_0)' },
-    ],
-})
+for (const {iter, output} of iterations) {
+    const i = iter;
+    setFolder({
+        id: `iter${i}_folder`,
+        title: `Iteration ${i}`,
+        children: [
+            { id: `iter${i}`, latex: `I_{${i}}=[${output}]`},
+            { id: `iter${i}_pairs`, latex: `(X,I_{${i}})` },
+        ],
+    })
+}
+
