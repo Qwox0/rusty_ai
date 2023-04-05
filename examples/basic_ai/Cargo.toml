@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 rusty_ai = { path = "../../rusty_ai" }
+clap = { version = "4.2.1", features = ["derive"] }
+rand = "0.8.5"
