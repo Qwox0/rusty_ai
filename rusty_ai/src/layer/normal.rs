@@ -31,13 +31,17 @@ impl IsLayer for NormalLayer {
         (&self.weights * inputs)
             .into_iter()
             .map(|x| x + self.bias)
-            .map(crate::util::relu)
+            .map(&self.activation_function)
             .collect()
     }
 }
 
 impl std::fmt::Display for NormalLayer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} Bias: {}", self.weights, self.bias)
+        write!(
+            f,
+            "{} Bias: {}; {}",
+            self.weights, self.bias, self.activation_function
+        )
     }
 }

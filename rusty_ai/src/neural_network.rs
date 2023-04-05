@@ -1,4 +1,4 @@
-use crate::activation_function::ActivationFunction::*;
+use crate::activation_function::ActivationFunction;
 use crate::layer::{IsLayer, Layer};
 use std::iter::once;
 
@@ -8,15 +8,14 @@ pub struct NeuralNetwork {
 }
 
 impl NeuralNetwork {
-    pub fn new(layer_neurons: &[usize]) -> NeuralNetwork {
+    pub fn new(layer_neurons: &[(usize, ActivationFunction)]) -> NeuralNetwork {
         assert!(layer_neurons.len() >= 2);
         NeuralNetwork {
             layers: layer_neurons
                 .windows(2)
-                .map(|neurons| Layer::new(neurons[0], neurons[1], ReLU2))
+                .map(|layer_pair| Layer::new(layer_pair[0].0, layer_pair[1].0, layer_pair[0].1))
                 .chain(once(Layer::new_output(
-                    *layer_neurons.last().expect("last element exists"),
-                    Sigmoid,
+                    layer_neurons.last().expect("last element exists").0,
                 )))
                 .collect::<Vec<_>>(),
         }

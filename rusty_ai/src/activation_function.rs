@@ -1,5 +1,8 @@
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ActivationFunction {
+    /// Identity(x) = x
+    /// Identity(x) = 1
+    Identity,
     /// ReLU(x) = max(0, x)
     /// ReLU'(0) = 0
     ReLU,
@@ -21,6 +24,7 @@ impl ActivationFunction {
     pub fn calculate(&self, input: f64) -> f64 {
         use ActivationFunction::*;
         match self {
+            Identity => input,
             ReLU | ReLU2 => match input {
                 x if x.is_sign_positive() => x,
                 _ => 0.0,
@@ -36,6 +40,7 @@ impl ActivationFunction {
     pub fn derivative(&self, input: f64) -> f64 {
         use ActivationFunction::*;
         match self {
+            Identity => 1.0,
             ReLU => input.is_sign_positive() as i32 as f64, // ReLU'(0) := 0
             ReLU2 => !input.is_sign_negative() as i32 as f64, // ReLU2'(0) := 1
             LeakyReLU(leak_rate) => match input {
@@ -44,6 +49,7 @@ impl ActivationFunction {
             },
             LeakyReLU2(leak_rate) => match input {
                 x if x.is_sign_positive() => 1.0,
+                #[allow(illegal_floating_point_literal_pattern)]
                 0.0 => 1.0,
                 _ => *leak_rate,
             },
@@ -73,5 +79,17 @@ impl FnMut<(f64,)> for ActivationFunction {
 impl Fn<(f64,)> for ActivationFunction {
     extern "rust-call" fn call(&self, args: (f64,)) -> Self::Output {
         self.calculate(args.0)
+    }
+}
+
+impl std::fmt::Display for ActivationFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use ActivationFunction::*;
+        match self {
+            Identity => write!(f, "Identity"),
+            ReLU | ReLU2 => write!(f, "ReLU"),
+            LeakyReLU(a) | LeakyReLU2(a) => write!(f, "Leaky ReLU (a={})", a),
+            Sigmoid => write!(f, "Sigmoid"),
+        }
     }
 }

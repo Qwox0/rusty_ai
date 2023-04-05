@@ -1,18 +1,17 @@
 use super::IsLayer;
+#[allow(unused_imports)]
 use crate::activation_function::ActivationFunction;
 
+/// An [`ActivationFunction`] is used to calculate the vector for the next layer.
+/// => OutputLayers don't have an [`ActivationFunction`]
 #[derive(Debug)]
 pub struct OutputLayer {
     neuron_count: usize,
-    activation_function: ActivationFunction,
 }
 
 impl OutputLayer {
-    pub fn new(neuron_count: usize, activation_function: ActivationFunction) -> OutputLayer {
-        OutputLayer {
-            neuron_count,
-            activation_function,
-        }
+    pub fn new(neuron_count: usize) -> OutputLayer {
+        OutputLayer { neuron_count }
     }
 }
 

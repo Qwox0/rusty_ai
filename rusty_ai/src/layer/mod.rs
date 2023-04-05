@@ -25,8 +25,8 @@ impl Layer {
         Layer::Normal(NormalLayer::new(neuron_count, next_neuron_count, activation_function))
     }
 
-    pub fn new_output(neuron_count: usize, activation_function: ActivationFunction) -> Layer {
-        Layer::Output(OutputLayer::new(neuron_count, activation_function))
+    pub fn new_output(neuron_count: usize) -> Layer {
+        Layer::Output(OutputLayer::new(neuron_count))
     }
 }
 
