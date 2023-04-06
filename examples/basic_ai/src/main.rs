@@ -31,7 +31,7 @@ fn main() {
     let ai = NeuralNetwork::new(
         [1, 2, 3, 2, 1]
             .into_iter()
-            .zip([ReLU2, ReLU2, ReLU2, Sigmoid, Identity])
+            .zip([ReLU2, ReLU2, ReLU2, ReLU2, Identity])
             .collect::<Vec<_>>()
             .as_slice(),
     );
@@ -48,7 +48,7 @@ fn main() {
     let trainings_results = vec![(0usize, iter0_training_y.clone()), (1, iter0_training_y)];
     let result_str = trainings_results
         .iter()
-        .map(|(iter, y)| format!("{{ iter: {iter}, output: {y:?} }}"))
+        .map(|(gen, y)| format!("{{ gen: {gen}, output: {y:?} }}"))
         .collect::<Vec<_>>()
         .join(", ");
 

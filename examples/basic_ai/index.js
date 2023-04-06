@@ -6,21 +6,23 @@ training_x = training_x;
 training_y = training_y.replace(/e(.[0-9]+)/g, "*10^{$1}")
 iterations = iterations;
 
-const setFolder = folder => {
-    const { id, title, children } = folder;
-    let state = calculator.getState()
+function update_state(callback) {
+    let state = calculator.getState();
+    callback(state);
+    calculator.setState(state);
+}
 
+const setFolder = ({ id, title, children }) => update_state(state => {
     state.expressions.list.push({ id, type: 'folder', title });
     for (const child of children) {
         state.expressions.list.push({ id: Math.random(), folderId: id, type: 'expression', ...child });
     }
+});
 
-    calculator.setState(state)
-}
 
 setFolder({
     id: 'training_data_folder',
-    title: 'training data',
+    title: 'Training data',
     children: [
         { id: 'training_x', latex: 'X=' + training_x },
         { id: 'training_y', latex: 'Y=' + training_y },
@@ -29,14 +31,19 @@ setFolder({
     ],
 })
 
-for (const {iter, output} of iterations) {
-    const i = iter;
+update_state(state => state.expressions.list = state
+    .expressions
+    .list
+    .filter(expr => !(expr.type === "expression" && expr.latex === undefined))
+);
+
+for (const { gen, output } of iterations) {
     setFolder({
-        id: `iter${i}_folder`,
-        title: `Iteration ${i}`,
+        id: `gen${gen}_folder`,
+        title: `Generation ${gen}`,
         children: [
-            { id: `iter${i}`, latex: `I_{${i}}=[${output}]`},
-            { id: `iter${i}_pairs`, latex: `(X,I_{${i}})` },
+            { id: `gen${gen}`, latex: `G_{${gen}}=[${output}]` },
+            { id: `gen${gen}_pairs`, latex: `(X,G_{${gen}})` },
         ],
     })
 }
