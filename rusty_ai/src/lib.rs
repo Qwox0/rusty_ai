@@ -10,6 +10,7 @@ pub mod util;
 pub mod layer;
 pub mod neural_network;
 pub mod activation_function;
+pub mod builder;
 
 // Ai Training steps
 // n: number of data points

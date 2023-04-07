@@ -113,3 +113,34 @@ impl<T: Display, const W: usize, const H: usize> std::fmt::Display for Matrix<T,
         )
     }
 }
+
+// Test
+
+use crate::activation_function::ActivationFunction::{self, *};
+use Matrix as ConstMatrix;
+
+#[derive(Debug)]
+struct ConstNN<const LAYERS: usize> {
+    pub layers: [ConstLayer<10, 10>; LAYERS],
+}
+
+#[derive(Debug)]
+pub struct ConstLayer<const INPUTS: usize, const OUTPUTS: usize> {
+    weights: ConstMatrix<f64, INPUTS, OUTPUTS>,
+    bias: f64,
+    activation_function: ActivationFunction,
+}
+
+fn test() {
+    let layers = [get_layer::<1, 2>(), get_layer::<2, 2>()]; // it doesn't work!
+
+    let nn = ConstNN { layers };
+}
+
+fn get_layer<const W: usize, const H: usize>() -> ConstLayer<W, H> {
+    ConstLayer {
+        weights: ConstMatrix::new_random(),
+        bias: rand::random(),
+        activation_function: ReLU2,
+    }
+}
