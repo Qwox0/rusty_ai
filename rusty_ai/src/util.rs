@@ -30,6 +30,16 @@ where
         .fold(T::default(), |acc, (x1, x2)| acc + x1.clone() * x2.clone())
 }
 
+pub fn dot_product2<T, const N: usize>(vec1: &[T; N], vec2: &[T; N]) -> T
+where
+    T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
+{
+    debug_assert_eq!(vec1.len(), vec2.len());
+    vec1.iter()
+        .zip(vec2.iter())
+        .fold(T::default(), |acc, (x1, x2)| acc + x1.clone() * x2.clone())
+}
+
 pub fn relu(x: f64) -> f64 {
     if x.is_sign_positive() {
         x

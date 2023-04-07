@@ -1,19 +1,17 @@
-use rusty_ai::matrix::Matrix;
-use test::{black_box, Bencher};
+use crate::constants::*;
+use crate::macros::make_benches;
+use rusty_ai::{matrix::Matrix, util::dot_product};
 
 trait MatrixBenchmarks {
-    fn get_max_column_width1(&self) -> Vec<usize>;
-    fn get_max_column_width2(&self) -> Vec<usize>;
-    fn get_max_column_width3(&self) -> Vec<usize>;
-    fn get_max_column_width4(&self) -> Vec<usize>;
-    fn get_max_column_width5(&self) -> Vec<usize>;
+    fn v1(&self) -> Vec<usize>;
+    fn v2(&self) -> Vec<usize>;
+    fn v3(&self) -> Vec<usize>;
+    fn v4(&self) -> Vec<usize>;
+    fn v5(&self) -> Vec<usize>;
 }
 
-impl<T> MatrixBenchmarks for Matrix<T>
-where
-    T: std::fmt::Display,
-{
-    fn get_max_column_width1(&self) -> Vec<usize> {
+impl MatrixBenchmarks for Matrix<f64> {
+    fn v1(&self) -> Vec<usize> {
         let mut column_widths = vec![0; *self.get_width()];
         for row in self.get_elements().iter() {
             for (idx, element) in row.iter().enumerate() {
@@ -23,7 +21,7 @@ where
         column_widths
     }
 
-    fn get_max_column_width2(&self) -> Vec<usize> {
+    fn v2(&self) -> Vec<usize> {
         let mut column_widths = vec![0; *self.get_width()];
         for row in self.get_elements().iter() {
             for (max, element) in column_widths.iter_mut().zip(row) {
@@ -33,7 +31,7 @@ where
         column_widths
     }
 
-    fn get_max_column_width3(&self) -> Vec<usize> {
+    fn v3(&self) -> Vec<usize> {
         self.get_elements()
             .iter()
             .fold(vec![0; *self.get_width()], |mut acc, row| {
@@ -44,7 +42,7 @@ where
             })
     }
 
-    fn get_max_column_width4(&self) -> Vec<usize> {
+    fn v4(&self) -> Vec<usize> {
         self.get_elements()
             .iter()
             .fold(vec![0; *self.get_width()], |acc, row| {
@@ -55,7 +53,7 @@ where
             })
     }
 
-    fn get_max_column_width5(&self) -> Vec<usize> {
+    fn v5(&self) -> Vec<usize> {
         self.get_elements()
             .iter()
             .fold(vec![0; *self.get_width()], |acc, row| {
@@ -67,27 +65,12 @@ where
     }
 }
 
-macro_rules! make_benches {
-        ( $($name:ident: $fn:ident),* ) => { $(
-            #[bench]
-            fn $name(b: &mut Bencher) {
-                let m = Matrix::new_random(30, 20);
-                b.iter(|| {
-                    black_box(Matrix::$fn(&m));
-                    /*
-                    for _ in 0..10 {
-                        black_box(Matrix::$fn(&m));
-                    }
-                    */
-                })
-            }
-        )* };
-    }
-
 make_benches! {
-    bench1: get_max_column_width1,
-    bench2: get_max_column_width2,
-    bench3: get_max_column_width3,
-    bench4: get_max_column_width4,
-    bench5: get_max_column_width5
+    Matrix<f64>;
+    Matrix::new_random(MAX_COL_WIDTH_W, MAX_COL_WIDTH_H);
+    v1
+    v2
+    v3
+    v4
+    v5
 }
