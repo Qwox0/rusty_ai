@@ -1,7 +1,7 @@
 use crate::util::macros::impl_getter;
-use crate::util::{dot_product, SetLength};
+use crate::util::{dot_product, dot_product2, SetLength};
 use rand::Rng;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 #[derive(Clone, PartialEq)]
 pub struct Matrix<T> {
@@ -188,3 +188,4 @@ where
             .finish()
     }
 }
+
