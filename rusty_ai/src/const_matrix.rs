@@ -14,7 +14,8 @@ impl<const N: usize> Matrix<f64, N, N> {
     }
 }
 
-impl<T: Clone, const W: usize, const H: usize> Matrix<T, W, H> {
+impl<T, const W: usize, const H: usize> Matrix<T, W, H> {
+    #[inline(always)]
     pub fn from_rows(rows: [[T; W]; H]) -> Matrix<T, W, H> {
         Matrix(rows)
     }
@@ -29,7 +30,13 @@ impl<T: Copy, const W: usize, const H: usize> Matrix<T, W, H> {
 impl<const W: usize, const H: usize> Matrix<f64, W, H> {
     pub fn new_random() -> Matrix<f64, W, H> {
         let mut rng = rand::thread_rng();
-        Matrix([[0; W]; H].map(|row| row.map(|_| rng.gen())))
+        let mut a = [[0.0; W]; H];
+        for row in a.iter_mut() {
+            for elem in row.iter_mut() {
+                *elem = rng.gen();
+            }
+        }
+        Matrix(a)
     }
 }
 

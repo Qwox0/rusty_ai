@@ -1,2 +1,3 @@
-pub mod mul;
-pub mod max_col_width;
+mod mul;
+mod max_col_width;
+mod new_random;

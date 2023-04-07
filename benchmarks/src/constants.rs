@@ -6,3 +6,6 @@ pub const MUL_VEC: [f64; MUL_SIZE_W] = [10.1239712; MUL_SIZE_W];
 
 pub const MAX_COL_WIDTH_W: usize = 20;
 pub const MAX_COL_WIDTH_H: usize = 30;
+
+pub const NEW_RAND_W: usize = 100;
+pub const NEW_RAND_H: usize = 100;
