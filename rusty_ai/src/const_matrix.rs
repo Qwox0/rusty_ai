@@ -1,43 +1,39 @@
-use std::fmt::{Debug, Display};
-
-use rand::Rng;
-
 use crate::util::dot_product2;
+use rand::Rng;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Matrix<T, const WIDTH: usize, const HEIGHT: usize>([[T; WIDTH]; HEIGHT]);
 
-use Matrix as ConstMatrix;
-
-impl<const N: usize> ConstMatrix<f64, N, N> {
-    pub fn identity() -> ConstMatrix<f64, N, N> {
-        ConstMatrix((0..N).into_iter().fold([[0.0; N]; N], |mut acc, i| {
+impl<const N: usize> Matrix<f64, N, N> {
+    pub fn identity() -> Matrix<f64, N, N> {
+        Matrix((0..N).into_iter().fold([[0.0; N]; N], |mut acc, i| {
             acc[i][i] = 1.0;
             acc
         }))
     }
 }
 
-impl<T: Clone, const W: usize, const H: usize> ConstMatrix<T, W, H> {
-    pub fn from_rows(rows: [[T; W]; H]) -> ConstMatrix<T, W, H> {
-        ConstMatrix(rows)
+impl<T: Clone, const W: usize, const H: usize> Matrix<T, W, H> {
+    pub fn from_rows(rows: [[T; W]; H]) -> Matrix<T, W, H> {
+        Matrix(rows)
     }
 }
 
-impl<T: Copy, const W: usize, const H: usize> ConstMatrix<T, W, H> {
-    pub fn with_default(default: T) -> ConstMatrix<T, W, H> {
-        ConstMatrix([[default; W]; H])
+impl<T: Copy, const W: usize, const H: usize> Matrix<T, W, H> {
+    pub fn with_default(default: T) -> Matrix<T, W, H> {
+        Matrix([[default; W]; H])
     }
 }
 
-impl<const W: usize, const H: usize> ConstMatrix<f64, W, H> {
-    pub fn new_random() -> ConstMatrix<f64, W, H> {
+impl<const W: usize, const H: usize> Matrix<f64, W, H> {
+    pub fn new_random() -> Matrix<f64, W, H> {
         let mut rng = rand::thread_rng();
-        ConstMatrix([[0; W]; H].map(|row| row.map(|_| rng.gen())))
+        Matrix([[0; W]; H].map(|row| row.map(|_| rng.gen())))
     }
 }
 
-impl<T, const W: usize, const H: usize> ConstMatrix<T, W, H> {
+impl<T, const W: usize, const H: usize> Matrix<T, W, H> {
     #[inline]
     pub fn get_elements(&self) -> &[[T; W]; H] {
         &self.0
@@ -53,7 +49,7 @@ impl<T, const W: usize, const H: usize> ConstMatrix<T, W, H> {
     }
 }
 
-impl<T, const W: usize, const H: usize> std::ops::Mul<[T; W]> for &ConstMatrix<T, W, H>
+impl<T, const W: usize, const H: usize> std::ops::Mul<[T; W]> for &Matrix<T, W, H>
 where
     T: Default + Copy + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
 {
@@ -78,7 +74,7 @@ where
     }
 }
 
-impl<T: Display, const W: usize, const H: usize> std::fmt::Display for ConstMatrix<T, W, H> {
+impl<T: Display, const W: usize, const H: usize> std::fmt::Display for Matrix<T, W, H> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let column_widths = self.0.iter().fold(vec![0; W], |acc, row| {
             row.iter()
