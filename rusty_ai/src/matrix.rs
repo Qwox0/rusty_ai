@@ -1,9 +1,9 @@
 use crate::util::macros::impl_getter;
-use crate::util::{dot_product, dot_product2, SetLength};
+use crate::util::{dot_product, SetLength};
 use rand::Rng;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Matrix<T> {
     width: usize,
     height: usize,
@@ -94,51 +94,6 @@ macro_rules! impl_mul {
 
 impl_mul! { Matrix<T> &Matrix<T> }
 
-/*
-pub struct Matrix<T, const WIDTH: usize, const HEIGHT: usize> {
-    elements: [[T; WIDTH]; HEIGHT],
-}
-
-impl<T, const WIDTH: usize, const HEIGHT: usize> Matrix<T, WIDTH, HEIGHT>
-where
-    T: Copy,
-{
-    pub fn with_default(default: T) -> Matrix<T, WIDTH, HEIGHT> {
-        Matrix {
-            elements: [[default; WIDTH]; HEIGHT],
-        }
-    }
-}
-
-impl<T, const WIDTH: usize, const HEIGHT: usize> Matrix<T, WIDTH, HEIGHT> {
-    #[inline]
-    pub fn get_row(&self, y: usize) -> Option<&[T; WIDTH]> {
-        self.elements.get(y)
-    }
-
-    pub fn get(&self, y: usize, x: usize) -> Option<&T> {
-        self.get_row(y).map(|row| row.get(x)).flatten()
-    }
-}
-
-impl<T, const WIDTH: usize, const HEIGHT: usize> std::ops::Mul<[T; WIDTH]>
-    for Matrix<T, WIDTH, HEIGHT>
-where
-    T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
-{
-    type Output = [T; WIDTH];
-
-    fn mul(self, rhs: [T; WIDTH]) -> Self::Output {
-        rhs.iter()
-            .enumerate()
-            .map(|(idx, _)| dot_product(&self.get_row(idx).expect(""), &rhs))
-            .collect::<Vec<T>>()
-            .try_into()
-            .unwrap()
-    }
-}
-*/
-
 impl<T> std::fmt::Display for Matrix<T>
 where
     T: std::fmt::Display,
@@ -174,18 +129,3 @@ where
         )
     }
 }
-
-impl<T> std::fmt::Debug for Matrix<T>
-where
-    //T: std::fmt::Display,
-    T: std::fmt::Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Matrix")
-            .field("width", &self.width)
-            .field("height", &self.height)
-            .field("elements", &self.elements)
-            .finish()
-    }
-}
-

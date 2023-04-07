@@ -1,15 +1,11 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 
-// both matrix and const_matrix contain a Matrix struct.
-// only import one of them or use an alias like `use const_matrix::Matrix as Matrix`.
-pub mod matrix;
-pub mod const_matrix;
-
-pub mod util;
-pub mod layer;
-pub mod neural_network;
 pub mod activation_function;
+pub mod layer;
+pub mod matrix;
+pub mod neural_network;
+pub mod util;
 
 // Ai Training steps
 // n: number of data points
