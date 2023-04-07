@@ -76,7 +76,7 @@ impl Layer {
     pub fn calculate(&self, inputs: Vec<f64>) -> Vec<f64> {
         (&self.weights * inputs)
             .apply(|x| x + self.bias)
-            .apply(self.activation_function)
+            .apply(|a| (self.activation_function)(*a))
     }
     pub fn calculate2(&self, inputs: Vec<f64>) -> Vec<f64> {
         let mut res = &self.weights * inputs;
@@ -96,14 +96,17 @@ impl Layer {
 
 // -----------------------------
 pub trait Apply: Sized {
-    type Elem;
+    type Elem: Clone;
     fn apply_mut(self, f: impl FnMut(&mut Self::Elem)) -> Self;
-    fn apply(self, f: impl FnMut(Self::Elem) -> Self::Elem) -> Self {
-        self.apply_mut(|a| *a = f(*a))
+    fn apply(self, mut f: impl FnMut(&Self::Elem) -> Self::Elem) -> Self {
+        self.apply_mut(|a| *a = f(a))
+    }
+    fn apply2(self, mut f: impl FnMut(Self::Elem) -> Self::Elem) -> Self {
+        self.apply_mut(|a| *a = f(a.clone()))
     }
 }
 
-impl<T> Apply for Vec<T> {
+impl<T: Clone> Apply for Vec<T> {
     type Elem = T;
 
     fn apply_mut(mut self, f: impl FnMut(&mut Self::Elem)) -> Self {
@@ -127,7 +130,7 @@ impl std::fmt::Display for Layer {
         let plural_s = |x: usize| if x == 1 { "" } else { "s" };
         if let Input = self.layer_type {
             let input_count = self.get_input_count();
-            write!(f, "{} Input{}", input_count, plural_s(input_count))?;
+            write!(f, "{} Input{}\n", input_count, plural_s(input_count))?;
         }
         write!(
             f,
@@ -136,7 +139,7 @@ impl std::fmt::Display for Layer {
         )?;
         if let Output = self.layer_type {
             let output_count = self.get_neuron_count();
-            write!(f, "{} Output{}", output_count, plural_s(output_count))?;
+            write!(f, "\n{} Output{}", output_count, plural_s(output_count))?;
         }
         Ok(())
     }

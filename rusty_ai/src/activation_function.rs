@@ -1,3 +1,5 @@
+use crate::util::macros::impl_fn_traits;
+
 #[derive(Debug, Clone, Copy)]
 pub enum ActivationFunction {
     /// Identity(x) = x
@@ -60,27 +62,17 @@ impl ActivationFunction {
             }
         }
     }
-}
 
-impl FnOnce<(f64,)> for ActivationFunction {
-    type Output = f64;
-
-    extern "rust-call" fn call_once(self, args: (f64,)) -> Self::Output {
+    pub fn call(&self, args: (f64,)) -> f64 {
         self.calculate(args.0)
+    }
+    pub fn call_ref(&self, args: (&f64,)) -> f64 {
+        self.calculate(*args.0)
     }
 }
 
-impl FnMut<(f64,)> for ActivationFunction {
-    extern "rust-call" fn call_mut(&mut self, args: (f64,)) -> Self::Output {
-        self.calculate(args.0)
-    }
-}
-
-impl Fn<(f64,)> for ActivationFunction {
-    extern "rust-call" fn call(&self, args: (f64,)) -> Self::Output {
-        self.calculate(args.0)
-    }
-}
+impl_fn_traits!(Fn<(f64,)> -> f64: ActivationFunction => call);
+impl_fn_traits!(Fn<(&f64,)> -> f64: ActivationFunction => call_ref);
 
 impl std::fmt::Display for ActivationFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

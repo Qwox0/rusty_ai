@@ -50,27 +50,48 @@ where
 */
 
 pub mod macros {
-    macro_rules! __get_getter {
-        ($name:ident -> $attr: ident: $attr_type: ty) => {
+    /// impl_getter! { Matrix<T>: get_elements -> elements: Vec<Vec<T>> }
+    macro_rules! impl_getter {
+        ( $type:ident: $( $getter:ident -> $attr:ident: $attr_type:ty ),+ $(,)? ) => {
+            impl $type {
+                $( $crate::util::macros::impl_getter! { inner $getter -> $attr: $attr_type } )+
+            }
+        };
+        ( $type:ident < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >: $( $getter: ident -> $attr: ident: $attr_type: ty ),+ $(,)? ) => {
+            impl<$( $lt $( : $clt $(+ $dlt )* )? ),+> $type<$( $lt ),+> {
+                $( $crate::util::macros::impl_getter! { inner $getter -> $attr: $attr_type } )+
+            }
+        };
+        ( inner $name:ident -> $attr:ident : $attr_type:ty ) => {
             #[inline(always)]
             pub fn $name(&self) -> &$attr_type {
                 &self.$attr
             }
         };
     }
-    pub(crate) use __get_getter;
+    pub(crate) use impl_getter;
 
-    macro_rules! impl_getter {
-        ( $type:ident: $( $getter: ident -> $attr: ident: $attr_type: ty ),+ ) => {
-            impl $type {
-                $( $crate::util::macros::__get_getter! { $getter -> $attr: $attr_type } )+
-            }
+    /// impl_fn_traits!(Fn<(f64,)> -> f64: ActivationFunction => call);
+    macro_rules! impl_fn_traits {
+        ( FnOnce < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+            $crate::util::macros::impl_fn_traits! { inner FnOnce<$in> -> $out; $type; $method; call_once; }
         };
-        ( $type:ident < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >: $( $getter: ident -> $attr: ident: $attr_type: ty ),+ ) => {
-            impl<$( $lt $( : $clt $(+ $dlt )* )? ),+> $type<$( $lt ),+> {
-                $( $crate::util::macros::__get_getter! { $getter -> $attr: $attr_type } )+
+        ( FnMut < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+            $crate::util::macros::impl_fn_traits!(FnOnce<$in> -> $out: $type => $method);
+            $crate::util::macros::impl_fn_traits! { inner FnMut<$in>; $type; $method; call_mut; &mut}
+        };
+        ( Fn < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+            $crate::util::macros::impl_fn_traits!(FnMut<$in> -> $out: $type => $method);
+            $crate::util::macros::impl_fn_traits!(inner Fn<$in>; $type; $method; call; &);
+        };
+        ( inner $fn_trait:ident < $in:ty > $( -> $out:ty )? ; $type:ty ; $method:ident ; $call:ident ; $( $self:tt )* ) => {
+            impl $fn_trait<$in> for $type {
+                $( type Output = $out; )?
+                extern "rust-call" fn $call( $($self)* self, args: $in) -> Self::Output {
+                    <$type>::$method(&self, args)
+                }
             }
         };
     }
-    pub(crate) use impl_getter;
+    pub(crate) use impl_fn_traits;
 }

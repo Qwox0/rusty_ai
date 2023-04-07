@@ -1,6 +1,6 @@
 use clap::Parser;
 use rand::Rng;
-use rusty_ai::neural_network::NeuralNetwork;
+use rusty_ai::{builder::NeuralNetworkBuilder, neural_network::NeuralNetwork};
 use std::fmt::Debug;
 
 const JS_OUTPUT_FILE: &str = "./out.js";
@@ -26,22 +26,18 @@ fn main() {
         .collect();
 
     //let training_pairs: Vec<(&f64, &f64)> = training_x.iter().zip(training_y.iter()).collect();
-
     use rusty_ai::activation_function::ActivationFunction::*;
-    let ai = NeuralNetwork::new(
-        [1, 2, 3, 2, 1]
-            .into_iter()
-            .zip([ReLU2, ReLU2, ReLU2, ReLU2, Identity])
-            .collect::<Vec<_>>()
-            .as_slice(),
-    );
+    let ai = NeuralNetworkBuilder::input_layer(1)
+        .hidden_layer(2, ReLU2)
+        .hidden_layers(&[3, 2], ReLU2)
+        .output_layer(1, ReLU2)
+        .build();
 
-    //println!("{:?}", ai);
     println!("ai: {}", ai);
 
     let iter0_training_y: Vec<f64> = training_x
         .iter()
-        .map(|input| ai.calculate(&vec![*input]))
+        .map(|input| ai.calculate(vec![*input]))
         .map(|out| out[0])
         .collect();
 
@@ -77,5 +73,5 @@ fn main() {
     export_to_js!(&mut file => iterations = format!("[{}]", result_str));
 
     let input = vec![0.0];
-    println!("input: {:?} -> output: {:?}", &input, ai.calculate(&input));
+    println!("input: {:?} -> output: {:?}", &input, ai.calculate_ref(&input));
 }

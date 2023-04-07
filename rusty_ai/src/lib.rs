@@ -2,6 +2,7 @@
 #![feature(fn_traits)]
 
 pub mod activation_function;
+pub mod builder;
 pub mod layer;
 pub mod matrix;
 pub mod neural_network;

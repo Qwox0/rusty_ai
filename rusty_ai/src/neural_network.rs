@@ -1,45 +1,36 @@
-use crate::activation_function::ActivationFunction;
-use crate::layer::{IsLayer, Layer};
-use std::iter::once;
+use crate::layer::Layer;
 
 #[derive(Debug)]
 pub struct NeuralNetwork {
     layers: Vec<Layer>,
 }
 
+#[allow(unused)]
+use crate::builder::NeuralNetworkBuilder;
+
 impl NeuralNetwork {
-    pub fn new(layer_neurons: &[(usize, ActivationFunction)]) -> NeuralNetwork {
-        assert!(layer_neurons.len() >= 2);
-        NeuralNetwork {
-            layers: layer_neurons
-                .windows(2)
-                .map(|layer_pair| Layer::new(layer_pair[0].0, layer_pair[1].0, layer_pair[0].1))
-                .chain(once(Layer::new_output(
-                    layer_neurons.last().expect("last element exists").0,
-                )))
-                .collect::<Vec<_>>(),
-        }
+    /// use [`NeuralNetworkBuilder`] instead!
+    pub(crate) fn new(layers: Vec<Layer>) -> NeuralNetwork {
+        NeuralNetwork { layers }
     }
 
-    pub fn calculate(&self, inputs: &Vec<f64>) -> Vec<f64> {
+    pub fn calculate(&self, inputs: Vec<f64>) -> Vec<f64> {
         self.layers
             .iter()
-            .fold(inputs.clone(), |acc, layer| layer.calculate(acc))
+            .skip(1) // first layer is always an input layer which doesn't mutate the input
+            .fold(inputs, |acc, layer| layer.calculate(acc))
+    }
+
+    pub fn calculate_ref(&self, inputs: &Vec<f64>) -> Vec<f64> {
+        self.calculate(inputs.clone())
     }
 }
 
 impl std::fmt::Display for NeuralNetwork {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let input_count = self
-            .layers
-            .get(0)
-            .map(|l| l.get_neuron_count())
-            .unwrap_or(0);
         write!(
             f,
-            "{} Input{}\n{}",
-            input_count,
-            if input_count == 1 { "" } else { "s" },
+            "{}",
             self.layers
                 .iter()
                 .map(ToString::to_string)
