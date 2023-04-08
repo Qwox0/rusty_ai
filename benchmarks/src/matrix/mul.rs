@@ -14,6 +14,6 @@ impl MatrixBenchmarks for Matrix<f64> {
 
 make_benches! {
     Matrix<f64>;
-    Matrix::new_random(MUL_SIZE_W, MUL_SIZE_H);
-    mul: Vec::from(MUL_VEC)
+    Matrix::new_random(MATRIX_MUL_W, MATRIX_MUL_H);
+    mul: fill_rand(MATRIX_MUL_VEC)
 }

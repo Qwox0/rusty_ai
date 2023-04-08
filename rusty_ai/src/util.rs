@@ -18,18 +18,23 @@ pub fn relu(x: f64) -> f64 {
 
 pub trait SetLength {
     type Item;
-    fn set_length(self, length: usize, default: Self::Item) -> Self;
+    fn set_length(self, new_length: usize, default: Self::Item) -> Self;
+    fn to_arr<const N: usize>(self, default: Self::Item) -> [Self::Item; N];
 }
 
 impl<T: Clone> SetLength for Vec<T> {
     type Item = T;
-    fn set_length(self, length: usize, default: Self::Item) -> Self {
-        let missing_len = length - self.len();
-        let missing_elements = (0..missing_len).into_iter().map(|_| default.clone());
-        self.into_iter()
-            .take(length)
-            .chain(missing_elements)
-            .collect()
+    fn set_length(mut self, new_length: usize, default: Self::Item) -> Self {
+        self.resize(new_length, default);
+        self
+    }
+
+    fn to_arr<const N: usize>(self, default: Self::Item) -> [Self::Item; N] {
+        let mut arr = std::array::from_fn::<_, N, _>(|_| default.clone());
+        for (idx, elem) in self.into_iter().enumerate() {
+            arr[idx] = elem;
+        }
+        arr
     }
 }
 
@@ -50,7 +55,7 @@ where
 */
 
 pub mod macros {
-    /// impl_getter! { Matrix<T>: get_elements -> elements: Vec<Vec<T>> }
+    /// impl_getter! { Matrix<T>: get_elements -> elements: Vec<Vec<T>>, }
     macro_rules! impl_getter {
         ( $type:ident: $( $getter:ident -> $attr:ident: $attr_type:ty ),+ $(,)? ) => {
             impl $type {
@@ -94,4 +99,25 @@ pub mod macros {
         };
     }
     pub(crate) use impl_fn_traits;
+
+    macro_rules! impl_new {
+        ( $vis:vis $type:ident : $( $attr:ident : $attrty: ty ),* $(,)? ) => {
+            impl $type {
+                $vis fn new( $( $attr : $attrty ),* ) -> $type {
+                    $type { $( $attr ),* }
+                }
+            }
+        };
+        ( $vis:vis $type:ident : $( $attr:ident : $attrty: ty ),* ; Default ) => {
+            impl $type {
+                $vis fn new( $( $attr : $attrty ),* ) -> $type {
+                    $type {
+                        $( $attr ),* ,
+                        ..Default::default()
+                    }
+                }
+            }
+        };
+    }
+    pub(crate) use impl_new;
 }

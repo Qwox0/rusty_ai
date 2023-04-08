@@ -4,7 +4,7 @@ let calculator = Desmos.GraphingCalculator(elt);
 // some variables are sourced from ./out.js
 training_x = training_x;
 training_y = training_y.replace(/e(.[0-9]+)/g, "*10^{$1}")
-iterations = iterations;
+generations = generations;
 
 function update_state(callback) {
     let state = calculator.getState();
@@ -37,13 +37,15 @@ update_state(state => state.expressions.list = state
     .filter(expr => !(expr.type === "expression" && expr.latex === undefined))
 );
 
-for (const { gen, output } of iterations) {
+for (const { gen, error, outputs } of generations) {
+    console.log(gen, error, outputs)
     setFolder({
         id: `gen${gen}_folder`,
         title: `Generation ${gen}`,
         children: [
-            { id: `gen${gen}`, latex: `G_{${gen}}=[${output}]` },
+            { id: `gen${gen}`, latex: `G_{${gen}}=[${outputs}]` },
             { id: `gen${gen}_pairs`, latex: `(X,G_{${gen}})` },
+            { id: `gen${gen}_err`, latex: `E_{${gen}}=${error}` },
         ],
     })
 }

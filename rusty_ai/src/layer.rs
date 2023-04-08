@@ -1,6 +1,7 @@
 use crate::{
     activation_function::ActivationFunction::{self, *},
     matrix::Matrix,
+    util::macros::{impl_getter, impl_new},
 };
 
 pub trait IsLayer: std::fmt::Display {
@@ -26,21 +27,16 @@ pub struct Layer {
     activation_function: ActivationFunction,
 }
 
-impl Layer {
-    fn new(
-        layer_type: LayerType,
-        weights: Matrix<f64>,
-        bias: f64,
-        activation_function: ActivationFunction,
-    ) -> Layer {
-        Layer {
-            layer_type,
-            weights,
-            bias,
-            activation_function,
-        }
-    }
+impl_getter! { Layer:
+    get_layer_type -> layer_type: LayerType,
+    get_weights -> weights: Matrix<f64>,
+    get_bias -> bias: f64,
+    get_activation_function -> activation_function: ActivationFunction,
+}
 
+impl_new! { Layer: layer_type: LayerType, weights: Matrix<f64>, bias: f64, activation_function: ActivationFunction }
+
+impl Layer {
     pub fn new_input(neurons: usize) -> Layer {
         Layer::new(Input, Matrix::identity(neurons), 0.0, Identity)
     }
@@ -50,7 +46,7 @@ impl Layer {
             Hidden,
             Matrix::new_random(inputs, neurons),
             rand::random(),
-            ReLU2,
+            acti_func,
         )
     }
 
@@ -59,7 +55,7 @@ impl Layer {
             Output,
             Matrix::new_random(inputs, neurons),
             rand::random(),
-            ReLU2,
+            acti_func,
         )
     }
 
@@ -71,59 +67,17 @@ impl Layer {
         *self.weights.get_height()
     }
 
-    /// Input layer doesn't change the input, but multiplies by the identity matrix and uses the
-    /// identity activation function. It might be good to skip the Input layer.
+    /// An Input layer doesn't change the input, but still multiplies by the identity matrix and
+    /// uses the identity activation function. It might be a good idea to skip the Input layer to
+    /// reduce calculations.
     pub fn calculate(&self, inputs: Vec<f64>) -> Vec<f64> {
-        (&self.weights * inputs)
-            .apply(|x| x + self.bias)
-            .apply(|a| (self.activation_function)(*a))
-    }
-    pub fn calculate2(&self, inputs: Vec<f64>) -> Vec<f64> {
-        let mut res = &self.weights * inputs;
-        for x in res.iter_mut() {
-            *x = (self.activation_function)(*x + self.bias)
-        }
-        res
-    }
-    pub fn calculate3(&self, inputs: Vec<f64>) -> Vec<f64> {
         (&self.weights * inputs)
             .into_iter()
             .map(|x| x + self.bias)
-            .map(&self.activation_function)
+            .map(self.activation_function)
             .collect()
     }
 }
-
-// -----------------------------
-pub trait Apply: Sized {
-    type Elem: Clone;
-    fn apply_mut(self, f: impl FnMut(&mut Self::Elem)) -> Self;
-    fn apply(self, mut f: impl FnMut(&Self::Elem) -> Self::Elem) -> Self {
-        self.apply_mut(|a| *a = f(a))
-    }
-    fn apply2(self, mut f: impl FnMut(Self::Elem) -> Self::Elem) -> Self {
-        self.apply_mut(|a| *a = f(a.clone()))
-    }
-}
-
-impl<T: Clone> Apply for Vec<T> {
-    type Elem = T;
-
-    fn apply_mut(mut self, f: impl FnMut(&mut Self::Elem)) -> Self {
-        self.iter_mut().for_each(f);
-        self
-    }
-
-    /*
-    fn apply(mut self, f: impl FnMut(Self::Elem) -> Self::Elem) -> Self {
-        for e in self.iter_mut() {
-            *e = f(*e)
-        }
-        self
-    }
-        */
-}
-// -----------------------------
 
 impl std::fmt::Display for Layer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -5,33 +5,39 @@ pub enum ActivationFunction {
     /// Identity(x) = x
     /// Identity(x) = 1
     Identity,
+
+    /// values: (ReLU'(0))
     /// ReLU(x) = max(0, x)
-    /// ReLU'(0) = 0
-    ReLU,
-    /// ReLU2(x) = max(0, x)
-    /// ReLU2'(0) = 1
-    ReLU2,
-    /// LeakyReLU(x) = max(leak_rate*x, x)
-    /// LeakyReLU'(0) = 0
-    LeakyReLU(f64), // leak_rate
-    /// LeakyReLU2(x) = max(leak_rate*x, x)
-    /// LeakyReLU2'(0) = 1
-    LeakyReLU2(f64),
+    /// ReLU'(0) := self.0
+    ReLU(f64),
+
+    /// values: (leak_rate, LeakyReLU'(0))
+    /// LeakyReLU(x) = max(self.0 * x, x)
+    /// LeakyReLU'(0) := self.1
+    LeakyReLU(f64, f64),
+
     /// Sigmoid(x) = 1/(1 + exp(-x)) = exp(x)/(exp(x) + 1)
     /// Sigmoid'(x) = e^(-x)/(1+e^(-x))^2 = e^x/(1+e^x)^2
     Sigmoid,
 }
 
 impl ActivationFunction {
+    pub fn default_relu() -> ActivationFunction {
+        ActivationFunction::ReLU(1.0)
+    }
+    pub fn default_leaky_relu() -> ActivationFunction {
+        ActivationFunction::LeakyReLU(0.01, 1.0)
+    }
+
     pub fn calculate(&self, input: f64) -> f64 {
         use ActivationFunction::*;
         match self {
             Identity => input,
-            ReLU | ReLU2 => match input {
+            ReLU(_) => match input {
                 x if x.is_sign_positive() => x,
                 _ => 0.0,
             },
-            LeakyReLU(leak_rate) | LeakyReLU2(leak_rate) => match input {
+            LeakyReLU(leak_rate, _) => match input {
                 x if x.is_sign_positive() => x,
                 x => leak_rate * x,
             },
@@ -41,18 +47,16 @@ impl ActivationFunction {
 
     pub fn derivative(&self, input: f64) -> f64 {
         use ActivationFunction::*;
+        #[allow(illegal_floating_point_literal_pattern)] // for pattern: 0.0 => ...
         match self {
             Identity => 1.0,
-            ReLU => input.is_sign_positive() as i32 as f64, // ReLU'(0) := 0
-            ReLU2 => !input.is_sign_negative() as i32 as f64, // ReLU2'(0) := 1
-            LeakyReLU(leak_rate) => match input {
-                x if x.is_sign_positive() => 1.0,
-                _ => *leak_rate, // LeakyReLU'(0) = leak_rate
+            ReLU(d0) => match input {
+                0.0 => *d0,
+                x => x.is_sign_positive() as u8 as f64,
             },
-            LeakyReLU2(leak_rate) => match input {
+            LeakyReLU(leak_rate, d0) => match input {
+                0.0 => *d0,
                 x if x.is_sign_positive() => 1.0,
-                #[allow(illegal_floating_point_literal_pattern)]
-                0.0 => 1.0,
                 _ => *leak_rate,
             },
             Sigmoid => {
@@ -79,8 +83,8 @@ impl std::fmt::Display for ActivationFunction {
         use ActivationFunction::*;
         match self {
             Identity => write!(f, "Identity"),
-            ReLU | ReLU2 => write!(f, "ReLU"),
-            LeakyReLU(a) | LeakyReLU2(a) => write!(f, "Leaky ReLU (a={})", a),
+            ReLU(d0) => write!(f, "ReLU (ReLU'(0)={})", d0),
+            LeakyReLU(a, d0) => write!(f, "Leaky ReLU (a={}; f'(0)={})", a, d0),
             Sigmoid => write!(f, "Sigmoid"),
         }
     }

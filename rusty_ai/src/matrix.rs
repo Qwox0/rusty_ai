@@ -21,7 +21,7 @@ impl_ring! { i8 i16 i32 i64 i128: 0 1 }
 impl_ring! { u8 u16 u32 u64 u128: 0 1 }
 impl_ring! { f32 f64: 0.0 1.0 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Matrix<T> {
     width: usize,
     height: usize,
@@ -36,11 +36,7 @@ impl_getter! { Matrix<T>:
 
 impl<T: Ring + Clone> Matrix<T> {
     pub fn with_zero(width: usize, height: usize) -> Matrix<T> {
-        Matrix {
-            width,
-            height,
-            elements: vec![vec![T::ZERO; width]; height],
-        }
+        Matrix::with_default(width, height, T::ZERO)
     }
 
     /// Creates the `n` by `n` identity Matrix.

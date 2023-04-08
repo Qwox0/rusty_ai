@@ -1,40 +1,70 @@
+mod args;
+
 use clap::Parser;
 use rand::Rng;
-use rusty_ai::{builder::NeuralNetworkBuilder, neural_network::NeuralNetwork};
-use std::fmt::Debug;
+use rusty_ai::{
+    activation_function::ActivationFunction,
+    builder::NeuralNetworkBuilder,
+    export::{ExportToJs, ExportedVariables},
+    export_to_js,
+    results::{TestsResult, TrainingsResult},
+};
 
 const JS_OUTPUT_FILE: &str = "./out.js";
+const INPUTS: usize = 1;
+const TRAINING_RANGE: std::ops::RangeInclusive<f64> = -30.0..=30.0;
 
-#[derive(Debug, clap::Parser)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    #[arg(long, short = 'c', default_value_t = 10)]
-    training_count: usize,
+#[inline(always)]
+fn target_fn(x: &f64) -> f64 {
+    x.exp()
 }
 
 fn main() {
-    let args = Args::parse();
+    let args = args::Args::parse();
 
-    let mut rng = rand::thread_rng();
-    let training_x: Vec<f64> = (0..args.training_count)
-        .map(|_| rng.gen_range(-10.0..=10.0))
-        .collect();
-    let training_y: Vec<f64> = training_x
-        .clone()
-        .into_iter()
-        .map(|x: f64| f64::sin(x))
-        .collect();
+    // remove content
+    std::fs::write(JS_OUTPUT_FILE, "").expect("could write out.js file");
+    let mut js_file = std::fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(JS_OUTPUT_FILE)
+        .expect("could open file");
+    let mut result_names = ExportedVariables::new("generations");
 
-    //let training_pairs: Vec<(&f64, &f64)> = training_x.iter().zip(training_y.iter()).collect();
-    use rusty_ai::activation_function::ActivationFunction::*;
-    let ai = NeuralNetworkBuilder::input_layer(1)
-        .hidden_layer(2, ReLU2)
-        .hidden_layers(&[3, 2], ReLU2)
-        .output_layer(1, ReLU2)
+    // create ai
+    let relu = ActivationFunction::default_relu();
+    let mut ai = NeuralNetworkBuilder::new()
+        .input_layer::<1>()
+        .hidden_layers(&[2, 3, 2], relu)
+        .output_layer::<1>(relu)
         .build();
 
     println!("ai: {}", ai);
 
+    // create training data
+    let mut rng = rand::thread_rng();
+    let training_x: Vec<f64> = (0..args.training_count)
+        .map(|_| rng.gen_range(TRAINING_RANGE))
+        .collect();
+    let training_y: Vec<f64> = training_x.iter().map(target_fn).collect();
+    training_x.export_to_js(&mut js_file, "training_x"); // js doesn't need to know, that inputs are actually Vec<f64> instead of f64
+    training_y.export_to_js(&mut js_file, "training_y");
+
+    let training_x: Vec<[f64; 1]> = training_x.into_iter().map(|x| [x; 1]).collect();
+    let training_y = training_y.into_iter().map(|y| [y; 1]).collect();
+
+    // train ai with training data
+    let no_training_result = ai.test2(&training_x, &training_y);
+    no_training_result.export_to_js(&mut js_file, "gen0_result");
+    result_names.push("gen0_result").export(&mut js_file);
+
+    dbg!(no_training_result);
+
+    //let a = ai.train(training_pairs);
+
+    let out = ai.propagate_many(&training_x);
+
+    /*
     let iter0_training_y: Vec<f64> = training_x
         .iter()
         .map(|input| ai.calculate(vec![*input]))
@@ -51,27 +81,6 @@ fn main() {
     // remove content
     std::fs::write(JS_OUTPUT_FILE, "").expect("could write out.js file");
 
-    macro_rules! export_to_js {
-        ( $js_file:expr => $( $var:ident = $val:expr ),* ) => {{
-            use std::io::prelude::Write;
-            let file: &mut ::std::fs::File = $js_file;
-            $(
-                writeln!(file, "let {} = {};", stringify!($var), $val).expect("could write to file");
-            )*
-        }};
-        ( $js_file:expr => $( $var:ident ),* ) => {
-            export_to_js!($js_file => $( $var = format!("'{:?}'", $var)),*)
-        };
-    }
-
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .append(true)
-        .open(JS_OUTPUT_FILE)
-        .expect("could open file");
-    export_to_js!(&mut file => training_x, training_y);
-    export_to_js!(&mut file => iterations = format!("[{}]", result_str));
-
-    let input = vec![0.0];
-    println!("input: {:?} -> output: {:?}", &input, ai.calculate_ref(&input));
+    export_to_js!(&mut js_file => iterations = format!("[{}]", result_str));
+    */
 }
