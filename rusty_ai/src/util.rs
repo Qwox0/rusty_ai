@@ -18,18 +18,23 @@ pub fn relu(x: f64) -> f64 {
 
 pub trait SetLength {
     type Item;
-    fn set_length(self, length: usize, default: Self::Item) -> Self;
+    fn set_length(self, new_length: usize, default: Self::Item) -> Self;
+    fn to_arr<const N: usize>(self, default: Self::Item) -> [Self::Item; N];
 }
 
 impl<T: Clone> SetLength for Vec<T> {
     type Item = T;
-    fn set_length(self, length: usize, default: Self::Item) -> Self {
-        let missing_len = length - self.len();
-        let missing_elements = (0..missing_len).into_iter().map(|_| default.clone());
-        self.into_iter()
-            .take(length)
-            .chain(missing_elements)
-            .collect()
+    fn set_length(mut self, new_length: usize, default: Self::Item) -> Self {
+        self.resize(new_length, default);
+        self
+    }
+
+    fn to_arr<const N: usize>(self, default: Self::Item) -> [Self::Item; N] {
+        let mut arr = std::array::from_fn::<_, N, _>(|_| default.clone());
+        for (idx, elem) in self.into_iter().enumerate() {
+            arr[idx] = elem;
+        }
+        arr
     }
 }
 
@@ -50,27 +55,69 @@ where
 */
 
 pub mod macros {
-    macro_rules! __get_getter {
-        ($name:ident -> $attr: ident: $attr_type: ty) => {
+    /// impl_getter! { Matrix<T>: get_elements -> elements: Vec<Vec<T>>, }
+    macro_rules! impl_getter {
+        ( $type:ident: $( $getter:ident -> $attr:ident: $attr_type:ty ),+ $(,)? ) => {
+            impl $type {
+                $( $crate::util::macros::impl_getter! { inner $getter -> $attr: $attr_type } )+
+            }
+        };
+        ( $type:ident < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >: $( $getter: ident -> $attr: ident: $attr_type: ty ),+ $(,)? ) => {
+            impl<$( $lt $( : $clt $(+ $dlt )* )? ),+> $type<$( $lt ),+> {
+                $( $crate::util::macros::impl_getter! { inner $getter -> $attr: $attr_type } )+
+            }
+        };
+        ( inner $name:ident -> $attr:ident : $attr_type:ty ) => {
             #[inline(always)]
             pub fn $name(&self) -> &$attr_type {
                 &self.$attr
             }
         };
     }
-    pub(crate) use __get_getter;
+    pub(crate) use impl_getter;
 
-    macro_rules! impl_getter {
-        ( $type:ident: $( $getter: ident -> $attr: ident: $attr_type: ty ),+ ) => {
-            impl $type {
-                $( $crate::util::macros::__get_getter! { $getter -> $attr: $attr_type } )+
-            }
+    /// impl_fn_traits!(Fn<(f64,)> -> f64: ActivationFunction => call);
+    macro_rules! impl_fn_traits {
+        ( FnOnce < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+            $crate::util::macros::impl_fn_traits! { inner FnOnce<$in> -> $out; $type; $method; call_once; }
         };
-        ( $type:ident < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >: $( $getter: ident -> $attr: ident: $attr_type: ty ),+ ) => {
-            impl<$( $lt $( : $clt $(+ $dlt )* )? ),+> $type<$( $lt ),+> {
-                $( $crate::util::macros::__get_getter! { $getter -> $attr: $attr_type } )+
+        ( FnMut < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+            $crate::util::macros::impl_fn_traits!(FnOnce<$in> -> $out: $type => $method);
+            $crate::util::macros::impl_fn_traits! { inner FnMut<$in>; $type; $method; call_mut; &mut}
+        };
+        ( Fn < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+            $crate::util::macros::impl_fn_traits!(FnMut<$in> -> $out: $type => $method);
+            $crate::util::macros::impl_fn_traits!(inner Fn<$in>; $type; $method; call; &);
+        };
+        ( inner $fn_trait:ident < $in:ty > $( -> $out:ty )? ; $type:ty ; $method:ident ; $call:ident ; $( $self:tt )* ) => {
+            impl $fn_trait<$in> for $type {
+                $( type Output = $out; )?
+                extern "rust-call" fn $call( $($self)* self, args: $in) -> Self::Output {
+                    <$type>::$method(&self, args)
+                }
             }
         };
     }
-    pub(crate) use impl_getter;
+    pub(crate) use impl_fn_traits;
+
+    macro_rules! impl_new {
+        ( $vis:vis $type:ident : $( $attr:ident : $attrty: ty ),* $(,)? ) => {
+            impl $type {
+                $vis fn new( $( $attr : $attrty ),* ) -> $type {
+                    $type { $( $attr ),* }
+                }
+            }
+        };
+        ( $vis:vis $type:ident : $( $attr:ident : $attrty: ty ),* ; Default ) => {
+            impl $type {
+                $vis fn new( $( $attr : $attrty ),* ) -> $type {
+                    $type {
+                        $( $attr ),* ,
+                        ..Default::default()
+                    }
+                }
+            }
+        };
+    }
+    pub(crate) use impl_new;
 }

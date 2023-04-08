@@ -1,45 +1,92 @@
-use crate::activation_function::ActivationFunction;
-use crate::layer::{IsLayer, Layer};
-use std::iter::once;
+use crate::{
+    layer::Layer,
+    results::{PropagationResult, TestsResult},
+};
 
 #[derive(Debug)]
-pub struct NeuralNetwork {
+pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
     layers: Vec<Layer>,
+    generation: usize,
 }
 
-impl NeuralNetwork {
-    pub fn new(layer_neurons: &[(usize, ActivationFunction)]) -> NeuralNetwork {
-        assert!(layer_neurons.len() >= 2);
+#[allow(unused)]
+use crate::builder::NeuralNetworkBuilder;
+
+impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
+    /// use [`NeuralNetworkBuilder`] instead!
+    pub(crate) fn new(layers: Vec<Layer>) -> NeuralNetwork<IN, OUT> {
         NeuralNetwork {
-            layers: layer_neurons
-                .windows(2)
-                .map(|layer_pair| Layer::new(layer_pair[0].0, layer_pair[1].0, layer_pair[0].1))
-                .chain(once(Layer::new_output(
-                    layer_neurons.last().expect("last element exists").0,
-                )))
-                .collect::<Vec<_>>(),
+            layers,
+            generation: 0,
         }
     }
 
-    pub fn calculate(&self, inputs: &Vec<f64>) -> Vec<f64> {
+    pub fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
         self.layers
             .iter()
-            .fold(inputs.clone(), |acc, layer| layer.calculate(acc))
+            .skip(1) // first layer is always an input layer which doesn't mutate the input
+            .fold(input.to_vec(), |acc, layer| layer.calculate(acc))
+            .into()
+    }
+
+    pub fn propagate_many(&self, input_list: &Vec<[f64; IN]>) -> Vec<PropagationResult<OUT>> {
+        input_list
+            .iter()
+            .map(|input| self.propagate(input))
+            .collect()
+    }
+
+    pub fn test2<'a>(
+        &'a self,
+        inputs: &'a Vec<[f64; IN]>,
+        expected_outputs: &'a Vec<[f64; OUT]>,
+    ) -> TestsResult<IN, OUT> {
+        assert_eq!(inputs.len(), expected_outputs.len());
+        let outputs = self.propagate_many(inputs);
+        let error = outputs
+            .iter()
+            .zip(expected_outputs)
+            .map(|(out, expected)| out.mean_squarred_error(expected))
+            .sum();
+        TestsResult {
+            generation: self.generation,
+            outputs: outputs.into_iter().map(Into::into).collect(),
+            error,
+        }
+    }
+    pub fn test<'a>(
+        &'a self,
+        data_pairs: &'a Vec<([f64; IN], [f64; OUT])>,
+    ) -> TestsResult<IN, OUT> {
+        let (outputs, error) = data_pairs
+            .iter()
+            .map(|(input, expected_output)| {
+                let output = self.propagate(input);
+                let err = output.mean_squarred_error(expected_output);
+                (output, err)
+            })
+            .fold((vec![], 0.0), |mut acc, (output, err)| {
+                acc.0.push(output.into());
+                acc.1 += err;
+                acc
+            });
+        TestsResult {
+            generation: self.generation,
+            outputs,
+            error,
+        }
+    }
+
+    pub fn train(&mut self, data_pairs: impl Iterator<Item = ([f64; IN], [f64; OUT])>) {
+        todo!()
     }
 }
 
-impl std::fmt::Display for NeuralNetwork {
+impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, OUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let input_count = self
-            .layers
-            .get(0)
-            .map(|l| l.get_neuron_count())
-            .unwrap_or(0);
         write!(
             f,
-            "{} Input{}\n{}",
-            input_count,
-            if input_count == 1 { "" } else { "s" },
+            "{}",
             self.layers
                 .iter()
                 .map(ToString::to_string)
