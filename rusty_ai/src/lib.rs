@@ -7,6 +7,7 @@ pub mod export;
 pub mod layer;
 pub mod matrix;
 pub mod neural_network;
+pub mod optimizer;
 pub mod results;
 pub mod util;
 

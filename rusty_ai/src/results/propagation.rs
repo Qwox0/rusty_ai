@@ -1,4 +1,4 @@
-use crate::util::SetLength;
+use crate::util::{mean_squarred_error, SetLength};
 
 pub struct PropagationResult<const OUT: usize>(pub [f64; OUT]);
 
@@ -20,27 +20,7 @@ impl<const OUT: usize> Into<[f64; OUT]> for PropagationResult<OUT> {
 }
 
 impl<const OUT: usize> PropagationResult<OUT> {
-    /// Mean squarred error: E = 0.5 * ∑ (o_i - t_i)^2 from i = 1 to n
     pub fn mean_squarred_error(&self, expected_output: &[f64; OUT]) -> f64 {
-        0.5 * self
-            .0
-            .iter()
-            .zip(expected_output)
-            .map(|(out, expected)| out - expected)
-            .map(|x| x * x)
-            .sum::<f64>()
+        mean_squarred_error(&self.0, expected_output)
     }
-}
-
-#[derive(Debug)]
-pub struct TestsResult<const IN: usize, const OUT: usize> {
-    pub generation: usize,
-    pub outputs: Vec<[f64; OUT]>,
-    pub error: f64,
-}
-
-pub struct TrainingsResult<'a, const IN: usize, const OUT: usize> {
-    pub input: &'a [f64; IN],
-    pub output: [f64; OUT],
-    pub generation: usize,
 }

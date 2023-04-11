@@ -2,11 +2,7 @@ use std::{iter::once, marker::PhantomData};
 
 use itertools::Itertools;
 
-use crate::{
-    activation_function::ActivationFunction::{self, *},
-    layer::Layer,
-    neural_network::NeuralNetwork,
-};
+use crate::{activation_function::ActivationFunction, layer::Layer, neural_network::NeuralNetwork};
 
 // Markers
 pub struct NoLayer;

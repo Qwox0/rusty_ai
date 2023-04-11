@@ -1,21 +1,26 @@
+use std::ops::{AddAssign, Mul, MulAssign};
+
+use crate::matrix::Matrix;
+
 pub fn dot_product<T>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
 where
     T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
 {
-    debug_assert_eq!(vec1.len(), vec2.len());
+    assert_eq!(vec1.len(), vec2.len());
     vec1.iter()
         .zip(vec2.iter())
         .fold(T::default(), |acc, (x1, x2)| acc + x1.clone() * x2.clone())
 }
 
-pub fn relu(x: f64) -> f64 {
-    if x.is_sign_positive() {
-        x
-    } else {
-        0.0
-    }
+/// Mean squarred error: E = 0.5 * ∑ (o_i - t_i)^2 from i = 1 to n
+pub fn mean_squarred_error<const N: usize>(output: &[f64; N], expected_output: &[f64; N]) -> f64 {
+    0.5 * output
+        .iter()
+        .zip(expected_output)
+        .map(|(out, expected)| out - expected)
+        .map(|x| x * x)
+        .sum::<f64>()
 }
-
 pub trait SetLength {
     type Item;
     fn set_length(self, new_length: usize, default: Self::Item) -> Self;
@@ -39,6 +44,180 @@ impl<T: Clone> SetLength for Vec<T> {
 }
 
 /*
+/// can be used for scalar multiplication ( vec * Scalar(t) / Scalar(t) * vec )
+#[derive(Debug, Clone, Copy)]
+pub struct Scalar(pub f64);
+
+macro_rules! impl_scalar_mul {
+    ( Scalar * $rhs:ty = $out:ty ) => {
+        impl Mul<Scalar> for $rhs {
+            type Output = $out;
+            fn mul(self, rhs: Scalar) -> Self::Output {
+                self.into_iter().map(|x| x * rhs.0).collect()
+            }
+        }
+        impl Mul<$rhs> for Scalar {
+            type Output = $out;
+            fn mul(self, rhs: $rhs) -> Self::Output {
+                rhs * self
+            }
+        }
+    };
+}
+
+impl_scalar_mul! { Scalar * Vec<f64> = Vec<f64> }
+impl_scalar_mul! { Scalar * &Vec<f64> = Vec<f64> }
+impl_scalar_mul! { Scalar * Vec<&f64> = Vec<f64> }
+
+impl MulAssign<Scalar> for Vec<f64> {
+    fn mul_assign(&mut self, rhs: Scalar) {
+        *self = self.iter().map(|x| x * rhs.0).collect();
+    }
+}
+
+impl Mul<Scalar> for Matrix<f64> {
+    type Output = Matrix<f64>;
+    fn mul(mut self, rhs: Scalar) -> Self::Output {
+        for row in self.iter_rows_mut() {
+            *row *= rhs;
+        }
+        self
+    }
+}
+
+impl Mul<Matrix<f64>> for Scalar {
+    type Output = Matrix<f64>;
+    fn mul(self, rhs: Matrix<f64>) -> Self::Output {
+        rhs * self
+    }
+}
+
+// ------------------------
+
+impl<T: Mul<Scalar, Output = T>> Mul<T> for Scalar {
+    type Output = T;
+    fn mul(self, rhs: T) -> Self::Output {
+        rhs * self
+    }
+}
+
+impl<'a, T: 'a> Mul<&T> for Scalar
+where
+    &'a T: Mul<Scalar, Output = T>,
+{
+    type Output = T;
+    fn mul(self, rhs: &T) -> Self::Output {
+        rhs * self
+    }
+}
+*/
+
+//pub struct ArithWrapper<T>(pub T);
+
+pub trait EntryAdd<Rhs = Self>: Sized {
+    /// performs addition entrywise by mutating `self` in place.
+    /// "`self` = `self` + `rhs`"
+    fn add_into(&mut self, rhs: Rhs);
+    /// performs addition entrywise and returns result.
+    /// "return `self` + `rhs`"
+    fn add(mut self, rhs: Rhs) -> Self {
+        self.add_into(rhs);
+        self
+    }
+}
+
+impl EntryAdd<&f64> for f64 {
+    fn add_into(&mut self, rhs: &f64) {
+        *self += rhs;
+    }
+}
+
+impl<'a, T: EntryAdd<&'a T> + 'a> EntryAdd<&'a Vec<T>> for Vec<T> {
+    fn add_into(&mut self, rhs: &'a Vec<T>) {
+        assert_eq!(self.len(), rhs.len());
+        for (x, rhs) in self.iter_mut().zip(rhs) {
+            x.add_into(rhs)
+        }
+    }
+}
+
+impl<T: for<'a> EntryAdd<&'a T>> EntryAdd<T> for T {
+    fn add_into(&mut self, rhs: T) {
+        self.add_into(&rhs)
+    }
+}
+
+pub trait ScalarMul: Sized {
+    /// performs scalar multiplication by mutating `self` in place.
+    /// "`self` = `self` * `scalar`"
+    fn mul_scalar_into(&mut self, scalar: f64);
+    /// performs scalar multiplication and returns result.
+    /// "return `self` * `scalar`"
+    fn mul_scalar(mut self, scalar: f64) -> Self {
+        self.mul_scalar_into(scalar);
+        self
+    }
+}
+
+impl ScalarMul for f64 {
+    fn mul_scalar_into(&mut self, scalar: f64) {
+        *self *= scalar;
+    }
+}
+
+impl<T: ScalarMul> ScalarMul for Vec<T> {
+    fn mul_scalar_into(&mut self, scalar: f64) {
+        self.iter_mut().for_each(|x| x.mul_scalar_into(scalar));
+    }
+}
+
+pub trait EntrySub<Rhs = Self>: Sized {
+    /// performs addition entrywise by mutating `self` in place.
+    /// "`self` = `self` - `rhs`"
+    fn sub_into(&mut self, rhs: Rhs);
+    /// performs subtraction entrywise and returns result.
+    /// "return `self` - `rhs`"
+    fn sub(mut self, rhs: Rhs) -> Self {
+        self.sub_into(rhs);
+        self
+    }
+}
+
+impl<'a, T> EntrySub<&'a T> for T
+where
+    T: EntryAdd<&'a T> + ScalarMul + 'a,
+{
+    fn sub_into(&mut self, rhs: &'a T) {
+        self.mul_scalar_into(-1.0);
+        self.add_into(rhs);
+        self.mul_scalar_into(-1.0);
+    }
+}
+
+impl<T: for<'a> EntrySub<&'a T>> EntrySub<T> for T {
+    fn sub_into(&mut self, rhs: T) {
+        self.sub_into(&rhs);
+    }
+}
+
+/*
+impl EntrySub for f64 {
+    fn sub_into(&mut self, rhs: &Self) {
+        *self -= rhs;
+    }
+}
+
+impl<T: EntrySub> EntrySub for Vec<T> {
+    fn sub_into(&mut self, rhs: &Self) {
+        assert_eq!(self.len(), rhs.len());
+        for (x, rhs) in self.iter_mut().zip(rhs) {
+            x.sub_into(rhs)
+        }
+    }
+}
+*/
+
+/*
 pub trait SetLengthDefault {
     fn set_length_default(self, length: usize) -> Self;
 }
@@ -55,22 +234,32 @@ where
 */
 
 pub mod macros {
-    /// impl_getter! { Matrix<T>: get_elements -> elements: Vec<Vec<T>>, }
+    /// ```rust
+    /// impl Type {
+    ///     impl_getter! { get_num -> num: usize }
+    ///     impl_getter! { get_num_mut -> elements: &mut usize }
+    /// }
+    /// ```
     macro_rules! impl_getter {
-        ( $type:ident: $( $getter:ident -> $attr:ident: $attr_type:ty ),+ $(,)? ) => {
-            impl $type {
-                $( $crate::util::macros::impl_getter! { inner $getter -> $attr: $attr_type } )+
-            }
-        };
-        ( $type:ident < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),+ >: $( $getter: ident -> $attr: ident: $attr_type: ty ),+ $(,)? ) => {
-            impl<$( $lt $( : $clt $(+ $dlt )* )? ),+> $type<$( $lt ),+> {
-                $( $crate::util::macros::impl_getter! { inner $getter -> $attr: $attr_type } )+
-            }
-        };
-        ( inner $name:ident -> $attr:ident : $attr_type:ty ) => {
+        ( $name:ident -> $attr:ident : &mut $( $attr_type:tt )+ ) => {
+            #[allow(unused)]
             #[inline(always)]
-            pub fn $name(&self) -> &$attr_type {
+            pub fn $name(&mut self) -> &mut $($attr_type)+ {
+                &mut self.$attr
+            }
+        };
+        ( $name:ident -> $attr:ident : & $( $attr_type:tt )+ ) => {
+            #[allow(unused)]
+            #[inline(always)]
+            pub fn $name(&self) -> & $($attr_type)+ {
                 &self.$attr
+            }
+        };
+        ( $name:ident -> $attr:ident : $( $attr_type:tt )+ ) => {
+            #[allow(unused)]
+            #[inline(always)]
+            pub fn $name(&self) -> $($attr_type)+ {
+                self.$attr
             }
         };
     }
@@ -100,21 +289,22 @@ pub mod macros {
     }
     pub(crate) use impl_fn_traits;
 
+    /// ```rust
+    /// impl Point {
+    ///     impl_new! { pub x: usize, y: usize }
+    /// }
+    /// ```
     macro_rules! impl_new {
-        ( $vis:vis $type:ident : $( $attr:ident : $attrty: ty ),* $(,)? ) => {
-            impl $type {
-                $vis fn new( $( $attr : $attrty ),* ) -> $type {
-                    $type { $( $attr ),* }
-                }
+        ( $vis:vis $( $attr:ident : $attrty: ty ),* $(,)? ) => {
+            $vis fn new( $( $attr : $attrty ),* ) -> Self {
+                Self { $( $attr ),* }
             }
         };
-        ( $vis:vis $type:ident : $( $attr:ident : $attrty: ty ),* ; Default ) => {
-            impl $type {
-                $vis fn new( $( $attr : $attrty ),* ) -> $type {
-                    $type {
-                        $( $attr ),* ,
-                        ..Default::default()
-                    }
+        ( $vis:vis $( $attr:ident : $attrty: ty ),+ ; Default ) => {
+            $vis fn new( $( $attr : $attrty ),* ) -> Self {
+                Self {
+                    $( $attr ),* ,
+                    ..Default::default()
                 }
             }
         };

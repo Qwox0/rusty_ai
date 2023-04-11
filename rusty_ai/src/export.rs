@@ -1,4 +1,4 @@
-use std::{fmt::Display, fs::File, io::Write};
+use std::{fs::File, io::Write};
 
 pub trait ExportToJs {
     fn export_to_js(&self, js_file: &mut File, variable_name: &str) {
@@ -11,7 +11,7 @@ pub trait ExportToJs {
 #[derive(Debug, Clone)]
 pub struct ExportedVariables {
     name: &'static str,
-    list: Vec<&'static str>,
+    list: Vec<String>,
 }
 
 impl ExportedVariables {
@@ -19,8 +19,8 @@ impl ExportedVariables {
         ExportedVariables { name, list: vec![] }
     }
 
-    pub fn push(&mut self, var: &'static str) -> &Self {
-        self.list.push(var);
+    pub fn push(&mut self, var: impl Into<String>) -> &Self {
+        self.list.push(var.into());
         self
     }
 

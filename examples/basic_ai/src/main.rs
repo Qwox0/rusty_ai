@@ -1,3 +1,4 @@
+#![allow(unused)]
 mod args;
 
 use clap::Parser;
@@ -12,11 +13,11 @@ use rusty_ai::{
 
 const JS_OUTPUT_FILE: &str = "./out.js";
 const INPUTS: usize = 1;
-const TRAINING_RANGE: std::ops::RangeInclusive<f64> = -30.0..=30.0;
+const TRAINING_RANGE: std::ops::RangeInclusive<f64> = -10.0..=10.0;
 
 #[inline(always)]
 fn target_fn(x: &f64) -> f64 {
-    x.exp()
+    x.sin()
 }
 
 fn main() {
@@ -32,24 +33,50 @@ fn main() {
     let mut result_names = ExportedVariables::new("generations");
 
     // create ai
-    let relu = ActivationFunction::default_relu();
+    let relu = ActivationFunction::default_leaky_relu();
     let mut ai = NeuralNetworkBuilder::new()
         .input_layer::<1>()
-        .hidden_layers(&[2, 3, 2], relu)
+        .hidden_layers(&[3, 5, 3], relu)
         .output_layer::<1>(relu)
         .build();
 
     println!("ai: {}", ai);
 
-    // create training data
-    let mut rng = rand::thread_rng();
-    let training_x: Vec<f64> = (0..args.training_count)
-        .map(|_| rng.gen_range(TRAINING_RANGE))
-        .collect();
-    let training_y: Vec<f64> = training_x.iter().map(target_fn).collect();
-    training_x.export_to_js(&mut js_file, "training_x"); // js doesn't need to know, that inputs are actually Vec<f64> instead of f64
-    training_y.export_to_js(&mut js_file, "training_y");
+    fn get_data_pairs(count: usize) -> Vec<([f64; 1], [f64; 1])> {
+        let mut rng = rand::thread_rng();
+        (0..count)
+            .map(|_| rng.gen_range(TRAINING_RANGE))
+            .map(|x| ([x], [target_fn(&x)]))
+            .collect()
+    }
 
+    // create training data
+
+    let mut rng = rand::thread_rng();
+    let test_data = get_data_pairs(100);
+    let (test_x, test_y): (Vec<f64>, Vec<f64>) = test_data
+        .clone()
+        .into_iter()
+        .map(|(x, y)| (x[0], y[0]))
+        .unzip();
+    test_x.export_to_js(&mut js_file, "training_x"); // js doesn't need to know, that inputs are actually Vec<f64> instead of f64
+    test_y.export_to_js(&mut js_file, "training_y");
+
+    let no_training_result = ai.test(&test_data);
+    no_training_result.export_to_js(&mut js_file, "gen0_result");
+    result_names.push("gen0_result").export(&mut js_file);
+
+    for epoch in 1..3 {
+        ai.train(get_data_pairs(args.training_count));
+        if epoch % 1 == 0 {
+            let no_training_result = ai.test(&test_data);
+            let res_name = format!("gen{}_result", epoch);
+            no_training_result.export_to_js(&mut js_file, &res_name);
+            result_names.push(&res_name).export(&mut js_file);
+        }
+    }
+
+    /*
     let training_x: Vec<[f64; 1]> = training_x.into_iter().map(|x| [x; 1]).collect();
     let training_y = training_y.into_iter().map(|y| [y; 1]).collect();
 
@@ -64,6 +91,7 @@ fn main() {
 
     let out = ai.propagate_many(&training_x);
 
+    */
     /*
     let iter0_training_y: Vec<f64> = training_x
         .iter()
