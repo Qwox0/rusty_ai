@@ -1,9 +1,9 @@
-use crate::util::ScalarMul;
 use crate::util::macros::impl_new;
+use crate::util::ScalarMul;
 use crate::util::{dot_product, macros::impl_getter, EntryAdd, SetLength};
 use rand::Rng;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, Mul, AddAssign};
+use std::ops::{Add, Mul};
 
 pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
     const ZERO: Self;
