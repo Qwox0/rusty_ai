@@ -1,8 +1,9 @@
-use crate::util::macros::impl_getter;
-use crate::util::{dot_product, SetLength};
+use crate::util::ScalarMul;
+use crate::util::macros::impl_new;
+use crate::util::{dot_product, macros::impl_getter, EntryAdd, SetLength};
 use rand::Rng;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, AddAssign};
 
 pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
     const ZERO: Self;
@@ -28,29 +29,26 @@ pub struct Matrix<T> {
     elements: Vec<Vec<T>>,
 }
 
-impl_getter! { Matrix<T>:
-    get_width -> width: usize,
-    get_height -> height: usize,
-    get_elements -> elements: Vec<Vec<T>>,
-}
-
-impl<T: Ring + Clone> Matrix<T> {
-    pub fn with_zero(width: usize, height: usize) -> Matrix<T> {
-        Matrix::with_default(width, height, T::ZERO)
-    }
-
-    /// Creates the `n` by `n` identity Matrix.
-    pub fn identity(n: usize) -> Matrix<T> {
-        (0..n)
-            .into_iter()
-            .fold(Matrix::with_zero(n, n), |mut acc, i| {
-                acc.elements[i][i] = T::ONE;
-                acc
-            })
-    }
-}
-
 impl<T> Matrix<T> {
+    impl_new! { pub(crate) width: usize, height: usize, elements: Vec<Vec<T>> }
+    impl_getter! { get_width -> width: usize }
+    impl_getter! { get_height -> height: usize }
+    impl_getter! { get_elements -> elements: &Vec<Vec<T>> }
+    impl_getter! { get_elements_mut -> elements: &mut Vec<Vec<T>> }
+
+    /// Creates a [`Matrix`] containing an empty elements [`Vec`] with a capacity of `height`.
+    /// Insert new rows with `Matrix::push_row`.
+    pub fn new_unchecked(width: usize, height: usize) -> Matrix<T> {
+        Matrix::new(width, height, Vec::with_capacity(height))
+    }
+
+    /// use with `Matrix::new_unchecked`.
+    pub fn push_row(&mut self, row: Vec<T>) {
+        assert!(self.elements.len() < self.height);
+        assert_eq!(row.len(), self.width);
+        self.elements.push(row);
+    }
+
     #[inline]
     pub fn get_row(&self, y: usize) -> Option<&Vec<T>> {
         self.elements.get(y)
@@ -58,6 +56,46 @@ impl<T> Matrix<T> {
 
     pub fn get(&self, y: usize, x: usize) -> Option<&T> {
         self.get_row(y).map(|row| row.get(x)).flatten()
+    }
+
+    pub fn iter_rows(&self) -> impl Iterator<Item = &Vec<T>> {
+        self.elements.iter()
+    }
+
+    pub fn iter_rows_mut(&mut self) -> impl Iterator<Item = &mut Vec<T>> {
+        self.elements.iter_mut()
+    }
+
+    pub fn get_dimensions(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
+}
+/*
+
+impl<T> IntoIterator for Matrix<T> {
+    type Item = &'a Vec<T>;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_rows()
+    }
+}
+*/
+
+impl<T: Ring + Clone> Matrix<T> {
+    pub fn with_zeros(width: usize, height: usize) -> Matrix<T> {
+        Matrix::with_default(width, height, T::ZERO)
+    }
+
+    /// Creates the `n` by `n` identity Matrix.
+    pub fn identity(n: usize) -> Matrix<T> {
+        (0..n)
+            .into_iter()
+            .fold(Matrix::with_zeros(n, n), |mut acc, i| {
+                acc.elements[i][i] = T::ONE;
+                acc
+            })
     }
 }
 
@@ -78,21 +116,7 @@ impl<T: Clone> Matrix<T> {
     }
 
     pub fn with_default(width: usize, height: usize, default: T) -> Matrix<T> {
-        Matrix {
-            width,
-            height,
-            elements: vec![vec![default; width]; height],
-        }
-    }
-}
-
-impl<T: Clone + Default> Matrix<T> {
-    pub fn from_rows_default(rows: Vec<Vec<T>>) -> Matrix<T> {
-        Matrix::from_rows(rows, T::default())
-    }
-
-    pub fn new_default(width: usize, height: usize) -> Matrix<T> {
-        Matrix::with_default(width, height, T::default())
+        Matrix::new(width, height, vec![vec![default; width]; height])
     }
 }
 
@@ -109,26 +133,39 @@ impl Matrix<f64> {
     }
 }
 
+impl EntryAdd<&Matrix<f64>> for Matrix<f64> {
+    fn add_into(&mut self, rhs: &Matrix<f64>) {
+        debug_assert_eq!(self.get_dimensions(), rhs.get_dimensions());
+        self.elements.add_into(&rhs.elements)
+    }
+}
+
+impl ScalarMul for Matrix<f64> {
+    fn mul_scalar_into(&mut self, scalar: f64) {
+        self.elements.mul_scalar_into(scalar)
+    }
+}
+
 macro_rules! impl_mul {
-    ( $( $type:ty )*) => {$(
-        impl<T> std::ops::Mul<Vec<T>> for $type
+    ( $type:ty : $( $rhs:ty )* ) => { $(
+        impl<T> std::ops::Mul<$rhs> for $type
         where
             T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
         {
             type Output = Vec<T>;
 
-            fn mul(self, rhs: Vec<T>) -> Self::Output {
-                debug_assert_eq!(self.width, rhs.len(), "Vector has incompatible dimensions (expected: {}, got: {})", self.width, rhs.len());
+            fn mul(self, rhs: $rhs) -> Self::Output {
+                assert_eq!(self.width, rhs.len(), "Vector has incompatible dimensions (expected: {}, got: {})", self.width, rhs.len());
                 self.elements.iter()
                     .map(|row| dot_product(&row, &rhs))
                     .collect::<Vec<T>>()
             }
         }
-
-    )*};
+    )* };
 }
 
-impl_mul! { Matrix<T> &Matrix<T> }
+impl_mul! { Matrix<T>: Vec<T> &Vec<T> }
+impl_mul! { &Matrix<T>: Vec<T> &Vec<T> }
 
 impl<T: Display> Display for Matrix<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
