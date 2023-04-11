@@ -3,7 +3,6 @@ use crate::{
     matrix::Matrix,
     results::GradientLayer,
     util::{
-        dot_product,
         macros::{impl_getter, impl_new},
         EntryAdd, EntrySub, ScalarMul,
     },
@@ -107,13 +106,6 @@ impl Layer {
         derivative_outputs: Vec<f64>,
         expected_outputs: &Vec<f64>,
     ) -> (f64, Matrix<f64>, Vec<f64>) {
-        // layer_inputs (Neurons) --(weights)-> Neurons in layer -> layer_outputs <- expected_outputs
-        /*
-        println!(
-            "{}\nlayer_inputs {:?}, layer_outputs {:?},derivatives: {:?}, expected_outputs: {:?}",
-            self, &layer_inputs, &layer_outputs, derivative_outputs, &expected_outputs
-        );
-        */
         let layer_input_count = self.get_input_count();
         let layer_neuron_count = self.get_neuron_count();
         assert_eq!(
@@ -199,7 +191,9 @@ impl Layer {
         let layer_input_count = self.get_input_count();
         let layer_neuron_count = self.get_neuron_count();
 
+        #[cfg(debug_assertions)]
         assert!(self.weights.get(0, 0).unwrap().abs() < 1000000.0);
+        #[cfg(debug_assertions)]
         assert!(!self.weights.get(0, 0).unwrap().is_nan());
         assert_eq!(
             derivative_outputs.len(),
@@ -222,17 +216,21 @@ impl Layer {
             "expected_output is the wrong size"
         );
 
-        let now = std::time::Instant::now();
-
+        #[cfg(debug_assertions)]
         print!(
             "expected outputs: {:.4?}; {:.4} got: {:.4?}",
             expected_outputs,
-            " ".repeat(40usize.checked_sub(format!("{expected_outputs:?}").len()).unwrap_or(2)),
+            " ".repeat(
+                40usize
+                    .checked_sub(format!("{expected_outputs:?}").len())
+                    .unwrap_or(2)
+            ),
             layer_outputs
         );
 
         let mut err = layer_outputs.clone().sub(expected_outputs); // size: 2
 
+        #[cfg(debug_assertions)]
         println!("   -> ERR: {err:.4?}");
 
         err.iter_mut()
@@ -253,75 +251,19 @@ impl Layer {
             //input_changes.add_into(weights.clone().mul_scalar(change.signum()));
         }
 
-        println!("BIAS CHANGE   : {:.7}", bias_change);
-        println!("WEIGHTS CHANGE: {:.7?}    (inputs: {:.4?})", weight_changes, layer_inputs);
-        println!("INPUTS CHANGE : {:.7?}    (weights: {:.4?})", input_changes, self.weights);
-
-        let time1 = now.elapsed().as_nanos();
-        /*
-        let now = std::time::Instant::now();
-
-        let res = self
-            .iter_neurons()
-            .zip(derivative_outputs.iter())
-            .zip(layer_outputs)
-            .zip(expected_outputs.iter())
-            .map(|(((l, d), lo), eo)| (l, d, lo, eo))
-            .map(
-                |(neuron_weights, weighted_sum_derivative, output, expected_output)| {
-                    let err = output - expected_output;
-                    //print!("err: {:?} ", err);
-
-                    // dC/db_L       = (o_L_i - e_i) *     f'(z_i)
-                    let dc_dbias = err * weighted_sum_derivative;
-                    // dC/dw_ij      = (o_L_i - e_i) *     f'(z_i) *  o_(L-1)_j
-                    let dc_dweights = layer_inputs.clone().mul_scalar(dc_dbias);
-                    // dC/do_(L-1)_j = (o_L_i - e_i) *     f'(z_i) *       w_ij ()
-                    let dc_dinputs = neuron_weights.clone().mul_scalar(dc_dbias);
-                    /*
-                    println!(
-                        "Bias_d: {}; weights_derivatives: {:?}; inputs_d: {:?}",
-                        &dc_dbias, &dc_dweights, &dc_dinputs
-                    );
-                    */
-
-                    (dc_dbias, dc_dweights, dc_dinputs)
-                },
-            )
-            .fold(
-                (
-                    // sum of partial derivatives with respect to bias
-                    0.0,
-                    // partial derivatives with respect to weights: matrix row i
-                    // contains the weights change of connections to layer neuron i.
-                    Matrix::new_unchecked(layer_input_count, layer_neuron_count),
-                    // sum of partial derivatives with respect to input (next expected output)
-                    vec![0.0; layer_input_count],
-                ),
-                |mut acc, (dc_dbias, dc_dweights, dc_dinputs)| {
-                    acc.0 += dc_dbias;
-                    acc.1.push_row(dc_dweights);
-                    acc.2.add_into(&dc_dinputs);
-                    acc
-                },
+        #[cfg(debug_assertions)]
+        {
+            println!("BIAS CHANGE   : {:.7}", bias_change);
+            println!(
+                "WEIGHTS CHANGE: {:.7?}    (inputs: {:.4?})",
+                weight_changes, layer_inputs
             );
+            println!(
+                "INPUTS CHANGE : {:.7?}    (weights: {:.4?})",
+                input_changes, self.weights
+            );
+        }
 
-        let time2 = now.elapsed().as_nanos();
-
-        dbg!(&res);
-        dbg!((&bias_change, &weight_changes, &input_changes));
-        println!("1:{time1}");
-        println!("2:{time2}");
-
-        println!("{}", res.0);
-        let bias_derivative_average = res.0 / layer_neuron_count as f64;
-        println!("{}", bias_derivative_average);
-        let input_derivative_average = res.2.mul_scalar(1.0 / layer_neuron_count as f64);
-        let res2 = (bias_derivative_average, res.1, input_derivative_average);
-
-        dbg!(&res2);
-        dbg!((&bias_change, &weight_changes, &input_changes));
-        */
         (bias_change, weight_changes, input_changes)
     }
 

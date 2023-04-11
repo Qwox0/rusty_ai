@@ -1,6 +1,3 @@
-use std::ops::{AddAssign, Mul, MulAssign};
-
-use crate::matrix::Matrix;
 
 pub fn dot_product<T>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
 where

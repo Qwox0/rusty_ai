@@ -1,6 +1,6 @@
 use crate::{
     matrix::Matrix,
-    util::{macros::{impl_new, impl_getter}, EntryAdd},
+    util::{macros::impl_new, EntryAdd},
 };
 
 /// Contains the estimated Gradient of the Costfunction with respect to the weights and the bias of

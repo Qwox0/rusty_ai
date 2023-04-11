@@ -1,8 +1,6 @@
 use crate::{
     layer::Layer,
-    optimizer::LEARNING_RATE,
     results::{GradientLayer, PropagationResult, TestsResult},
-    util::{EntryAdd, ScalarMul},
 };
 
 #[derive(Debug)]
@@ -203,18 +201,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
                         &expected_output,
                     );
 
-                    // use output_diff = layer_output-expected_output instead of both
-
-                    /*
-                    println!("\ntotal bias derivative: {}", sum_dc_dbias);
-                    println!("weights derivatives: {:?}", dc_dweights);
-                    println!("total inputs derivatives: {:?}\n", sum_dc_dinputs);
-                    */
                     expected_output = sum_dc_dinputs;
-                    //expected_output = sum_dc_dinputs.mul_scalar(-LEARNING_RATE);
-                    //expected_output = Scalar(-1.0) * sum_dc_dinputs;
-                    //expected_output.add_into(layer_input);
-                    //println!("in: {:?} new_in: {:?}", layer_input, expected_output);
                     gradient
                         .get_mut(rev_layer_idx)
                         .expect("gradient layer exists")
@@ -240,9 +227,6 @@ impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, 
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools;
-    use rand::Rng;
-
     use super::NeuralNetwork;
     use crate::builder::NeuralNetworkBuilder;
     use crate::layer::LayerType::*;
@@ -393,24 +377,22 @@ mod tests {
             ),
         ]);
 
-        // one hidden layer: Gen10: TestsResult { generation: 91, outputs: [[-8.670479574319565], [3.428770522035781], [3.152536785898278], [3.428770522035781]], error: 7.036894229866931 }
-        //
         println!("{:.4}\n", ai);
 
-        println!("[0.05, 0.1] -> [0.01, 0.99]");
-
-        let (all_outputs, all_derivatives) = ai.training_propagate(&[0.05, 0.1]);
-
         let data_pairs = vec![([0.05, 0.1], [0.01, 0.99])];
+        println!("[0.05, 0.1] -> [0.01, 0.99]");
 
         let res = ai.test(&data_pairs);
         println!("{:?}\n\n", res);
 
         ai.train(data_pairs.clone().into_iter());
-
         println!("{:.8}\n", ai);
 
-        println!("END!!!!!!");
-        panic!("END!!!!!!");
+        let weight5 = ai.layers.last().unwrap().get_weights().get(0, 0).unwrap();
+        let expected = 0.35891648;
+        let err = (weight5 - expected).abs();
+
+        println!("err: {}", err);
+        assert!(err < 10f64.powi(-8));
     }
 }
