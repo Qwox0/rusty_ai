@@ -2,7 +2,12 @@ use std::{iter::once, marker::PhantomData};
 
 use itertools::Itertools;
 
-use crate::{activation_function::ActivationFunction, layer::Layer, neural_network::NeuralNetwork};
+use crate::{
+    activation_function::ActivationFunction,
+    layer::Layer,
+    neural_network::NeuralNetwork,
+    optimizer::{Optimizer, OptimizerDispatch},
+};
 
 // Markers
 pub struct NoLayer;
@@ -13,45 +18,53 @@ pub struct Output<const N: usize>;
 pub trait InputOrHidden {}
 impl<const N: usize> InputOrHidden for Input<N> {}
 impl InputOrHidden for Hidden {}
+
+pub struct NoOptimizer;
+pub struct HasOptimizer(OptimizerDispatch);
 // Markers end
 
 #[derive(Debug)]
-pub struct NeuralNetworkBuilder<IN, LAST> {
+pub struct NeuralNetworkBuilder<IN, LAST, OPTIMIZER> {
     layers: Vec<Layer>,
     input: PhantomData<IN>,
     last_layer: PhantomData<LAST>,
+    optimizer: OPTIMIZER,
 }
 
-impl NeuralNetworkBuilder<NoLayer, NoLayer> {
-    pub fn new() -> NeuralNetworkBuilder<NoLayer, NoLayer> {
+impl NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer> {
+    pub fn new() -> NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer> {
         NeuralNetworkBuilder {
             layers: vec![],
             input: PhantomData,
             last_layer: PhantomData,
+            optimizer: NoOptimizer,
         }
     }
-
-    pub fn input_layer<const N: usize>(self) -> NeuralNetworkBuilder<Input<N>, Input<N>> {
+}
+impl<O> NeuralNetworkBuilder<NoLayer, NoLayer, O> {
+    pub fn input_layer<const N: usize>(self) -> NeuralNetworkBuilder<Input<N>, Input<N>, O> {
         NeuralNetworkBuilder {
             layers: vec![Layer::new_input(N)],
             input: PhantomData,
             last_layer: PhantomData,
+            optimizer: self.optimizer,
         }
     }
 }
 
-impl<T: InputOrHidden, const N: usize> NeuralNetworkBuilder<Input<N>, T> {
+impl<T: InputOrHidden, O, const N: usize> NeuralNetworkBuilder<Input<N>, T, O> {
     pub fn hidden_layer(
         mut self,
         neurons: usize,
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Hidden> {
+    ) -> NeuralNetworkBuilder<Input<N>, Hidden, O> {
         self.layers
             .push(Layer::new_hidden(self.last_count(), neurons, act_func));
         NeuralNetworkBuilder {
             layers: self.layers,
             input: PhantomData,
             last_layer: PhantomData,
+            optimizer: self.optimizer,
         }
     }
 
@@ -59,7 +72,7 @@ impl<T: InputOrHidden, const N: usize> NeuralNetworkBuilder<Input<N>, T> {
         mut self,
         neurons_per_layer: &[usize],
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Hidden> {
+    ) -> NeuralNetworkBuilder<Input<N>, Hidden, O> {
         let last_count = self.last_count();
         for (last, count) in once(&last_count).chain(neurons_per_layer).tuple_windows() {
             self.layers.push(Layer::new_hidden(*last, *count, act_func));
@@ -68,19 +81,21 @@ impl<T: InputOrHidden, const N: usize> NeuralNetworkBuilder<Input<N>, T> {
             layers: self.layers,
             input: PhantomData,
             last_layer: PhantomData,
+            optimizer: self.optimizer,
         }
     }
 
     pub fn output_layer<const OUT: usize>(
         mut self,
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Output<OUT>> {
+    ) -> NeuralNetworkBuilder<Input<N>, Output<OUT>, O> {
         self.layers
             .push(Layer::new_output(self.last_count(), OUT, act_func));
         NeuralNetworkBuilder {
             layers: self.layers,
             input: PhantomData,
             last_layer: PhantomData,
+            optimizer: self.optimizer,
         }
     }
 
@@ -92,9 +107,24 @@ impl<T: InputOrHidden, const N: usize> NeuralNetworkBuilder<Input<N>, T> {
     }
 }
 
-impl<const IN: usize, const OUT: usize> NeuralNetworkBuilder<Input<IN>, Output<OUT>> {
-    pub fn build(self) -> NeuralNetwork<IN, OUT> {
-        NeuralNetwork::new(self.layers)
+impl<const IN: usize, const OUT: usize> NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer> {
+    pub fn optimizer(
+        self,
+        optimizer: OptimizerDispatch,
+    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer> {
+        NeuralNetworkBuilder {
+            layers: self.layers,
+            input: PhantomData,
+            last_layer: PhantomData,
+            optimizer: HasOptimizer(optimizer),
+        }
+    }
+}
+
+impl<const IN: usize, const OUT: usize> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer> {
+    pub fn build(mut self) -> NeuralNetwork<IN, OUT> {
+        self.optimizer.0.init_with_layers(&self.layers);
+        NeuralNetwork::new(self.layers, self.optimizer.0)
     }
 }
 

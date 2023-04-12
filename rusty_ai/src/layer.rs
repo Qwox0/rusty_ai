@@ -4,7 +4,7 @@ use crate::{
     results::GradientLayer,
     util::{
         macros::{impl_getter, impl_new},
-        EntryAdd, EntrySub, ScalarMul,
+        EntryAdd, EntryMul, EntrySub, ScalarMul,
     },
 };
 
@@ -24,7 +24,7 @@ use LayerType::*;
 /// Layer: all input weights + bias for all neurons in layer + activation function
 /// The Propagation calculation is done in the same Order
 #[derive(Debug)]
-pub(crate) struct Layer {
+pub struct Layer {
     layer_type: LayerType,
     weights: Matrix<f64>,
     bias: f64,
@@ -144,10 +144,10 @@ impl Layer {
                     //print!("err: {:?} ", err);
 
                     // dC/db_L       = (o_L_i - e_i) *     f'(z_i)
-                    let dc_dbias = err * weighted_sum_derivative;
+                    let dc_dbias = 2.0 * err * weighted_sum_derivative;
                     // dC/dw_ij      = (o_L_i - e_i) *     f'(z_i) *  o_(L-1)_j
                     let dc_dweights = layer_inputs.clone().mul_scalar(dc_dbias);
-                    // dC/do_(L-1)_j = (o_L_i - e_i) *     f'(z_i) *       w_ij ()
+                    // dC/do_(L-1)_j = (o_L_i - e_i) *     f'(z_i) *       w_ij
                     let dc_dinputs = neuron_weights.clone().mul_scalar(dc_dbias);
                     /*
                     println!(
@@ -172,7 +172,7 @@ impl Layer {
                 |mut acc, (dc_dbias, dc_dweights, dc_dinputs)| {
                     acc.0 += dc_dbias;
                     acc.1.push_row(dc_dweights);
-                    acc.2.add_into(&dc_dinputs);
+                    acc.2.mut_add_entries(&dc_dinputs);
                     acc
                 },
             );
@@ -183,10 +183,9 @@ impl Layer {
 
     pub(crate) fn backpropagation2(
         &self,
-        layer_inputs: &Vec<f64>,
-        layer_outputs: &Vec<f64>,
-        derivative_outputs: Vec<f64>,
-        expected_outputs: &Vec<f64>,
+        derivative_output: Vec<f64>,
+        input: &Vec<f64>,
+        output_gradient: Vec<f64>,
     ) -> (f64, Matrix<f64>, Vec<f64>) {
         let layer_input_count = self.get_input_count();
         let layer_neuron_count = self.get_neuron_count();
@@ -196,70 +195,64 @@ impl Layer {
         #[cfg(debug_assertions)]
         assert!(!self.weights.get(0, 0).unwrap().is_nan());
         assert_eq!(
-            derivative_outputs.len(),
+            derivative_output.len(),
             layer_neuron_count,
             "derivatives is the wrong size"
         );
         assert_eq!(
-            layer_inputs.len(),
+            input.len(),
             layer_input_count,
             "layer_inputs is the wrong size"
         );
         assert_eq!(
-            layer_outputs.len(),
+            output_gradient.len(),
             layer_neuron_count,
             "layer_outputs is the wrong size"
         );
+        /*
         assert_eq!(
-            expected_outputs.len(),
+            expected_output.len(),
             layer_neuron_count,
             "expected_output is the wrong size"
         );
 
         #[cfg(debug_assertions)]
         print!(
-            "expected outputs: {:.4?}; {:.4} got: {:.4?}",
-            expected_outputs,
+            "expected outputs: {:.7?}; {:.7} got: {:.7?}",
+            expected_output,
             " ".repeat(
                 40usize
-                    .checked_sub(format!("{expected_outputs:?}").len())
+                    .checked_sub(format!("{expected_output:?}").len())
                     .unwrap_or(2)
             ),
-            layer_outputs
+            output_gradient
         );
+        */
 
-        let mut err = layer_outputs.clone().sub(expected_outputs); // size: 2
+        let input_gradient = output_gradient.mul_entries(derivative_output);
+        println!("   -> CHANGE: {:.7?}", input_gradient);
 
-        #[cfg(debug_assertions)]
-        println!("   -> ERR: {err:.4?}");
+        let bias_change: f64 = input_gradient.iter().sum();
 
-        err.iter_mut()
-            .zip(derivative_outputs.iter())
-            .for_each(|(x, d)| *x *= d);
-        let neuron_change = err;
-
-        let bias_change: f64 = neuron_change.iter().sum(); // size: 1
-
-        let mut weight_changes = Matrix::new_unchecked(layer_input_count, layer_neuron_count); // width: 3, height: 2
-        for neuron in neuron_change.iter() {
-            weight_changes.push_row(layer_inputs.clone().mul_scalar(*neuron));
+        let mut weight_changes = Matrix::new_unchecked(layer_input_count, layer_neuron_count);
+        for neuron in input_gradient.iter() {
+            weight_changes.push_row(input.clone().mul_scalar(*neuron));
         }
 
         let mut input_changes = vec![0.0; layer_input_count];
-        for (weights, change) in self.iter_neurons().zip(neuron_change) {
-            input_changes.add_into(weights.clone().mul_scalar(change));
-            //input_changes.add_into(weights.clone().mul_scalar(change.signum()));
+        for (weights, change) in self.iter_neurons().zip(input_gradient) {
+            input_changes.mut_add_entries(weights.clone().mul_scalar(change));
         }
 
         #[cfg(debug_assertions)]
         {
             println!("BIAS CHANGE   : {:.7}", bias_change);
             println!(
-                "WEIGHTS CHANGE: {:.7?}    (inputs: {:.4?})",
-                weight_changes, layer_inputs
+                "WEIGHTS CHANGE: {:?}    (inputs: {:.7?})",
+                weight_changes, input
             );
             println!(
-                "INPUTS CHANGE : {:.7?}    (weights: {:.4?})",
+                "INPUTS CHANGE : {:.7?}    (weights: {:.7?})",
                 input_changes, self.weights
             );
         }

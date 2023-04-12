@@ -1,14 +1,21 @@
 use crate::{
+    data::DataPair,
     layer::Layer,
+    optimizer::{Optimizer, OptimizerDispatch},
     results::{GradientLayer, PropagationResult, TestsResult},
+    util::{EntrySub, ScalarMul},
 };
 
 #[derive(Debug)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
     layers: Vec<Layer>,
     generation: usize,
-    #[allow(unused)]
-    optimizer: (), // TODO
+    optimizer: OptimizerDispatch,
+}
+
+pub struct NNOptimizationParts<'a> {
+    pub layers: &'a mut Vec<Layer>,
+    pub generation: &'a usize,
 }
 
 #[allow(unused)]
@@ -16,11 +23,11 @@ use crate::builder::NeuralNetworkBuilder;
 
 impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     /// use [`NeuralNetworkBuilder`] instead!
-    pub(crate) fn new(layers: Vec<Layer>) -> NeuralNetwork<IN, OUT> {
+    pub(crate) fn new(layers: Vec<Layer>, optimizer: OptimizerDispatch) -> NeuralNetwork<IN, OUT> {
         NeuralNetwork {
             layers,
             generation: 0,
-            optimizer: (),
+            optimizer,
         }
     }
 
@@ -59,13 +66,13 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     }
     pub fn test<'a>(
         &'a self,
-        data_pairs: &'a Vec<([f64; IN], [f64; OUT])>,
+        data_pairs: impl IntoIterator<Item = &'a DataPair<IN, OUT>>,
     ) -> TestsResult<IN, OUT> {
         let (outputs, error) = data_pairs
-            .iter()
-            .map(|(input, expected_output)| {
-                let output = self.propagate(input);
-                let err = output.mean_squarred_error(expected_output);
+            .into_iter()
+            .map(|pair| {
+                let output = self.propagate(&pair.input);
+                let err = output.mean_squarred_error(&pair.output);
                 (output, err)
             })
             .fold((vec![], 0.0), |mut acc, (output, err)| {
@@ -102,8 +109,10 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         res
     }
 
+    //pub fn train(&mut self, data_pairs: impl IntoIterator<Item = ([f64; IN], [f64; OUT])>) {
+    //pub fn train(&mut self, data_pairs: PairList<IN, OUT>) {
     /// uses a small data set to find an aproximation for the weights gradient.
-    pub fn train(&mut self, data_pairs: impl IntoIterator<Item = ([f64; IN], [f64; OUT])>) {
+    pub fn train<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a DataPair<IN, OUT>>) {
         // estimated gradient, but seperated for each (non input) layer. starts with last layer,
         // ends with second to first
         let mut gradient = self
@@ -113,9 +122,10 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
             .rev()
             .map(Layer::init_gradient)
             .collect();
-        for (input, expected_output) in data_pairs {
+        for (input, expected_output) in data_pairs.into_iter().map(Into::into) {
             let (all_outputs, all_derivatives) = self.training_propagate(&input);
 
+            #[cfg(debug_assertions)]
             println!(
                 "PROPAGATE:\n   {}",
                 all_outputs
@@ -133,9 +143,10 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
 
             self.backpropagation(all_outputs, expected_output, all_derivatives, &mut gradient);
         }
+        #[cfg(debug_assertions)]
         println!("GRADIENT: {:.4?}", gradient);
         assert!(self.layers.len() - 1 == gradient.len());
-        crate::optimizer::optimize_weights(self.layers.iter_mut().skip(1).rev(), gradient);
+        self.optimize_weights(gradient);
         self.generation += 1;
     }
 
@@ -176,38 +187,51 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     fn backpropagation(
         &self,
         outputs: Vec<Vec<f64>>,
-        expected_output: [f64; OUT], // only for the last layer
+        expected_output: &[f64; OUT], // only for the last layer
         derivative_outputs: Vec<Option<Vec<f64>>>,
         gradient: &mut Vec<GradientLayer>,
     ) {
-        let mut expected_output = expected_output.to_vec();
+        let mut outputs = outputs.into_iter().rev();
+
+        // derivatives of the cost function with respect to the output of the neurons in the last layer.
+        let last_output_gradient = outputs
+            .next()
+            .unwrap()
+            .sub_entries(expected_output.to_vec())
+            .mul_scalar(2.0);
+
+        let inputs_rev = outputs;
+
         self.layers
             .iter()
             .zip(derivative_outputs)
             .skip(1) // Input Layer isn't affected by backpropagation
-            .zip(outputs.windows(2))
             .rev()
-            .enumerate()
-            .map(|(idx, ((l, d), win))| (idx, l, d, win.get(0).unwrap(), win.get(1).unwrap()))
-            .for_each(
-                |(rev_layer_idx, layer, derivative_output, layer_input, layer_output)| {
+            .zip(inputs_rev)
+            .zip(gradient.iter_mut())
+            .fold(
+                last_output_gradient,
+                |current_output_gradient, (((layer, derivative_output), input), gradient)| {
                     let derivative_output = derivative_output.expect("layer has derivatives");
 
                     // dc_dx = partial derivative of the cost function with respect to x.
-                    let (sum_dc_dbias, dc_dweights, sum_dc_dinputs) = layer.backpropagation2(
-                        layer_input,
-                        layer_output,
-                        derivative_output,
-                        &expected_output,
-                    );
+                    let (bias_change, weight_gradient, inputs_gradient) =
+                        layer.backpropagation2(derivative_output, &input, current_output_gradient);
 
-                    expected_output = sum_dc_dinputs;
-                    gradient
-                        .get_mut(rev_layer_idx)
-                        .expect("gradient layer exists")
-                        .add_next_backpropagation(dc_dweights, sum_dc_dbias);
+                    gradient.add_next_backpropagation(weight_gradient, bias_change);
+                    inputs_gradient
                 },
             );
+    }
+
+    fn optimize_weights(&mut self, gradient: Vec<GradientLayer>) {
+        self.optimizer.optimize_weights(
+            NNOptimizationParts {
+                layers: &mut self.layers,
+                generation: &self.generation,
+            },
+            gradient,
+        )
     }
 }
 
@@ -229,8 +253,18 @@ impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, 
 mod tests {
     use super::NeuralNetwork;
     use crate::builder::NeuralNetworkBuilder;
+    use crate::data::DataPair;
+    use crate::data_list::PairList;
     use crate::layer::LayerType::*;
-    use crate::{activation_function::ActivationFunction, layer::Layer, matrix::Matrix};
+    use crate::optimizer::OptimizerDispatch;
+    use crate::{
+        activation_function::ActivationFunction::{self, *},
+        layer::Layer,
+        matrix::Matrix,
+    };
+    use itertools::Itertools;
+    use rand::seq::SliceRandom;
+    use std::iter::once;
 
     #[test]
     fn neural_network() {
@@ -257,6 +291,7 @@ mod tests {
             .hidden_layer(5, ActivationFunction::default_relu())
             //.hidden_layer(3, ActivationFunction::default_relu())
             .output_layer::<1>(ActivationFunction::Identity)
+            .optimizer(OptimizerDispatch::gradient_descent(0.5))
             .build();
 
         // one hidden layer: Gen10: TestsResult { generation: 91, outputs: [[-8.670479574319565], [3.428770522035781], [3.152536785898278], [3.428770522035781]], error: 7.036894229866931 }
@@ -265,13 +300,16 @@ mod tests {
 
         //let mut res: Vec<_> = vec![];
 
+        const data_count: usize = 1;
         let get_data = || {
-            rand::random::<[f64; 1]>()
-                .into_iter()
-                .map(|x| x - 0.5)
-                .map(|x| x * 20.0)
-                .map(|x| ([x], [x * 2.0]))
-                .collect::<Vec<_>>()
+            PairList::from(
+                rand::random::<[f64; data_count]>()
+                    .into_iter()
+                    .map(|x| x - 0.5)
+                    .map(|x| x * 20.0)
+                    .map(|x| (x, x * 2.0))
+                    .collect::<Vec<_>>(),
+            )
         };
         /*
 
@@ -312,13 +350,8 @@ mod tests {
 
         for i in 0..100 {
             let data = get_data();
-            println!(
-                "\n\n{}\nai: {ai}\nDATA: {} -> {}",
-                i + 1,
-                data[0].0[0],
-                data[0].1[0]
-            );
-            ai.train(data.clone());
+            println!("\n\n{}\nai: {ai}\nDATA: {}", i + 1, data[0]);
+            ai.train(data.iter());
             println!(
                 "TEST: {:?}\n",
                 ai.test2(
@@ -360,39 +393,166 @@ mod tests {
     /// test backpropagation example calculation from
     /// `https://medium.com/edureka/backpropagation-bd2cf8fdde81`
     #[test]
-    fn neural_network2() {
-        let mut ai = NeuralNetwork::<2, 2>::new(vec![
-            Layer::new_input(2),
-            Layer::new(
-                Hidden,
-                Matrix::from_rows(vec![vec![0.15, 0.2], vec![0.25, 0.3]], 0.0),
-                0.35,
-                ActivationFunction::Sigmoid,
-            ),
-            Layer::new(
-                Output,
-                Matrix::from_rows(vec![vec![0.4, 0.45], vec![0.5, 0.55]], 0.0),
-                0.6,
-                ActivationFunction::Sigmoid,
-            ),
-        ]);
+    fn backpropagation1() {
+        let mut ai = NeuralNetwork::<2, 2>::new(
+            vec![
+                Layer::new_input(2),
+                Layer::new(
+                    Hidden,
+                    Matrix::from_rows(vec![vec![0.15, 0.2], vec![0.25, 0.3]], 0.0),
+                    0.35,
+                    ActivationFunction::Sigmoid,
+                ),
+                Layer::new(
+                    Output,
+                    Matrix::from_rows(vec![vec![0.4, 0.45], vec![0.5, 0.55]], 0.0),
+                    0.6,
+                    ActivationFunction::Sigmoid,
+                ),
+            ],
+            OptimizerDispatch::gradient_descent(0.5),
+        );
 
         println!("{:.4}\n", ai);
 
-        let data_pairs = vec![([0.05, 0.1], [0.01, 0.99])];
-        println!("[0.05, 0.1] -> [0.01, 0.99]");
+        let data_pair = DataPair::from(([0.05, 0.1], [0.01, 0.99]));
+        println!("{data_pair}");
 
-        let res = ai.test(&data_pairs);
+        let res = ai.test(once(&data_pair));
         println!("{:?}\n\n", res);
+        assert!((res.outputs[0][0] - 0.75136507).abs() < 10f64.powi(-8));
+        assert!((res.outputs[0][1] - 0.772928465).abs() < 10f64.powi(-8));
+        // 0.5: different formula for
+        assert!((0.5 * res.error - 0.298371109).abs() < 10f64.powi(-8));
 
-        ai.train(data_pairs.clone().into_iter());
+        ai.train(once(&data_pair));
         println!("{:.8}\n", ai);
 
         let weight5 = ai.layers.last().unwrap().get_weights().get(0, 0).unwrap();
-        let expected = 0.35891648;
-        let err = (weight5 - expected).abs();
+        let err = (weight5 - 0.35891648).abs();
 
         println!("err: {}", err);
         assert!(err < 10f64.powi(-8));
+    }
+
+    /// test backpropagation example calculation from
+    /// `https://alexander-schiendorfer.github.io/2020/02/24/a-worked-example-of-backprop.html`
+    #[test]
+    fn backpropagation2() {
+        const LEARNING_RATE: f64 = 0.1;
+        let mut ai = NeuralNetwork::<2, 2>::new(
+            vec![
+                Layer::new_input(2),
+                Layer::new(
+                    Hidden,
+                    Matrix::from_rows(vec![vec![6.0, -2.0], vec![-3.0, 5.0]], 0.0),
+                    0.0,
+                    ActivationFunction::Sigmoid,
+                ),
+                Layer::new(
+                    Output,
+                    Matrix::from_rows(vec![vec![1.0, 0.25], vec![-2.0, 2.0]], 0.0),
+                    0.0,
+                    ActivationFunction::Sigmoid,
+                ),
+            ],
+            OptimizerDispatch::gradient_descent(LEARNING_RATE),
+        );
+
+        println!("{:.4}\n", ai);
+
+        let data_pair1 = DataPair::from(([3.0, 1.0], [1.0, 0.0]));
+        println!("{}", data_pair1);
+        let res = ai.test(once(&data_pair1));
+        assert!((res.outputs[0][0] - 0.73).abs() < 10f64.powi(-2));
+        assert!((res.outputs[0][1] - 0.12).abs() < 10f64.powi(-2));
+        assert!((res.error - 0.08699208259994781).abs() < 10f64.powi(-8));
+
+        ai.train(once(&data_pair1));
+        println!("{:.8}\n", ai);
+
+        let hidden_layer1 = ai.layers[1].get_weights();
+
+        let w12 = hidden_layer1[(1, 0)];
+        println!("{w12}");
+        let err = (w12 - (-3.0 - LEARNING_RATE * 0.0014201436720081408)).abs();
+        println!("err: {}", err);
+        assert!(err < 10f64.powi(-8));
+
+        let w22 = hidden_layer1[(1, 1)];
+        println!("{w22}");
+        let err = (w22 - (5.0 - LEARNING_RATE * 0.0004733812240027136)).abs();
+        println!("err: {}", err);
+        assert!(err < 10f64.powi(-8));
+    }
+
+    /// https://www.youtube.com/watch?v=6nqV58NA_Ew
+    fn adam_fit(slope: f64, intercept: f64) {
+        const MAX_ITERATION: usize = 2000;
+        const LEARNING_RATE: f64 = 0.01;
+        const BETA1: f64 = 0.9;
+        const BETA2: f64 = 0.999;
+        const EPSILON: f64 = 0.00000001;
+
+        let mut ai = NeuralNetworkBuilder::new()
+            .input_layer::<1>()
+            //.hidden_layer(1, ActivationFunction::Identity)
+            .output_layer::<1>(ActivationFunction::Identity)
+            .optimizer(OptimizerDispatch::default_gradient_descent())
+            /*
+            .optimizer(OptimizerDispatch::Adam(Adam::new(
+                LEARNING_RATE,
+                BETA1,
+                BETA2,
+                EPSILON,
+            )))
+             */
+            .build();
+
+        println!("\nIteration 0: {ai}");
+
+        let mut rng = rand::thread_rng();
+        let idx = [0, 1, 2, 3, 4, 5, 6];
+
+        let x = (1..=7).into_iter().map(f64::from).collect_vec();
+        let mut y = vec![0.0; 7];
+        for (idx, x) in x.iter().enumerate() {
+            y[idx] = slope * x + intercept;
+        }
+        let data_pairs = PairList::from_simple_vecs(x, y);
+
+        for t in 1..=MAX_ITERATION {
+            let data = idx
+                .choose_multiple(&mut rng, 5)
+                .into_iter()
+                .map(|idx| &data_pairs[*idx]);
+            ai.train(data);
+
+            if t % 10usize.pow(t.ilog10()) == 0 {
+                println!("\nIteration {t}: {ai}");
+            }
+        }
+
+        let x = vec![-3.0, 0.0, 1.0, 10.0];
+        let y = x.iter().map(|x| slope * x + intercept).collect();
+        let test = PairList::from_simple_vecs(x, y);
+        let res = ai.test(test.iter());
+        println!("res: {res:?}");
+        assert!(res.error.abs() < 10f64.powi(-8));
+    }
+
+    #[test]
+    fn adam_fit_slope1_intercept0() {
+        adam_fit(1.0, 0.0)
+    }
+
+    #[test]
+    fn adam_fit_slope2_intercept0() {
+        adam_fit(2.0, 0.0)
+    }
+
+    #[test]
+    fn adam_fit_slope2_intercept1() {
+        adam_fit(2.0, 1.0)
     }
 }

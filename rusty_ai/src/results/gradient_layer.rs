@@ -6,7 +6,7 @@ use crate::{
 /// Contains the estimated Gradient of the Costfunction with respect to the weights and the bias of
 /// a layer in
 #[derive(Debug)]
-pub(crate) struct GradientLayer {
+pub struct GradientLayer {
     pub bias_change: f64,
     pub weights_change: Matrix<f64>,
 }
@@ -18,6 +18,6 @@ impl GradientLayer {
 
     pub fn add_next_backpropagation(&mut self, dc_dweights: Matrix<f64>, sum_dc_dbias: f64) {
         self.bias_change += sum_dc_dbias;
-        self.weights_change.add_into(&dc_dweights);
+        self.weights_change.mut_add_entries(&dc_dweights);
     }
 }

@@ -1,4 +1,3 @@
-
 pub fn dot_product<T>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
 where
     T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
@@ -11,7 +10,8 @@ where
 
 /// Mean squarred error: E = 0.5 * ∑ (o_i - t_i)^2 from i = 1 to n
 pub fn mean_squarred_error<const N: usize>(output: &[f64; N], expected_output: &[f64; N]) -> f64 {
-    0.5 * output
+    //0.5 *
+    output
         .iter()
         .zip(expected_output)
         .map(|(out, expected)| out - expected)
@@ -114,88 +114,99 @@ where
 pub trait EntryAdd<Rhs = Self>: Sized {
     /// performs addition entrywise by mutating `self` in place.
     /// "`self` = `self` + `rhs`"
-    fn add_into(&mut self, rhs: Rhs);
+    fn mut_add_entries(&mut self, rhs: Rhs) -> &mut Self;
     /// performs addition entrywise and returns result.
     /// "return `self` + `rhs`"
-    fn add(mut self, rhs: Rhs) -> Self {
-        self.add_into(rhs);
+    fn add_entries(mut self, rhs: Rhs) -> Self {
+        self.mut_add_entries(rhs);
         self
-    }
-}
-
-impl EntryAdd<&f64> for f64 {
-    fn add_into(&mut self, rhs: &f64) {
-        *self += rhs;
-    }
-}
-
-impl<'a, T: EntryAdd<&'a T> + 'a> EntryAdd<&'a Vec<T>> for Vec<T> {
-    fn add_into(&mut self, rhs: &'a Vec<T>) {
-        assert_eq!(self.len(), rhs.len());
-        for (x, rhs) in self.iter_mut().zip(rhs) {
-            x.add_into(rhs)
-        }
-    }
-}
-
-impl<T: for<'a> EntryAdd<&'a T>> EntryAdd<T> for T {
-    fn add_into(&mut self, rhs: T) {
-        self.add_into(&rhs)
-    }
-}
-
-pub trait ScalarMul: Sized {
-    /// performs scalar multiplication by mutating `self` in place.
-    /// "`self` = `self` * `scalar`"
-    fn mul_scalar_into(&mut self, scalar: f64);
-    /// performs scalar multiplication and returns result.
-    /// "return `self` * `scalar`"
-    fn mul_scalar(mut self, scalar: f64) -> Self {
-        self.mul_scalar_into(scalar);
-        self
-    }
-}
-
-impl ScalarMul for f64 {
-    fn mul_scalar_into(&mut self, scalar: f64) {
-        *self *= scalar;
-    }
-}
-
-impl<T: ScalarMul> ScalarMul for Vec<T> {
-    fn mul_scalar_into(&mut self, scalar: f64) {
-        self.iter_mut().for_each(|x| x.mul_scalar_into(scalar));
     }
 }
 
 pub trait EntrySub<Rhs = Self>: Sized {
     /// performs addition entrywise by mutating `self` in place.
     /// "`self` = `self` - `rhs`"
-    fn sub_into(&mut self, rhs: Rhs);
+    fn mut_sub_entries(&mut self, rhs: Rhs) -> &mut Self;
     /// performs subtraction entrywise and returns result.
     /// "return `self` - `rhs`"
-    fn sub(mut self, rhs: Rhs) -> Self {
-        self.sub_into(rhs);
+    fn sub_entries(mut self, rhs: Rhs) -> Self {
+        self.mut_sub_entries(rhs);
         self
     }
 }
 
-impl<'a, T> EntrySub<&'a T> for T
-where
-    T: EntryAdd<&'a T> + ScalarMul + 'a,
-{
-    fn sub_into(&mut self, rhs: &'a T) {
-        self.mul_scalar_into(-1.0);
-        self.add_into(rhs);
-        self.mul_scalar_into(-1.0);
+pub trait EntryMul<Rhs = Self>: Sized {
+    /// performs addition entrywise by mutating `self` in place.
+    /// "`self` = `self` + `rhs`"
+    fn mut_mul_entries(&mut self, rhs: Rhs) -> &mut Self;
+    /// performs addition entrywise and returns result.
+    /// "return `self` + `rhs`"
+    fn mul_entries(mut self, rhs: Rhs) -> Self {
+        self.mut_mul_entries(rhs);
+        self
     }
 }
 
-impl<T: for<'a> EntrySub<&'a T>> EntrySub<T> for T {
-    fn sub_into(&mut self, rhs: T) {
-        self.sub_into(&rhs);
+macro_rules! impl_entry_arithmetic_trait {
+    ( $trait:ident : $trait_fn:ident $op:tt ) => {
+        impl $trait<&f64> for f64 {
+            fn $trait_fn(&mut self, rhs: &f64) -> &mut Self {
+                *self $op rhs;
+                self
+            }
+        }
+
+        impl<'a, T: $trait<&'a T> + 'a> $trait<&'a Vec<T>> for Vec<T> {
+            fn $trait_fn(&mut self, rhs: &'a Vec<T>) -> &mut Self {
+                assert_eq!(self.len(), rhs.len());
+                for (x, rhs) in self.iter_mut().zip(rhs) {
+                    x.$trait_fn(rhs);
+                }
+                self
+            }
+        }
+
+        impl<T: for<'a> $trait<&'a T>> $trait<T> for T {
+            fn $trait_fn(&mut self, rhs: T) -> &mut Self {
+                self.$trait_fn(&rhs)
+            }
+        }
+    };
+}
+
+impl_entry_arithmetic_trait! { EntryAdd : mut_add_entries += }
+impl_entry_arithmetic_trait! { EntrySub : mut_sub_entries -= }
+impl_entry_arithmetic_trait! { EntryMul : mut_mul_entries *= }
+
+pub trait ScalarMul: Sized {
+    /// performs scalar multiplication by mutating `self` in place.
+    /// "`self` = `self` * `scalar`"
+    fn mut_mul_scalar(&mut self, scalar: f64) -> &mut Self;
+    /// performs scalar multiplication and returns result.
+    /// "return `self` * `scalar`"
+    fn mul_scalar(mut self, scalar: f64) -> Self {
+        self.mut_mul_scalar(scalar);
+        self
     }
 }
+
+impl ScalarMul for f64 {
+    fn mut_mul_scalar(&mut self, scalar: f64) -> &mut Self {
+        *self *= scalar;
+        self
+    }
+}
+
+impl<T: ScalarMul> ScalarMul for Vec<T> {
+    fn mut_mul_scalar(&mut self, scalar: f64) -> &mut Self {
+        for x in self.iter_mut() {
+            x.mut_mul_scalar(scalar);
+        }
+        self
+    }
+}
+
+
 
 /*
 impl EntrySub for f64 {
@@ -288,7 +299,7 @@ pub mod macros {
 
     /// ```rust
     /// impl Point {
-    ///     impl_new! { pub x: usize, y: usize }
+    ///     impl_new! { pub x: usize, y: usize; Default }
     /// }
     /// ```
     macro_rules! impl_new {
