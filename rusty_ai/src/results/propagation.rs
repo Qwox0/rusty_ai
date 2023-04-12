@@ -1,5 +1,6 @@
 use crate::util::{mean_squarred_error, SetLength};
 
+#[derive(Debug)]
 pub struct PropagationResult<const OUT: usize>(pub [f64; OUT]);
 
 impl<const OUT: usize> From<Vec<f64>> for PropagationResult<OUT> {

@@ -1,9 +1,9 @@
 use crate::util::macros::impl_new;
-use crate::util::ScalarMul;
+use crate::util::{ScalarMul, EntrySub};
 use crate::util::{dot_product, macros::impl_getter, EntryAdd, SetLength};
 use rand::Rng;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, Mul};
+use std::ops::{Add, Index, Mul};
 
 pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
     const ZERO: Self;
@@ -23,7 +23,7 @@ impl_ring! { u8 u16 u32 u64 u128: 0 1 }
 impl_ring! { f32 f64: 0.0 1.0 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct Matrix<T> {
+pub struct Matrix<T: Sized> {
     width: usize,
     height: usize,
     elements: Vec<Vec<T>>,
@@ -66,6 +66,15 @@ impl<T> Matrix<T> {
         self.elements.iter_mut()
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.iter_rows().map(|row| row.iter()).flatten()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.iter_rows_mut().map(|row| row.iter_mut()).flatten()
+    }
+
+    /// (width, height)
     pub fn get_dimensions(&self) -> (usize, usize) {
         (self.width, self.height)
     }
@@ -134,15 +143,25 @@ impl Matrix<f64> {
 }
 
 impl EntryAdd<&Matrix<f64>> for Matrix<f64> {
-    fn add_into(&mut self, rhs: &Matrix<f64>) {
+    fn mut_add_entries(&mut self, rhs: &Matrix<f64>) -> &mut Self {
         debug_assert_eq!(self.get_dimensions(), rhs.get_dimensions());
-        self.elements.add_into(&rhs.elements)
+        self.elements.mut_add_entries(&rhs.elements);
+        self
+    }
+}
+
+impl EntrySub<&Matrix<f64>> for Matrix<f64> {
+    fn mut_sub_entries(&mut self, rhs: &Matrix<f64>) -> &mut Self {
+        debug_assert_eq!(self.get_dimensions(), rhs.get_dimensions());
+        self.elements.mut_sub_entries(&rhs.elements);
+        self
     }
 }
 
 impl ScalarMul for Matrix<f64> {
-    fn mul_scalar_into(&mut self, scalar: f64) {
-        self.elements.mul_scalar_into(scalar)
+    fn mut_mul_scalar(&mut self, scalar: f64) -> &mut Matrix<f64> {
+        self.elements.mut_mul_scalar(scalar);
+        self
     }
 }
 
@@ -166,6 +185,14 @@ macro_rules! impl_mul {
 
 impl_mul! { Matrix<T>: Vec<T> &Vec<T> }
 impl_mul! { &Matrix<T>: Vec<T> &Vec<T> }
+
+impl<T> Index<(usize, usize)> for Matrix<T> {
+    type Output = T;
+
+    fn index(&self, index: (usize, usize)) -> &Self::Output {
+        &self.elements[index.0][index.1]
+    }
+}
 
 impl<T: Display> Display for Matrix<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

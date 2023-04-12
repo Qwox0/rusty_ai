@@ -3,6 +3,8 @@
 
 pub mod activation_function;
 pub mod builder;
+pub mod data;
+pub mod data_list;
 pub mod export;
 pub mod layer;
 pub mod matrix;
