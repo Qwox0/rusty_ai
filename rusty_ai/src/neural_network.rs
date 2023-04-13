@@ -1,5 +1,6 @@
 use crate::{
     data::DataPair,
+    error_function::ErrorFunction,
     layer::Layer,
     optimizer::{Optimizer, OptimizerDispatch},
     results::{GradientLayer, PropagationResult, TestsResult},
@@ -9,8 +10,9 @@ use crate::{
 #[derive(Debug)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
     layers: Vec<Layer>,
-    generation: usize,
+    error_function: ErrorFunction,
     optimizer: OptimizerDispatch,
+    generation: usize,
 }
 
 pub struct NNOptimizationParts<'a> {
@@ -23,11 +25,16 @@ use crate::builder::NeuralNetworkBuilder;
 
 impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     /// use [`NeuralNetworkBuilder`] instead!
-    pub(crate) fn new(layers: Vec<Layer>, optimizer: OptimizerDispatch) -> NeuralNetwork<IN, OUT> {
+    pub(crate) fn new(
+        layers: Vec<Layer>,
+        error_function: ErrorFunction,
+        optimizer: OptimizerDispatch,
+    ) -> NeuralNetwork<IN, OUT> {
         NeuralNetwork {
             layers,
-            generation: 0,
+            error_function,
             optimizer,
+            generation: 0,
         }
     }
 
@@ -56,7 +63,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         let error = outputs
             .iter()
             .zip(expected_outputs)
-            .map(|(out, expected)| out.mean_squarred_error(expected))
+            .map(|(out, expected)| self.error_function.calculate(&out.0, expected))
             .sum();
         TestsResult {
             generation: self.generation,
@@ -72,7 +79,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
             .into_iter()
             .map(|pair| {
                 let output = self.propagate(&pair.input);
-                let err = output.mean_squarred_error(&pair.output);
+                let err = self.error_function.calculate(&output.0, &pair.output);
                 (output, err)
             })
             .fold((vec![], 0.0), |mut acc, (output, err)| {
@@ -194,11 +201,9 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         let mut outputs = outputs.into_iter().rev();
 
         // derivatives of the cost function with respect to the output of the neurons in the last layer.
-        let last_output_gradient = outputs
-            .next()
-            .unwrap()
-            .sub_entries(expected_output.to_vec())
-            .mul_scalar(2.0);
+        let last_output_gradient = self
+            .error_function
+            .gradient(outputs.next().unwrap(), expected_output.to_vec());
 
         let inputs_rev = outputs;
 
@@ -255,13 +260,10 @@ mod tests {
     use crate::builder::NeuralNetworkBuilder;
     use crate::data::DataPair;
     use crate::data_list::PairList;
+    use crate::error_function::ErrorFunction;
     use crate::layer::LayerType::*;
     use crate::optimizer::OptimizerDispatch;
-    use crate::{
-        activation_function::ActivationFunction::{self, *},
-        layer::Layer,
-        matrix::Matrix,
-    };
+    use crate::{activation_function::ActivationFunction, layer::Layer, matrix::Matrix};
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use std::iter::once;
@@ -300,10 +302,10 @@ mod tests {
 
         //let mut res: Vec<_> = vec![];
 
-        const data_count: usize = 1;
+        const DATA_COUNT: usize = 1;
         let get_data = || {
             PairList::from(
-                rand::random::<[f64; data_count]>()
+                rand::random::<[f64; DATA_COUNT]>()
                     .into_iter()
                     .map(|x| x - 0.5)
                     .map(|x| x * 20.0)
@@ -410,6 +412,7 @@ mod tests {
                     ActivationFunction::Sigmoid,
                 ),
             ],
+            ErrorFunction::HalfSquaredError,
             OptimizerDispatch::gradient_descent(0.5),
         );
 
@@ -423,7 +426,7 @@ mod tests {
         assert!((res.outputs[0][0] - 0.75136507).abs() < 10f64.powi(-8));
         assert!((res.outputs[0][1] - 0.772928465).abs() < 10f64.powi(-8));
         // 0.5: different formula for
-        assert!((0.5 * res.error - 0.298371109).abs() < 10f64.powi(-8));
+        assert!((res.error - 0.298371109).abs() < 10f64.powi(-8));
 
         ai.train(once(&data_pair));
         println!("{:.8}\n", ai);
@@ -456,6 +459,7 @@ mod tests {
                     ActivationFunction::Sigmoid,
                 ),
             ],
+            ErrorFunction::SquaredError,
             OptimizerDispatch::gradient_descent(LEARNING_RATE),
         );
 
@@ -496,9 +500,9 @@ mod tests {
 
         let mut ai = NeuralNetworkBuilder::new()
             .input_layer::<1>()
-            //.hidden_layer(1, ActivationFunction::Identity)
+            .hidden_layer(1, ActivationFunction::Identity)
             .output_layer::<1>(ActivationFunction::Identity)
-            .optimizer(OptimizerDispatch::default_gradient_descent())
+            .optimizer(OptimizerDispatch::gradient_descent(0.01))
             /*
             .optimizer(OptimizerDispatch::Adam(Adam::new(
                 LEARNING_RATE,
@@ -533,7 +537,9 @@ mod tests {
             }
         }
 
+        println!("y = {} * x + {}", slope, intercept);
         let x = vec![-3.0, 0.0, 1.0, 10.0];
+        println!("test for x in {:?}", x);
         let y = x.iter().map(|x| slope * x + intercept).collect();
         let test = PairList::from_simple_vecs(x, y);
         let res = ai.test(test.iter());

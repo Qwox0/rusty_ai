@@ -8,16 +8,6 @@ where
         .fold(T::default(), |acc, (x1, x2)| acc + x1.clone() * x2.clone())
 }
 
-/// Mean squarred error: E = 0.5 * ∑ (o_i - t_i)^2 from i = 1 to n
-pub fn mean_squarred_error<const N: usize>(output: &[f64; N], expected_output: &[f64; N]) -> f64 {
-    //0.5 *
-    output
-        .iter()
-        .zip(expected_output)
-        .map(|(out, expected)| out - expected)
-        .map(|x| x * x)
-        .sum::<f64>()
-}
 pub trait SetLength {
     type Item;
     fn set_length(self, new_length: usize, default: Self::Item) -> Self;
@@ -206,8 +196,6 @@ impl<T: ScalarMul> ScalarMul for Vec<T> {
     }
 }
 
-
-
 /*
 impl EntrySub for f64 {
     fn sub_into(&mut self, rhs: &Self) {
@@ -279,12 +267,12 @@ pub mod macros {
             $crate::util::macros::impl_fn_traits! { inner FnOnce<$in> -> $out; $type; $method; call_once; }
         };
         ( FnMut < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
-            $crate::util::macros::impl_fn_traits!(FnOnce<$in> -> $out: $type => $method);
+            $crate::util::macros::impl_fn_traits! { FnOnce<$in> -> $out: $type => $method }
             $crate::util::macros::impl_fn_traits! { inner FnMut<$in>; $type; $method; call_mut; &mut}
         };
         ( Fn < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
-            $crate::util::macros::impl_fn_traits!(FnMut<$in> -> $out: $type => $method);
-            $crate::util::macros::impl_fn_traits!(inner Fn<$in>; $type; $method; call; &);
+            $crate::util::macros::impl_fn_traits! { FnMut<$in> -> $out: $type => $method }
+            $crate::util::macros::impl_fn_traits! { inner Fn<$in>; $type; $method; call; & }
         };
         ( inner $fn_trait:ident < $in:ty > $( -> $out:ty )? ; $type:ty ; $method:ident ; $call:ident ; $( $self:tt )* ) => {
             impl $fn_trait<$in> for $type {

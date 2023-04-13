@@ -4,6 +4,7 @@ use itertools::Itertools;
 
 use crate::{
     activation_function::ActivationFunction,
+    error_function::ErrorFunction,
     layer::Layer,
     neural_network::NeuralNetwork,
     optimizer::{Optimizer, OptimizerDispatch},
@@ -19,52 +20,66 @@ pub trait InputOrHidden {}
 impl<const N: usize> InputOrHidden for Input<N> {}
 impl InputOrHidden for Hidden {}
 
+pub struct NoErrFn;
+pub struct HasErrFn(ErrorFunction);
+pub trait GetErrFn: Sized {
+    fn get(self) -> ErrorFunction {
+        ErrorFunction::default()
+    }
+}
+impl GetErrFn for NoErrFn {}
+impl GetErrFn for HasErrFn {
+    fn get(self) -> ErrorFunction {
+        self.0
+    }
+}
+
 pub struct NoOptimizer;
 pub struct HasOptimizer(OptimizerDispatch);
 // Markers end
 
 #[derive(Debug)]
-pub struct NeuralNetworkBuilder<IN, LAST, OPTIMIZER> {
+pub struct NeuralNetworkBuilder<IN, LAST, ERRORFN, OPTIMIZER> {
     layers: Vec<Layer>,
     input: PhantomData<IN>,
     last_layer: PhantomData<LAST>,
+    error_function: ERRORFN,
     optimizer: OPTIMIZER,
 }
 
-impl NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer> {
-    pub fn new() -> NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer> {
+impl NeuralNetworkBuilder<NoLayer, NoLayer, NoErrFn, NoOptimizer> {
+    pub fn new() -> NeuralNetworkBuilder<NoLayer, NoLayer, NoErrFn, NoOptimizer> {
         NeuralNetworkBuilder {
             layers: vec![],
             input: PhantomData,
             last_layer: PhantomData,
+            error_function: NoErrFn,
             optimizer: NoOptimizer,
         }
     }
 }
-impl<O> NeuralNetworkBuilder<NoLayer, NoLayer, O> {
-    pub fn input_layer<const N: usize>(self) -> NeuralNetworkBuilder<Input<N>, Input<N>, O> {
+impl<EF, O> NeuralNetworkBuilder<NoLayer, NoLayer, EF, O> {
+    pub fn input_layer<const N: usize>(self) -> NeuralNetworkBuilder<Input<N>, Input<N>, EF, O> {
         NeuralNetworkBuilder {
             layers: vec![Layer::new_input(N)],
             input: PhantomData,
             last_layer: PhantomData,
-            optimizer: self.optimizer,
+            ..self
         }
     }
 }
 
-impl<T: InputOrHidden, O, const N: usize> NeuralNetworkBuilder<Input<N>, T, O> {
+impl<LL: InputOrHidden, EF, O, const N: usize> NeuralNetworkBuilder<Input<N>, LL, EF, O> {
     pub fn hidden_layer(
         mut self,
         neurons: usize,
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Hidden, O> {
+    ) -> NeuralNetworkBuilder<Input<N>, Hidden, EF, O> {
         self.layers
             .push(Layer::new_hidden(self.last_count(), neurons, act_func));
         NeuralNetworkBuilder {
-            layers: self.layers,
-            input: PhantomData,
             last_layer: PhantomData,
-            optimizer: self.optimizer,
+            ..self
         }
     }
 
@@ -72,30 +87,26 @@ impl<T: InputOrHidden, O, const N: usize> NeuralNetworkBuilder<Input<N>, T, O> {
         mut self,
         neurons_per_layer: &[usize],
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Hidden, O> {
+    ) -> NeuralNetworkBuilder<Input<N>, Hidden, EF, O> {
         let last_count = self.last_count();
         for (last, count) in once(&last_count).chain(neurons_per_layer).tuple_windows() {
             self.layers.push(Layer::new_hidden(*last, *count, act_func));
         }
         NeuralNetworkBuilder {
-            layers: self.layers,
-            input: PhantomData,
             last_layer: PhantomData,
-            optimizer: self.optimizer,
+            ..self
         }
     }
 
     pub fn output_layer<const OUT: usize>(
         mut self,
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Output<OUT>, O> {
+    ) -> NeuralNetworkBuilder<Input<N>, Output<OUT>, EF, O> {
         self.layers
             .push(Layer::new_output(self.last_count(), OUT, act_func));
         NeuralNetworkBuilder {
-            layers: self.layers,
-            input: PhantomData,
             last_layer: PhantomData,
-            optimizer: self.optimizer,
+            ..self
         }
     }
 
@@ -107,24 +118,38 @@ impl<T: InputOrHidden, O, const N: usize> NeuralNetworkBuilder<Input<N>, T, O> {
     }
 }
 
-impl<const IN: usize, const OUT: usize> NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer> {
-    pub fn optimizer(
+impl<IL, LL, O> NeuralNetworkBuilder<IL, LL, NoErrFn, O> {
+    pub fn error_function(
         self,
-        optimizer: OptimizerDispatch,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer> {
+        error_function: ErrorFunction,
+    ) -> NeuralNetworkBuilder<IL, LL, HasErrFn, O> {
         NeuralNetworkBuilder {
-            layers: self.layers,
-            input: PhantomData,
-            last_layer: PhantomData,
-            optimizer: HasOptimizer(optimizer),
+            error_function: HasErrFn(error_function),
+            ..self
         }
     }
 }
 
-impl<const IN: usize, const OUT: usize> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer> {
+impl<EF, const IN: usize, const OUT: usize>
+    NeuralNetworkBuilder<Input<IN>, Output<OUT>, EF, NoOptimizer>
+{
+    pub fn optimizer(
+        self,
+        optimizer: OptimizerDispatch,
+    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, EF, HasOptimizer> {
+        NeuralNetworkBuilder {
+            optimizer: HasOptimizer(optimizer),
+            ..self
+        }
+    }
+}
+
+impl<EF: GetErrFn, const IN: usize, const OUT: usize>
+    NeuralNetworkBuilder<Input<IN>, Output<OUT>, EF, HasOptimizer>
+{
     pub fn build(mut self) -> NeuralNetwork<IN, OUT> {
         self.optimizer.0.init_with_layers(&self.layers);
-        NeuralNetwork::new(self.layers, self.optimizer.0)
+        NeuralNetwork::new(self.layers, self.error_function.get(), self.optimizer.0)
     }
 }
 

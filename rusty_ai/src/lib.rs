@@ -1,10 +1,12 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
+#![feature(type_changing_struct_update)]
 
 pub mod activation_function;
 pub mod builder;
 pub mod data;
 pub mod data_list;
+pub mod error_function;
 pub mod export;
 pub mod layer;
 pub mod matrix;
