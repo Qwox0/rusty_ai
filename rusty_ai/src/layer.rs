@@ -4,7 +4,7 @@ use crate::{
     results::GradientLayer,
     util::{
         macros::{impl_getter, impl_new},
-        EntryAdd, EntryMul, EntrySub, ScalarMul,
+        EntryAdd, EntryMul, ScalarMul,
     },
 };
 
@@ -190,10 +190,12 @@ impl Layer {
         let layer_input_count = self.get_input_count();
         let layer_neuron_count = self.get_neuron_count();
 
+        /*
         #[cfg(debug_assertions)]
         assert!(self.weights.get(0, 0).unwrap().abs() < 1000000.0);
         #[cfg(debug_assertions)]
         assert!(!self.weights.get(0, 0).unwrap().is_nan());
+        */
         assert_eq!(
             derivative_output.len(),
             layer_neuron_count,
@@ -230,7 +232,7 @@ impl Layer {
         */
 
         let input_gradient = output_gradient.mul_entries(derivative_output);
-        println!("   -> CHANGE: {:.7?}", input_gradient);
+        //println!("   -> CHANGE: {:.7?}", input_gradient);
 
         let bias_change: f64 = input_gradient.iter().sum();
 

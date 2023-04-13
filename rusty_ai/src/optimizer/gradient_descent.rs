@@ -1,7 +1,6 @@
 use super::{Optimizer, DEFAULT_LEARNING_RATE};
 use crate::{
-    layer::Layer,
-    neural_network::{NNOptimizationParts, NeuralNetwork},
+    neural_network::NNOptimizationParts,
     results::GradientLayer,
     util::{EntrySub, ScalarMul},
 };

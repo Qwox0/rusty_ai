@@ -2,16 +2,13 @@ pub mod adam;
 pub mod gradient_descent;
 
 use self::{adam::Adam, gradient_descent::GradientDescent};
-use crate::{layer::Layer, neural_network::{NeuralNetwork, NNOptimizationParts}, results::GradientLayer};
+use crate::{layer::Layer, neural_network::NNOptimizationParts, results::GradientLayer};
 
 pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 
 pub trait Optimizer {
-    fn optimize_weights<'a>(
-        &mut self,
-        nn: NNOptimizationParts,
-        gradient: Vec<GradientLayer>,
-    );
+    fn optimize_weights<'a>(&mut self, nn: NNOptimizationParts, gradient: Vec<GradientLayer>);
+    #[allow(unused)]
     fn init_with_layers(&mut self, layers: &Vec<Layer>) {}
 }
 
@@ -35,11 +32,7 @@ impl OptimizerDispatch {
 }
 
 impl Optimizer for OptimizerDispatch {
-    fn optimize_weights<'a>(
-        &mut self,
-        nn: NNOptimizationParts,
-        gradient: Vec<GradientLayer>,
-    ) {
+    fn optimize_weights<'a>(&mut self, nn: NNOptimizationParts, gradient: Vec<GradientLayer>) {
         match self {
             OptimizerDispatch::GradientDescent(gd) => gd.optimize_weights(nn, gradient),
             OptimizerDispatch::Adam(a) => a.optimize_weights(nn, gradient),

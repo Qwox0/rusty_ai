@@ -1,6 +1,6 @@
 use crate::data::DataPair;
 use itertools::Itertools;
-use std::{ops::Index, vec::IntoIter};
+use std::ops::Index;
 
 #[derive(Debug, Clone)]
 pub struct PairList<const IN: usize, const OUT: usize>(pub Vec<DataPair<IN, OUT>>);

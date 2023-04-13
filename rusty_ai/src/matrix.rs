@@ -3,7 +3,7 @@ use crate::util::{ScalarMul, EntrySub};
 use crate::util::{dot_product, macros::impl_getter, EntryAdd, SetLength};
 use rand::Rng;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, Index, Mul};
+use std::ops::{Add, Index, Mul, IndexMut};
 
 pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
     const ZERO: Self;
@@ -191,6 +191,12 @@ impl<T> Index<(usize, usize)> for Matrix<T> {
 
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         &self.elements[index.0][index.1]
+    }
+}
+
+impl<T> IndexMut<(usize, usize)> for Matrix<T> {
+    fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
+        &mut self.elements[index.0][index.1]
     }
 }
 

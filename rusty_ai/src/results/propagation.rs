@@ -1,4 +1,4 @@
-use crate::util::{mean_squarred_error, SetLength};
+use crate::util::SetLength;
 
 #[derive(Debug)]
 pub struct PropagationResult<const OUT: usize>(pub [f64; OUT]);
@@ -17,11 +17,5 @@ impl<const OUT: usize> From<[f64; OUT]> for PropagationResult<OUT> {
 impl<const OUT: usize> Into<[f64; OUT]> for PropagationResult<OUT> {
     fn into(self) -> [f64; OUT] {
         self.0
-    }
-}
-
-impl<const OUT: usize> PropagationResult<OUT> {
-    pub fn mean_squarred_error(&self, expected_output: &[f64; OUT]) -> f64 {
-        mean_squarred_error(&self.0, expected_output)
     }
 }
