@@ -114,7 +114,7 @@ pub trait EntryAdd<Rhs = Self>: Sized {
 }
 
 pub trait EntrySub<Rhs = Self>: Sized {
-    /// performs addition entrywise by mutating `self` in place.
+    /// performs subtraction entrywise by mutating `self` in place.
     /// "`self` = `self` - `rhs`"
     fn mut_sub_entries(&mut self, rhs: Rhs) -> &mut Self;
     /// performs subtraction entrywise and returns result.
@@ -126,13 +126,25 @@ pub trait EntrySub<Rhs = Self>: Sized {
 }
 
 pub trait EntryMul<Rhs = Self>: Sized {
-    /// performs addition entrywise by mutating `self` in place.
-    /// "`self` = `self` + `rhs`"
+    /// performs multiplication entrywise by mutating `self` in place.
+    /// "`self` = `self` * `rhs`"
     fn mut_mul_entries(&mut self, rhs: Rhs) -> &mut Self;
-    /// performs addition entrywise and returns result.
-    /// "return `self` + `rhs`"
+    /// performs multiplication entrywise and returns result.
+    /// "return `self` * `rhs`"
     fn mul_entries(mut self, rhs: Rhs) -> Self {
         self.mut_mul_entries(rhs);
+        self
+    }
+}
+
+pub trait EntryDiv<Rhs = Self>: Sized {
+    /// performs division entrywise by mutating `self` in place.
+    /// "`self` = `self` / `rhs`"
+    fn mut_div_entries(&mut self, rhs: Rhs) -> &mut Self;
+    /// performs division entrywise and returns result.
+    /// "return `self` / `rhs`"
+    fn div_entries(mut self, rhs: Rhs) -> Self {
+        self.mut_div_entries(rhs);
         self
     }
 }
@@ -167,6 +179,7 @@ macro_rules! impl_entry_arithmetic_trait {
 impl_entry_arithmetic_trait! { EntryAdd : mut_add_entries += }
 impl_entry_arithmetic_trait! { EntrySub : mut_sub_entries -= }
 impl_entry_arithmetic_trait! { EntryMul : mut_mul_entries *= }
+impl_entry_arithmetic_trait! { EntryDiv : mut_div_entries /= }
 
 pub trait ScalarMul: Sized {
     /// performs scalar multiplication by mutating `self` in place.

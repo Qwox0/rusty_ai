@@ -4,7 +4,7 @@ use crate::{
     layer::Layer,
     optimizer::{Optimizer, OptimizerDispatch},
     results::{GradientLayer, PropagationResult, TestsResult},
-    util::{EntrySub, ScalarMul},
+    util::{EntryDiv, EntrySub, ScalarMul},
 };
 
 #[derive(Debug)]
@@ -120,6 +120,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     //pub fn train(&mut self, data_pairs: PairList<IN, OUT>) {
     /// uses a small data set to find an aproximation for the weights gradient.
     pub fn train<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a DataPair<IN, OUT>>) {
+        let mut data_count = 0;
         // estimated gradient, but seperated for each (non input) layer. starts with last layer,
         // ends with second to first
         let mut gradient = self
@@ -149,9 +150,14 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
             );
 
             self.backpropagation(all_outputs, expected_output, all_derivatives, &mut gradient);
+            data_count += 1;
         }
         #[cfg(debug_assertions)]
         println!("GRADIENT: {:.4?}", gradient);
+        gradient.mut_mul_scalar(1.0 / data_count as f64);
+        #[cfg(debug_assertions)]
+        println!("GRADIENT ADJUSTED: {:.4?}", gradient);
+
         assert!(self.layers.len() - 1 == gradient.len());
         self.optimize_weights(gradient);
         self.generation += 1;
@@ -500,7 +506,7 @@ mod tests {
 
         let mut ai = NeuralNetworkBuilder::new()
             .input_layer::<1>()
-            .hidden_layer(1, ActivationFunction::Identity)
+            .hidden_layer(3, ActivationFunction::Identity)
             .output_layer::<1>(ActivationFunction::Identity)
             .optimizer(OptimizerDispatch::gradient_descent(0.01))
             /*
@@ -527,7 +533,8 @@ mod tests {
 
         for t in 1..=MAX_ITERATION {
             let data = idx
-                .choose_multiple(&mut rng, 5)
+                .choose(&mut rng)
+                //.choose_multiple(&mut rng, 5)
                 .into_iter()
                 .map(|idx| &data_pairs[*idx]);
             ai.train(data);

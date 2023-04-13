@@ -1,6 +1,6 @@
 use crate::{
     matrix::Matrix,
-    util::{macros::impl_new, EntryAdd},
+    util::{macros::impl_new, EntryAdd, EntryDiv, ScalarMul},
 };
 
 /// Contains the estimated Gradient of the Costfunction with respect to the weights and the bias of
@@ -21,3 +21,12 @@ impl GradientLayer {
         self.weights_change.mut_add_entries(&dc_dweights);
     }
 }
+
+impl ScalarMul for GradientLayer {
+    fn mut_mul_scalar(&mut self, scalar: f64) -> &mut Self {
+        self.bias_change *= scalar;
+        self.weights_change.mut_mul_scalar(scalar);
+        self
+    }
+}
+
