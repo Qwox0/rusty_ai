@@ -1,5 +1,6 @@
 use crate::{
     data::DataPair,
+    data_list::DataList,
     error_function::ErrorFunction,
     layer::Layer,
     optimizer::{Optimizer, OptimizerDispatch},
@@ -116,10 +117,30 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         res
     }
 
-    //pub fn train(&mut self, data_pairs: impl IntoIterator<Item = ([f64; IN], [f64; OUT])>) {
-    //pub fn train(&mut self, data_pairs: PairList<IN, OUT>) {
-    /// uses a small data set to find an aproximation for the weights gradient.
-    pub fn train<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a DataPair<IN, OUT>>) {
+    pub fn train(
+        &mut self,
+        training_data: &DataList<IN, OUT>,
+        training_amount: usize,
+        epoch_count: usize,
+        silent: bool,
+    ) {
+        let mut rng = rand::thread_rng();
+        for epoch in 0..epoch_count {
+            let training_data = training_data.choose_multiple(&mut rng, training_amount);
+            self.train_single(training_data);
+            if !silent {
+                println!("{}", epoch);
+            }
+        }
+    }
+
+    /// Trains the neural network for one generation/epoch. Uses a small data set `data_pairs` to
+    /// find an aproximation for the weights gradient. The neural network's Optimizer changes the
+    /// weights by using the calculated gradient.
+    pub fn train_single<'a>(
+        &mut self,
+        data_pairs: impl IntoIterator<Item = &'a DataPair<IN, OUT>>,
+    ) {
         let mut data_count = 0;
         // estimated gradient, but seperated for each (non input) layer. starts with last layer,
         // ends with second to first
@@ -265,14 +286,56 @@ mod tests {
     use super::NeuralNetwork;
     use crate::builder::NeuralNetworkBuilder;
     use crate::data::DataPair;
-    use crate::data_list::PairList;
+    use crate::data_list::DataList;
     use crate::error_function::ErrorFunction;
     use crate::layer::LayerType::*;
+    use crate::optimizer::adam::Adam;
     use crate::optimizer::OptimizerDispatch;
     use crate::{activation_function::ActivationFunction, layer::Layer, matrix::Matrix};
     use itertools::Itertools;
     use rand::seq::SliceRandom;
     use std::iter::once;
+
+    #[test]
+    fn gradient_descent() {
+        let slope = 1.5;
+        let intercept = -3.0;
+        const MAX_ITERATION: usize = 1000;
+        const LEARNING_RATE: f64 = 0.01;
+
+        let mut ai = NeuralNetworkBuilder::new()
+            .input_layer::<1>()
+            .hidden_layer(3, ActivationFunction::Identity)
+            //.hidden_layer(3, ActivationFunction::Identity)
+            .output_layer::<1>(ActivationFunction::Identity)
+            .optimizer(OptimizerDispatch::gradient_descent(LEARNING_RATE))
+            .build();
+
+        println!("\nIteration 0: {ai}");
+
+        let mut rng = rand::thread_rng();
+        let x = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
+        let y = x.iter().map(|x| slope * x + intercept).collect_vec();
+        let data_pairs = DataList::from_simple_vecs(x, y);
+
+        for t in 1..=MAX_ITERATION {
+            let data = data_pairs.choose_multiple(&mut rng, 5);
+            ai.train_single(data);
+
+            if t % 10usize.pow(t.ilog10()) == 0 {
+                println!("\nIteration {t}: {ai}");
+            }
+        }
+
+        println!("y = {} * x + {}", slope, intercept);
+        let x = vec![-3.0, 0.0, 1.0, 10.0];
+        println!("test for x in {:?}", x);
+        let y = x.iter().map(|x| slope * x + intercept).collect();
+        let test = DataList::from_simple_vecs(x, y);
+        let res = ai.test(test.iter());
+        println!("res: {res:?}");
+        assert!(res.error.abs() < 10f64.powi(-8));
+    }
 
     #[test]
     fn neural_network() {
@@ -310,7 +373,7 @@ mod tests {
 
         const DATA_COUNT: usize = 1;
         let get_data = || {
-            PairList::from(
+            DataList::from(
                 rand::random::<[f64; DATA_COUNT]>()
                     .into_iter()
                     .map(|x| x - 0.5)
@@ -359,7 +422,7 @@ mod tests {
         for i in 0..100 {
             let data = get_data();
             println!("\n\n{}\nai: {ai}\nDATA: {}", i + 1, data[0]);
-            ai.train(data.iter());
+            ai.train_single(data.iter());
             println!(
                 "TEST: {:?}\n",
                 ai.test2(
@@ -434,7 +497,7 @@ mod tests {
         // 0.5: different formula for
         assert!((res.error - 0.298371109).abs() < 10f64.powi(-8));
 
-        ai.train(once(&data_pair));
+        ai.train_single(once(&data_pair));
         println!("{:.8}\n", ai);
 
         let weight5 = ai.layers.last().unwrap().get_weights().get(0, 0).unwrap();
@@ -478,7 +541,7 @@ mod tests {
         assert!((res.outputs[0][1] - 0.12).abs() < 10f64.powi(-2));
         assert!((res.error - 0.08699208259994781).abs() < 10f64.powi(-8));
 
-        ai.train(once(&data_pair1));
+        ai.train_single(once(&data_pair1));
         println!("{:.8}\n", ai);
 
         let hidden_layer1 = ai.layers[1].get_weights();
@@ -498,7 +561,7 @@ mod tests {
 
     /// https://www.youtube.com/watch?v=6nqV58NA_Ew
     fn adam_fit(slope: f64, intercept: f64) {
-        const MAX_ITERATION: usize = 2000;
+        const MAX_ITERATION: usize = 3000;
         const LEARNING_RATE: f64 = 0.01;
         const BETA1: f64 = 0.9;
         const BETA2: f64 = 0.999;
@@ -506,38 +569,28 @@ mod tests {
 
         let mut ai = NeuralNetworkBuilder::new()
             .input_layer::<1>()
+            //.hidden_layer(1, ActivationFunction::Identity)
             .hidden_layer(3, ActivationFunction::Identity)
             .output_layer::<1>(ActivationFunction::Identity)
-            .optimizer(OptimizerDispatch::gradient_descent(0.01))
-            /*
+            //.optimizer(OptimizerDispatch::gradient_descent(0.01))
             .optimizer(OptimizerDispatch::Adam(Adam::new(
                 LEARNING_RATE,
                 BETA1,
                 BETA2,
                 EPSILON,
             )))
-             */
             .build();
 
         println!("\nIteration 0: {ai}");
 
         let mut rng = rand::thread_rng();
-        let idx = [0, 1, 2, 3, 4, 5, 6];
-
-        let x = (1..=7).into_iter().map(f64::from).collect_vec();
-        let mut y = vec![0.0; 7];
-        for (idx, x) in x.iter().enumerate() {
-            y[idx] = slope * x + intercept;
-        }
-        let data_pairs = PairList::from_simple_vecs(x, y);
+        let x = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
+        let y = x.iter().map(|x| slope * x + intercept).collect_vec();
+        let data_pairs = DataList::from_simple_vecs(x, y);
 
         for t in 1..=MAX_ITERATION {
-            let data = idx
-                .choose(&mut rng)
-                //.choose_multiple(&mut rng, 5)
-                .into_iter()
-                .map(|idx| &data_pairs[*idx]);
-            ai.train(data);
+            let data = data_pairs.choose_multiple(&mut rng, 5);
+            ai.train_single(data);
 
             if t % 10usize.pow(t.ilog10()) == 0 {
                 println!("\nIteration {t}: {ai}");
@@ -548,7 +601,7 @@ mod tests {
         let x = vec![-3.0, 0.0, 1.0, 10.0];
         println!("test for x in {:?}", x);
         let y = x.iter().map(|x| slope * x + intercept).collect();
-        let test = PairList::from_simple_vecs(x, y);
+        let test = DataList::from_simple_vecs(x, y);
         let res = ai.test(test.iter());
         println!("res: {res:?}");
         assert!(res.error.abs() < 10f64.powi(-8));

@@ -40,7 +40,7 @@ impl Adam {
 
 impl Optimizer for Adam {
     fn optimize_weights<'a>(&mut self, nn: NNOptimizationParts, gradient: Vec<GradientLayer>) {
-        let time_step = nn.generation + 1;
+        let time_step = nn.generation + 1; // generation starts at 0. should start at 1
         for (((((layer, lgradient), m), m_bias), v), v_bias) in nn
             .layers
             .iter_mut()

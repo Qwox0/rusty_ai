@@ -30,15 +30,11 @@ impl<'a, const IN: usize, const OUT: usize> Into<(&'a [f64; IN], &'a [f64; OUT])
     }
 }
 
-impl From<(f64, f64)> for DataPair<1, 1> {
-    fn from(value: (f64, f64)) -> Self {
-        DataPair::from(([value.0], [value.1]))
-    }
-}
-
-impl Into<(f64, f64)> for DataPair<1, 1> {
-    fn into(self) -> (f64, f64) {
-        (self.input[0], self.output[0])
+impl<const IN: usize, const OUT: usize> DataPair<IN, OUT> {
+    pub fn random(get_out: impl FnOnce([f64; IN]) -> [f64; OUT]) -> DataPair<IN, OUT> {
+        let mut x = [0.0; IN];
+        x.iter_mut().for_each(|x| *x = rand::random());
+        (x, get_out(x)).into()
     }
 }
 
@@ -49,5 +45,30 @@ impl<const IN: usize, const OUT: usize> Display for DataPair<IN, OUT> {
             "input: {:?}, expected_output: {:?}",
             self.input, self.output
         )
+    }
+}
+
+// Simple (IN == OUT == 1)
+
+impl From<(f64, f64)> for DataPair<1, 1> {
+    fn from(value: (f64, f64)) -> Self {
+        DataPair::from(([value.0], [value.1]))
+    }
+}
+
+impl DataPair<1, 1> {
+    pub fn random_simple(get_out: impl FnOnce(f64) -> f64) -> DataPair<1, 1> {
+        let x = rand::random();
+        (x, get_out(x)).into()
+    }
+
+    pub fn simple_tuple(&self) -> (f64, f64) {
+        (self.input[0], self.output[0])
+    }
+}
+
+impl Into<(f64, f64)> for DataPair<1, 1> {
+    fn into(self) -> (f64, f64) {
+        (self.input[0], self.output[0])
     }
 }
