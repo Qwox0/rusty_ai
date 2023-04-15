@@ -5,12 +5,12 @@ use itertools::Itertools;
 use crate::{
     activation_function::ActivationFunction,
     error_function::ErrorFunction,
-    layer::Layer,
+    layer::{InputLayer, Layer},
     neural_network::NeuralNetwork,
     optimizer::{Optimizer, OptimizerDispatch},
 };
 
-// Markers
+// Layer Markers
 pub struct NoLayer;
 pub struct Input<const N: usize>;
 pub struct Hidden;
@@ -20,6 +20,7 @@ pub trait InputOrHidden {}
 impl<const N: usize> InputOrHidden for Input<N> {}
 impl InputOrHidden for Hidden {}
 
+// Error Function Markers
 pub struct NoErrFn;
 pub struct HasErrFn(ErrorFunction);
 pub trait GetErrFn: Sized {
@@ -34,10 +35,11 @@ impl GetErrFn for HasErrFn {
     }
 }
 
+// Optimizer Markers
 pub struct NoOptimizer;
 pub struct HasOptimizer(OptimizerDispatch);
-// Markers end
 
+// Builder
 #[derive(Debug)]
 pub struct NeuralNetworkBuilder<IN, LAST, ERRORFN, OPTIMIZER> {
     layers: Vec<Layer>,
@@ -61,7 +63,6 @@ impl NeuralNetworkBuilder<NoLayer, NoLayer, NoErrFn, NoOptimizer> {
 impl<EF, O> NeuralNetworkBuilder<NoLayer, NoLayer, EF, O> {
     pub fn input_layer<const N: usize>(self) -> NeuralNetworkBuilder<Input<N>, Input<N>, EF, O> {
         NeuralNetworkBuilder {
-            layers: vec![Layer::new_input(N)],
             input: PhantomData,
             last_layer: PhantomData,
             ..self
@@ -69,12 +70,12 @@ impl<EF, O> NeuralNetworkBuilder<NoLayer, NoLayer, EF, O> {
     }
 }
 
-impl<LL: InputOrHidden, EF, O, const N: usize> NeuralNetworkBuilder<Input<N>, LL, EF, O> {
+impl<LL: InputOrHidden, EF, O, const IN: usize> NeuralNetworkBuilder<Input<IN>, LL, EF, O> {
     pub fn hidden_layer(
         mut self,
         neurons: usize,
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Hidden, EF, O> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, EF, O> {
         self.layers
             .push(Layer::new_hidden(self.last_count(), neurons, act_func));
         NeuralNetworkBuilder {
@@ -87,7 +88,7 @@ impl<LL: InputOrHidden, EF, O, const N: usize> NeuralNetworkBuilder<Input<N>, LL
         mut self,
         neurons_per_layer: &[usize],
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Hidden, EF, O> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, EF, O> {
         let last_count = self.last_count();
         for (last, count) in once(&last_count).chain(neurons_per_layer).tuple_windows() {
             self.layers.push(Layer::new_hidden(*last, *count, act_func));
@@ -101,7 +102,7 @@ impl<LL: InputOrHidden, EF, O, const N: usize> NeuralNetworkBuilder<Input<N>, LL
     pub fn output_layer<const OUT: usize>(
         mut self,
         act_func: ActivationFunction,
-    ) -> NeuralNetworkBuilder<Input<N>, Output<OUT>, EF, O> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, EF, O> {
         self.layers
             .push(Layer::new_output(self.last_count(), OUT, act_func));
         NeuralNetworkBuilder {
@@ -113,8 +114,8 @@ impl<LL: InputOrHidden, EF, O, const N: usize> NeuralNetworkBuilder<Input<N>, LL
     fn last_count(&self) -> usize {
         self.layers
             .last()
-            .expect("self.layers always contains an InputLayer")
-            .get_neuron_count()
+            .map(Layer::get_neuron_count)
+            .unwrap_or(IN)
     }
 }
 
@@ -149,7 +150,12 @@ impl<EF: GetErrFn, const IN: usize, const OUT: usize>
 {
     pub fn build(mut self) -> NeuralNetwork<IN, OUT> {
         self.optimizer.0.init_with_layers(&self.layers);
-        NeuralNetwork::new(self.layers, self.error_function.get(), self.optimizer.0)
+        NeuralNetwork::new(
+            InputLayer::<IN>,
+            self.layers,
+            self.error_function.get(),
+            self.optimizer.0,
+        )
     }
 }
 

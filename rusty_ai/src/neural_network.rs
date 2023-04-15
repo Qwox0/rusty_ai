@@ -2,7 +2,7 @@ use crate::{
     data::DataPair,
     data_list::DataList,
     error_function::ErrorFunction,
-    layer::Layer,
+    layer::{InputLayer, Layer},
     optimizer::{Optimizer, OptimizerDispatch},
     results::{GradientLayer, PropagationResult, TestsResult},
     util::{EntryDiv, EntrySub, ScalarMul},
@@ -10,6 +10,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
+    input_layer: InputLayer<IN>,
     layers: Vec<Layer>,
     error_function: ErrorFunction,
     optimizer: OptimizerDispatch,
@@ -27,11 +28,13 @@ use crate::builder::NeuralNetworkBuilder;
 impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     /// use [`NeuralNetworkBuilder`] instead!
     pub(crate) fn new(
+        input_layer: InputLayer<IN>,
         layers: Vec<Layer>,
         error_function: ErrorFunction,
         optimizer: OptimizerDispatch,
     ) -> NeuralNetwork<IN, OUT> {
         NeuralNetwork {
+            input_layer,
             layers,
             error_function,
             optimizer,
@@ -42,7 +45,6 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     pub fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
         self.layers
             .iter()
-            .skip(1) // first layer is always an input layer which doesn't mutate the input
             .fold(input.to_vec(), |acc, layer| layer.calculate(acc))
             .into()
     }
@@ -95,26 +97,36 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         }
     }
 
-    fn training_propagate(&self, input: &[f64; IN]) -> (Vec<Vec<f64>>, Vec<Option<Vec<f64>>>) {
-        let mut vec = Vec::with_capacity(self.layers.len() - 1);
-        vec.push(None); // no derivatives for the Input Layer
-        let res = self
-            .layers
-            .iter()
-            .skip(1) // first layer is always an input layer which doesn't mutate the input
-            .fold(
-                (vec![input.to_vec()], vec),
-                |(mut outputs, mut derivatives), layer| {
-                    let input = outputs.last().expect("last element must exists");
-                    let (output, derivative) = layer.training_calculate(input);
-                    outputs.push(output);
-                    derivatives.push(Some(derivative));
-                    (outputs, derivatives)
-                },
-            );
-        assert!(res.0.len() == self.layers.len());
+    fn training_propagate(&self, input: &[f64; IN]) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
+        let res = self.layers.iter().fold(
+            (vec![input.to_vec()], Vec::with_capacity(self.layers.len())),
+            |(mut outputs, mut derivatives), layer| {
+                let input = outputs.last().expect("last element must exists");
+                let (output, derivative) = layer.training_calculate(input);
+                outputs.push(output);
+                derivatives.push(derivative);
+                (outputs, derivatives)
+            },
+        );
+        assert!(res.0.len() == self.layers.len() + 1);
         assert!(res.1.len() == self.layers.len());
         res
+    }
+    fn training_propagate2(&self, input: &[f64; IN]) -> (Vec<Vec<f64>>, Vec<Option<Vec<f64>>>) {
+        let mut outputs = Vec::with_capacity(self.layers.len());
+        let mut derivatives = Vec::with_capacity(self.layers.len());
+        outputs.push(input.to_vec());
+        derivatives.push(None);
+
+        for i in 0..self.layers.len() {
+            let input = outputs.last().expect("last element must exists");
+            let (output, derivative) = self.layers[i].training_calculate(input);
+            outputs.push(output);
+            derivatives.push(Some(derivative));
+        }
+        assert!(outputs.len() == self.layers.len() + 1);
+        assert!(derivatives.len() == self.layers.len() + 1);
+        (outputs, derivatives)
     }
 
     pub fn train(
@@ -144,42 +156,35 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         let mut data_count = 0;
         // estimated gradient, but seperated for each (non input) layer. starts with last layer,
         // ends with second to first
-        let mut gradient = self
-            .layers
-            .iter()
-            .skip(1)
-            .rev()
-            .map(Layer::init_gradient)
-            .collect();
+        let mut gradient = self.layers.iter().rev().map(Layer::init_gradient).collect();
         for (input, expected_output) in data_pairs.into_iter().map(Into::into) {
             let (all_outputs, all_derivatives) = self.training_propagate(&input);
 
             #[cfg(debug_assertions)]
-            println!(
-                "PROPAGATE:\n   {}",
-                all_outputs
-                    .iter()
-                    .zip(all_derivatives.iter())
-                    .map(|(l, dl)| format!(
-                        "{:?} {}; {:?}",
-                        l,
-                        " ".repeat(100usize.checked_sub(format!("{l:?}").len()).unwrap_or(2)),
-                        dl
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("\n   ")
-            );
+            {
+                let get_padding =
+                    |l| " ".repeat(80usize.checked_sub(format!("{l:?}").len()).unwrap_or(2));
+                let mut out_iter = all_outputs.iter();
+                let input = out_iter.next().unwrap();
+                println!(
+                    "PROPAGATE:\n   {:?}\n   {}",
+                    input,
+                    out_iter
+                        .zip(all_derivatives.iter())
+                        .map(|(l, dl)| format!("{:?} {}; {:?}", l, get_padding(l), dl))
+                        .collect::<Vec<_>>()
+                        .join("\n   ")
+                );
+            }
 
             self.backpropagation(all_outputs, expected_output, all_derivatives, &mut gradient);
             data_count += 1;
         }
+        gradient.mut_mul_scalar(1.0 / data_count as f64);
+
         #[cfg(debug_assertions)]
         println!("GRADIENT: {:.4?}", gradient);
-        gradient.mut_mul_scalar(1.0 / data_count as f64);
-        #[cfg(debug_assertions)]
-        println!("GRADIENT ADJUSTED: {:.4?}", gradient);
 
-        assert!(self.layers.len() - 1 == gradient.len());
         self.optimize_weights(gradient);
         self.generation += 1;
     }
@@ -222,7 +227,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         &self,
         outputs: Vec<Vec<f64>>,
         expected_output: &[f64; OUT], // only for the last layer
-        derivative_outputs: Vec<Option<Vec<f64>>>,
+        derivative_outputs: Vec<Vec<f64>>,
         gradient: &mut Vec<GradientLayer>,
     ) {
         let mut outputs = outputs.into_iter().rev();
@@ -237,15 +242,12 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         self.layers
             .iter()
             .zip(derivative_outputs)
-            .skip(1) // Input Layer isn't affected by backpropagation
             .rev()
             .zip(inputs_rev)
             .zip(gradient.iter_mut())
             .fold(
                 last_output_gradient,
                 |current_output_gradient, (((layer, derivative_output), input), gradient)| {
-                    let derivative_output = derivative_output.expect("layer has derivatives");
-
                     // dc_dx = partial derivative of the cost function with respect to x.
                     let (bias_change, weight_gradient, inputs_gradient) =
                         layer.backpropagation2(derivative_output, &input, current_output_gradient);
@@ -271,7 +273,8 @@ impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}",
+            "{}\n{}",
+            self.input_layer,
             self.layers
                 .iter()
                 .map(ToString::to_string)
@@ -288,7 +291,7 @@ mod tests {
     use crate::data::DataPair;
     use crate::data_list::DataList;
     use crate::error_function::ErrorFunction;
-    use crate::layer::LayerType::*;
+    use crate::layer::{InputLayer, LayerType::*};
     use crate::optimizer::adam::Adam;
     use crate::optimizer::OptimizerDispatch;
     use crate::{activation_function::ActivationFunction, layer::Layer, matrix::Matrix};
@@ -466,8 +469,8 @@ mod tests {
     #[test]
     fn backpropagation1() {
         let mut ai = NeuralNetwork::<2, 2>::new(
+            InputLayer::<2>,
             vec![
-                Layer::new_input(2),
                 Layer::new(
                     Hidden,
                     Matrix::from_rows(vec![vec![0.15, 0.2], vec![0.25, 0.3]], 0.0),
@@ -513,8 +516,8 @@ mod tests {
     fn backpropagation2() {
         const LEARNING_RATE: f64 = 0.1;
         let mut ai = NeuralNetwork::<2, 2>::new(
+            InputLayer::<2>,
             vec![
-                Layer::new_input(2),
                 Layer::new(
                     Hidden,
                     Matrix::from_rows(vec![vec![6.0, -2.0], vec![-3.0, 5.0]], 0.0),
@@ -544,7 +547,7 @@ mod tests {
         ai.train_single(once(&data_pair1));
         println!("{:.8}\n", ai);
 
-        let hidden_layer1 = ai.layers[1].get_weights();
+        let hidden_layer1 = ai.layers[0].get_weights();
 
         let w12 = hidden_layer1[(1, 0)];
         println!("{w12}");

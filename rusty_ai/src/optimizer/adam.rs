@@ -27,7 +27,6 @@ impl Adam {
         let layer_count = layers.iter().skip(1).count();
         self.m = layers
             .iter()
-            .skip(1) // Input layer isn't important
             .rev()
             .map(|l| l.get_weights().get_dimensions())
             .map(|(w, h)| Matrix::with_zeros(w, h))
@@ -44,7 +43,6 @@ impl Optimizer for Adam {
         for (((((layer, lgradient), m), m_bias), v), v_bias) in nn
             .layers
             .iter_mut()
-            .skip(1)
             .rev()
             .zip(gradient)
             .zip(self.m.iter_mut())

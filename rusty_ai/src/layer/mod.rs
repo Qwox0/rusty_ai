@@ -1,3 +1,7 @@
+mod input;
+
+pub use input::InputLayer;
+
 use crate::{
     activation_function::ActivationFunction::{self, *},
     matrix::Matrix,
@@ -15,7 +19,6 @@ pub trait IsLayer: std::fmt::Display {
 
 #[derive(Debug)]
 pub enum LayerType {
-    Input,
     Hidden,
     Output,
 }
@@ -39,10 +42,6 @@ impl Layer {
     impl_getter! { get_bias -> bias: f64 }
     impl_getter! { get_bias_mut -> bias: &mut f64 }
     impl_getter! { get_activation_function -> activation_function: &ActivationFunction }
-
-    pub(crate) fn new_input(neurons: usize) -> Layer {
-        Layer::new(Input, Matrix::identity(neurons), 0.0, Identity)
-    }
 
     pub fn new_hidden(inputs: usize, neurons: usize, acti_func: ActivationFunction) -> Layer {
         Layer::new(
@@ -270,11 +269,6 @@ impl Layer {
 
 impl std::fmt::Display for Layer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let plural_s = |x: usize| if x == 1 { "" } else { "s" };
-        if let Input = self.layer_type {
-            let input_count = self.get_input_count();
-            write!(f, "{} Input{}\n", input_count, plural_s(input_count))?;
-        }
         write!(
             f,
             "{} Bias: {}; {}",
@@ -282,7 +276,8 @@ impl std::fmt::Display for Layer {
         )?;
         if let Output = self.layer_type {
             let output_count = self.get_neuron_count();
-            write!(f, "\n{} Output{}", output_count, plural_s(output_count))?;
+            let plural_s = if output_count == 1 { "" } else { "s" };
+            write!(f, "\n{} Output{}", output_count, plural_s)?;
         }
         Ok(())
     }
