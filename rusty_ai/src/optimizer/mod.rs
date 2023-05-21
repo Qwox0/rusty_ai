@@ -1,55 +1,41 @@
-pub mod adam;
-pub mod gradient_descent;
+mod adam;
+mod gradient_descent;
 
-use self::{adam::Adam, gradient_descent::GradientDescent};
-use crate::{layer::Layer, neural_network::{NeuralNetwork, NNOptimizationParts}, results::GradientLayer};
+pub use adam::Adam;
+pub use gradient_descent::GradientDescent;
+
+use crate::{gradient::Gradient, layer::Layer, neural_network::NeuralNetwork};
+use enum_dispatch::enum_dispatch;
 
 pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 
-pub trait Optimizer {
-    fn optimize_weights<'a>(
+#[enum_dispatch]
+pub(crate) trait IsOptimizer {
+    fn optimize_weights<const IN: usize, const OUT: usize>(
         &mut self,
-        nn: NNOptimizationParts,
-        gradient: Vec<GradientLayer>,
+        nn: &mut NeuralNetwork<IN, OUT>,
+        gradient: Gradient,
     );
+    #[allow(unused)]
     fn init_with_layers(&mut self, layers: &Vec<Layer>) {}
 }
 
 #[derive(Debug)]
-pub enum OptimizerDispatch {
+#[enum_dispatch(IsOptimizer)]
+pub enum Optimizer {
     GradientDescent(GradientDescent),
     Adam(Adam),
 }
 
-impl OptimizerDispatch {
-    pub fn gradient_descent(learning_rate: f64) -> OptimizerDispatch {
-        OptimizerDispatch::GradientDescent(GradientDescent { learning_rate })
+impl Optimizer {
+    pub fn gradient_descent(learning_rate: f64) -> Optimizer {
+        Optimizer::GradientDescent(GradientDescent { learning_rate })
     }
-    pub fn default_gradient_descent() -> OptimizerDispatch {
-        OptimizerDispatch::GradientDescent(GradientDescent::default())
-    }
-
-    pub fn default_adam() -> OptimizerDispatch {
-        OptimizerDispatch::Adam(Adam::default())
-    }
-}
-
-impl Optimizer for OptimizerDispatch {
-    fn optimize_weights<'a>(
-        &mut self,
-        nn: NNOptimizationParts,
-        gradient: Vec<GradientLayer>,
-    ) {
-        match self {
-            OptimizerDispatch::GradientDescent(gd) => gd.optimize_weights(nn, gradient),
-            OptimizerDispatch::Adam(a) => a.optimize_weights(nn, gradient),
-        }
+    pub fn default_gradient_descent() -> Optimizer {
+        Optimizer::GradientDescent(GradientDescent::default())
     }
 
-    fn init_with_layers(&mut self, layers: &Vec<Layer>) {
-        match self {
-            OptimizerDispatch::GradientDescent(gd) => gd.init_with_layers(layers),
-            OptimizerDispatch::Adam(a) => a.init_with_layers(layers),
-        }
+    pub fn default_adam() -> Optimizer {
+        Optimizer::Adam(Adam::default())
     }
 }

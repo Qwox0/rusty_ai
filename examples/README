@@ -1,0 +1,3 @@
+run example with
+
+`cargo run --bin <EXAMPLENAME>`

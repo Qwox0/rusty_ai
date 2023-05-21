@@ -1,14 +1,30 @@
-mod gradient_layer;
 mod propagation;
 
-pub(crate) use gradient_layer::GradientLayer;
-pub use propagation::PropagationResult;
+pub use propagation::{PropagationResult, VerbosePropagation};
 
 #[derive(Debug)]
-pub struct TestsResult<const IN: usize, const OUT: usize> {
+pub struct TestsResult<const OUT: usize> {
     pub generation: usize,
-    pub outputs: Vec<[f64; OUT]>,
+    pub outputs: Vec<PropagationResult<OUT>>,
     pub error: f64,
+}
+
+impl<const OUT: usize> TestsResult<OUT> {
+    pub fn collect(
+        iter: impl Iterator<Item = (PropagationResult<OUT>, f64)>,
+        generation: usize,
+    ) -> Self {
+        let (outputs, error) = iter.fold((vec![], 0.0), |mut acc, (out, err)| {
+            acc.0.push(out);
+            acc.1 += err;
+            acc
+        });
+        TestsResult {
+            generation,
+            outputs,
+            error,
+        }
+    }
 }
 
 pub struct TrainingsResult<'a, const IN: usize, const OUT: usize> {

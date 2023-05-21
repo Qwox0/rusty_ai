@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "basic_ai",
+    "sine",
+    "xor"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+rusty_ai = { path = "../rusty_ai" }

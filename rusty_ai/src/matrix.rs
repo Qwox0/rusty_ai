@@ -1,9 +1,10 @@
-use crate::util::macros::impl_new;
-use crate::util::{ScalarMul, EntrySub};
-use crate::util::{dot_product, macros::impl_getter, EntryAdd, SetLength};
+use crate::util::{
+    constructor, dot_product, impl_getter, EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, Randomize,
+    ScalarAdd, ScalarDiv, ScalarMul, ScalarSub, SetLength,
+};
 use rand::Rng;
 use std::fmt::{Debug, Display};
-use std::ops::{Add, Index, Mul};
+use std::ops::{Add, Index, IndexMut, Mul};
 
 pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
     const ZERO: Self;
@@ -30,15 +31,22 @@ pub struct Matrix<T: Sized> {
 }
 
 impl<T> Matrix<T> {
-    impl_new! { pub(crate) width: usize, height: usize, elements: Vec<Vec<T>> }
-    impl_getter! { get_width -> width: usize }
-    impl_getter! { get_height -> height: usize }
-    impl_getter! { get_elements -> elements: &Vec<Vec<T>> }
-    impl_getter! { get_elements_mut -> elements: &mut Vec<Vec<T>> }
+    constructor! { new -> width: usize, height: usize, elements: Vec<Vec<T>> }
+    impl_getter! { pub get_width -> width: usize }
+    impl_getter! { pub get_height -> height: usize }
+    impl_getter! { pub get_elements -> elements: &Vec<Vec<T>> }
+    impl_getter! { pub get_elements_mut -> elements: &mut Vec<Vec<T>> }
+
+    pub fn from_elements(elements: Vec<Vec<T>>) -> Matrix<T> {
+        let height = elements.len();
+        let width = elements.first().map(Vec::len).unwrap_or(0);
+        assert!(elements.iter().map(Vec::len).all(|len| len == width));
+        Matrix::new(width, height, elements)
+    }
 
     /// Creates a [`Matrix`] containing an empty elements [`Vec`] with a capacity of `height`.
     /// Insert new rows with `Matrix::push_row`.
-    pub fn new_unchecked(width: usize, height: usize) -> Matrix<T> {
+    pub fn new_empty(width: usize, height: usize) -> Matrix<T> {
         Matrix::new(width, height, Vec::with_capacity(height))
     }
 
@@ -136,32 +144,75 @@ impl Matrix<f64> {
             width,
             height,
             elements: (0..height)
-                .map(|_| (0..width).map(|_| rng.gen()).collect())
+                .map(|_| (0..width).map(|_| rng.gen_range(-0.1..0.1)).collect())
                 .collect(),
         }
     }
 }
 
-impl EntryAdd<&Matrix<f64>> for Matrix<f64> {
-    fn mut_add_entries(&mut self, rhs: &Matrix<f64>) -> &mut Self {
-        debug_assert_eq!(self.get_dimensions(), rhs.get_dimensions());
-        self.elements.mut_add_entries(&rhs.elements);
+impl<T> Randomize for Matrix<T> {
+    type Sample = T;
+
+    fn _randomize_mut(
+        &mut self,
+        rng: &mut impl rand::Rng,
+        distr: impl rand::distributions::Distribution<Self::Sample>,
+    ) {
+        self.iter_mut().for_each(|x| *x = rng.sample(&distr));
+    }
+}
+
+macro_rules! impl_entrywise_arithmetic {
+    ( $trait:ident : $fn:ident ) => {
+        impl $trait<&Matrix<f64>> for Matrix<f64> {
+            fn $fn(&mut self, rhs: &Matrix<f64>) -> &mut Self {
+                assert_eq!(self.get_dimensions(), rhs.get_dimensions());
+                self.elements.$fn(&rhs.elements);
+                self
+            }
+        }
+    };
+}
+
+impl_entrywise_arithmetic! { EntryAdd: add_entries_mut }
+impl_entrywise_arithmetic! { EntrySub: sub_entries_mut }
+impl_entrywise_arithmetic! { EntryMul: mul_entries_mut }
+impl_entrywise_arithmetic! { EntryDiv: div_entries_mut }
+
+macro_rules! impl_scalar_arithmetic {
+    ( $trait:ident : $fn:ident ) => {
+        impl $trait for Matrix<f64> {
+            fn $fn(&mut self, scalar: f64) -> &mut Self {
+                self.elements.$fn(scalar);
+                self
+            }
+        }
+    };
+}
+
+impl_scalar_arithmetic! { ScalarAdd : add_scalar_mut }
+impl_scalar_arithmetic! { ScalarSub : sub_scalar_mut }
+impl_scalar_arithmetic! { ScalarMul : mul_scalar_mut }
+impl_scalar_arithmetic! { ScalarDiv : div_scalar_mut }
+
+impl Lerp<&Matrix<f64>> for Matrix<f64> {
+    fn lerp_mut(&mut self, other: &Matrix<f64>, blend: f64) -> &mut Self {
+        self.elements.lerp_mut(&other.elements, blend);
         self
     }
 }
 
-impl EntrySub<&Matrix<f64>> for Matrix<f64> {
-    fn mut_sub_entries(&mut self, rhs: &Matrix<f64>) -> &mut Self {
-        debug_assert_eq!(self.get_dimensions(), rhs.get_dimensions());
-        self.elements.mut_sub_entries(&rhs.elements);
-        self
-    }
-}
-
-impl ScalarMul for Matrix<f64> {
-    fn mut_mul_scalar(&mut self, scalar: f64) -> &mut Matrix<f64> {
-        self.elements.mut_mul_scalar(scalar);
-        self
+impl<T> std::ops::Mul<&Vec<T>> for &Matrix<T>
+where
+    T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
+{
+    type Output = Vec<T>;
+    fn mul(self, rhs: &Vec<T>) -> Self::Output {
+        assert_eq!(self.width, rhs.len(), "Vector has incompatible dimensions",);
+        self.elements
+            .iter()
+            .map(|row| dot_product(&row, &rhs))
+            .collect::<Vec<T>>()
     }
 }
 
@@ -184,13 +235,19 @@ macro_rules! impl_mul {
 }
 
 impl_mul! { Matrix<T>: Vec<T> &Vec<T> }
-impl_mul! { &Matrix<T>: Vec<T> &Vec<T> }
+impl_mul! { &Matrix<T>: Vec<T> }
 
 impl<T> Index<(usize, usize)> for Matrix<T> {
     type Output = T;
 
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         &self.elements[index.0][index.1]
+    }
+}
+
+impl<T> IndexMut<(usize, usize)> for Matrix<T> {
+    fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
+        &mut self.elements[index.0][index.1]
     }
 }
 
@@ -225,8 +282,11 @@ impl<T: Display> Display for Matrix<T> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
+    use crate::matrix::SimdMatrix;
+
     use super::Matrix;
 
     #[test]
@@ -241,4 +301,177 @@ mod tests {
             ]
         );
     }
+
+    /*
+    const M: usize = 11;
+    const N: usize = M - 1;
+    const K: usize = M - 10;
+    */
+
+    const M: usize = 512;
+    const N: usize = M;
+    const K: usize = M;
+
+    #[test]
+    fn bench() {
+        let a = Matrix::new_random(K, M);
+        let b = Matrix::new_random(N, K);
+        let mut c = Matrix::with_zeros(N, M);
+
+        let start = std::time::Instant::now();
+        c.matrix_mul(&a, &b);
+        c.matrix_mul(&a, &b);
+        let secs = start.elapsed().as_secs_f64() / 2.0;
+        println!(
+            "1: {} GFLOPS/s",
+            ((2 * M * N * K) as f64 / secs as f64) / 1e9
+        );
+        //println!("{:.2?}", c);
+
+        let c1 = c.clone().elements.concat();
+
+        let a = SimdMatrix::new(a);
+        let b = SimdMatrix::new(b);
+        let mut c = SimdMatrix::new(Matrix::with_zeros(N, M));
+
+        let start = std::time::Instant::now();
+        c.matrix_mul(&a, &b);
+        c.matrix_mul(&a, &b);
+        let secs = start.elapsed().as_secs_f64() / 2.0;
+        println!(
+            "2: {} GFLOPS/s",
+            ((2 * M * N * K) as f64 / secs as f64) / 1e9
+        );
+
+        assert!(
+            c1.iter()
+                .zip(c.vec)
+                .map(|(a, b)| a - b)
+                .map(|x| x * x)
+                .sum::<f64>()
+                < 1e-7
+        );
+        let mut c = SimdMatrix::new(Matrix::with_zeros(N, M));
+
+        let start = std::time::Instant::now();
+        c.matrix_mul_simd(&a, &b);
+        c.matrix_mul_simd(&a, &b);
+        let secs = start.elapsed().as_secs_f64() / 2.0;
+        println!(
+            "SIMD: {} GFLOPS/s",
+            ((2 * M * N * K) as f64 / secs as f64) / 1e9
+        );
+        //println!("{:.2?}", c);
+
+        assert!(
+            c1.iter()
+                .zip(c.vec)
+                .map(|(a, b)| a - b)
+                .map(|x| x * x)
+                .sum::<f64>()
+                < 1e-7
+        );
+
+        assert!(false)
+    }
 }
+
+const NELTS: usize = 8;
+
+impl Matrix<f64> {
+    fn get_mut(&mut self, y: usize, x: usize) -> &mut f64 {
+        &mut self.elements[y][x]
+    }
+
+    fn matrix_mul(&mut self, a: &Matrix<f64>, b: &Matrix<f64>) {
+        for m in 0..self.get_height() {
+            for n in 0..self.get_width() {
+                for k in 0..a.get_width() {
+                    *self.get_mut(m, n) += a.get(m, k).expect("1") * b.get(k, n).expect("2")
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+struct SimdMatrix {
+    pub vec: Vec<f64>,
+    pub width: usize,
+    pub height: usize,
+}
+
+impl SimdMatrix {
+    fn new(matrix: Matrix<f64>) -> SimdMatrix {
+        SimdMatrix {
+            vec: matrix.elements.into_iter().concat(),
+            width: matrix.width,
+            height: matrix.height,
+        }
+    }
+
+    fn get(&self, y: usize, x: usize) -> &f64 {
+        &self.vec[y * self.width + x]
+    }
+
+    fn get_mut(&mut self, y: usize, x: usize) -> &mut f64 {
+        &mut self.vec[y * self.width + x]
+    }
+
+    fn load_simd(&self, y: usize, x: usize) -> std::simd::Simd<f64, NELTS> {
+        let a = y * self.width + x;
+        std::simd::Simd::from_slice(&self.vec[a..a + NELTS])
+    }
+
+    fn load_simd_tr(&self, y: usize, x: usize) -> std::simd::Simd<f64, NELTS> {
+        let start = y * self.width + x;
+        let mut column: std::simd::f64x8 = std::simd::Simd::splat(0.0);
+        for (idx, val) in self
+            .vec
+            .iter()
+            .skip(start)
+            .step_by(self.width)
+            .take(NELTS)
+            .enumerate()
+        {
+            column[idx] = *val;
+        }
+        column
+    }
+
+    fn load_simd_tr2(&self, y: usize, x: usize) -> std::simd::Simd<f64, NELTS> {
+        let w = self.width;
+        let start = y * self.width + x;
+        let slice = &self.vec[start..];
+        let idxs = std::simd::Simd::from_array([0, w, 2 * w, 3 * w, 4 * w, 5 * w, 6 * w, 7 * w]);
+        std::simd::Simd::gather_or_default(slice, idxs)
+    }
+
+    fn matrix_mul(&mut self, a: &SimdMatrix, b: &SimdMatrix) {
+        for m in 0..self.height {
+            for n in 0..self.width {
+                for k in 0..a.width {
+                    *self.get_mut(m, n) += a.get(m, k) * b.get(k, n);
+                }
+            }
+        }
+    }
+
+    fn matrix_mul_simd(&mut self, a: &SimdMatrix, b: &SimdMatrix) {
+        let edge = NELTS * (a.width / NELTS);
+        for m in 0..self.height {
+            for n in 0..self.width {
+                let mut tmp = std::simd::Simd::from_array([0.0; NELTS]);
+                for kv in (0..edge).step_by(NELTS) {
+                    tmp += a.load_simd(m, kv) * b.load_simd_tr2(kv, n);
+                }
+                *self.get_mut(m, n) += tmp.reduce_sum();
+                for k in edge..a.width {
+                    *self.get_mut(m, n) += a.get(m, k) * b.get(k, n);
+                }
+            }
+        }
+    }
+
+}
+*/

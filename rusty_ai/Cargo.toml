@@ -7,4 +7,9 @@ edition = "2021"
 
 [dependencies]
 itertools = { workspace = true }
+enum_dispatch = { workspace = true }
 rand = { workspace = true }
+
+[dev-dependencies]
+rayon = "1.7.0"
+spmc = "0.3.0"

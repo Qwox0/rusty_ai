@@ -6,8 +6,10 @@ use rand::Rng;
 use rusty_ai::{
     activation_function::ActivationFunction,
     builder::NeuralNetworkBuilder,
+    data_list::DataList,
     export::{ExportToJs, ExportedVariables},
     export_to_js,
+    optimizer::OptimizerDispatch,
     results::{TestsResult, TrainingsResult},
 };
 
@@ -16,7 +18,7 @@ const INPUTS: usize = 1;
 const TRAINING_RANGE: std::ops::RangeInclusive<f64> = -10.0..=10.0;
 
 #[inline(always)]
-fn target_fn(x: &f64) -> f64 {
+fn target_fn(x: f64) -> f64 {
     x.sin()
 }
 
@@ -36,45 +38,51 @@ fn main() {
     let relu = ActivationFunction::default_leaky_relu();
     let mut ai = NeuralNetworkBuilder::new()
         .input_layer::<1>()
-        .hidden_layers(&[3, 5, 3], relu)
-        .output_layer::<1>(relu)
+        //.hidden_layers(&[3, 5, 3], relu)
+        .hidden_layers(&[10, 10, 10], relu)
+        .output_layer::<1>(ActivationFunction::Identity)
+        .optimizer(OptimizerDispatch::default_gradient_descent())
         .build();
 
-    println!("ai: {}", ai);
-
-    fn get_data_pairs(count: usize) -> Vec<([f64; 1], [f64; 1])> {
-        let mut rng = rand::thread_rng();
-        (0..count)
-            .map(|_| rng.gen_range(TRAINING_RANGE))
-            .map(|x| ([x], [target_fn(&x)]))
-            .collect()
-    }
+    println!("START: {}", ai);
 
     // create training data
 
-    let mut rng = rand::thread_rng();
-    let test_data = get_data_pairs(100);
-    let (test_x, test_y): (Vec<f64>, Vec<f64>) = test_data
-        .clone()
-        .into_iter()
-        .map(|(x, y)| (x[0], y[0]))
-        .unzip();
-    test_x.export_to_js(&mut js_file, "training_x"); // js doesn't need to know, that inputs are actually Vec<f64> instead of f64
-    test_y.export_to_js(&mut js_file, "training_y");
+    let training_data = DataList::random_simple(args.training_count, -10.0..10.0, target_fn);
 
-    let no_training_result = ai.test(&test_data);
+    let (training_x, training_y): (Vec<f64>, Vec<f64>) =
+        training_data.clone().into_iter_tuple_simple().unzip();
+    training_x.export_to_js(&mut js_file, "training_x");
+    training_y.export_to_js(&mut js_file, "training_y");
+
+    let no_training_result = ai.test(training_data.iter());
     no_training_result.export_to_js(&mut js_file, "gen0_result");
     result_names.push("gen0_result").export(&mut js_file);
 
+    // train
+
+    ai.train(&training_data, 10, 10000, |ai, epoch| {
+        if epoch % 10000 == 0 {
+            println!("epoch: {}", epoch);
+            let test_res = ai.test(training_data.iter());
+            let res_name = format!("gen{}_result", epoch);
+            test_res.export_to_js(&mut js_file, &res_name);
+            result_names.push(&res_name).export(&mut js_file);
+        }
+    });
+
+    println!("TRAINED: {}", ai);
+    /*
     for epoch in 1..3 {
-        ai.train(get_data_pairs(args.training_count));
+        ai.train(DataList::random_simple(5, target_fn).iter());
         if epoch % 1 == 0 {
-            let no_training_result = ai.test(&test_data);
+            let no_training_result = ai.test(training_data.iter());
             let res_name = format!("gen{}_result", epoch);
             no_training_result.export_to_js(&mut js_file, &res_name);
             result_names.push(&res_name).export(&mut js_file);
         }
     }
+    */
 
     /*
     let training_x: Vec<[f64; 1]> = training_x.into_iter().map(|x| [x; 1]).collect();

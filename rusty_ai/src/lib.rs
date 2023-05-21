@@ -1,16 +1,23 @@
 #![feature(unboxed_closures)]
+#![feature(associated_type_defaults)]
+#![feature(test)]
 #![feature(fn_traits)]
+#![feature(type_changing_struct_update)]
+#![feature(iter_array_chunks)]
+#![feature(portable_simd)]
 
 pub mod activation_function;
-pub mod builder;
 pub mod data;
-pub mod data_list;
+pub mod error_function;
 pub mod export;
+pub mod gradient;
 pub mod layer;
 pub mod matrix;
 pub mod neural_network;
 pub mod optimizer;
+pub mod prelude;
 pub mod results;
+pub mod traits;
 pub mod util;
 
 // Ai Training steps
