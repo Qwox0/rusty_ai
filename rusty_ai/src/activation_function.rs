@@ -1,7 +1,7 @@
-use crate::util::macros::impl_fn_traits;
+use crate::util::impl_fn_traits;
 
 #[derive(Debug, Clone, Copy)]
-pub enum ActivationFunction {
+pub enum ActivationFn {
     /// Identity(x) = x
     /// Identity(x) = 1
     Identity,
@@ -21,16 +21,16 @@ pub enum ActivationFunction {
     Sigmoid,
 }
 
-impl ActivationFunction {
-    pub fn default_relu() -> ActivationFunction {
-        ActivationFunction::ReLU(1.0)
+impl ActivationFn {
+    pub const fn default_relu() -> ActivationFn {
+        ActivationFn::ReLU(1.0)
     }
-    pub fn default_leaky_relu() -> ActivationFunction {
-        ActivationFunction::LeakyReLU(0.01, 1.0)
+    pub const fn default_leaky_relu() -> ActivationFn {
+        ActivationFn::LeakyReLU(0.01, 1.0)
     }
 
     pub fn calculate(&self, input: f64) -> f64 {
-        use ActivationFunction::*;
+        use ActivationFn::*;
         match self {
             Identity => input,
             ReLU(_) => match input {
@@ -46,7 +46,7 @@ impl ActivationFunction {
     }
 
     pub fn derivative(&self, input: f64) -> f64 {
-        use ActivationFunction::*;
+        use ActivationFn::*;
         #[allow(illegal_floating_point_literal_pattern)] // for pattern: 0.0 => ...
         match self {
             Identity => 1.0,
@@ -75,12 +75,12 @@ impl ActivationFunction {
     }
 }
 
-impl_fn_traits!(Fn<(f64,)> -> f64: ActivationFunction => call);
-impl_fn_traits!(Fn<(&f64,)> -> f64: ActivationFunction => call_ref);
+impl_fn_traits!(Fn<(f64,)> -> f64: ActivationFn => call);
+impl_fn_traits!(Fn<(&f64,)> -> f64: ActivationFn => call_ref);
 
-impl std::fmt::Display for ActivationFunction {
+impl std::fmt::Display for ActivationFn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use ActivationFunction::*;
+        use ActivationFn::*;
         match self {
             Identity => write!(f, "Identity"),
             ReLU(d0) => write!(f, "ReLU (ReLU'(0)={})", d0),

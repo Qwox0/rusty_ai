@@ -1,3 +1,5 @@
+use crate::gradient::aliases::OutputGradient;
+
 #[derive(Debug, Clone, Default)]
 pub enum ErrorFunction {
     SquaredError,
@@ -23,7 +25,7 @@ impl ErrorFunction {
         }
     }
 
-    pub fn gradient(&self, output: Vec<f64>, expected_output: Vec<f64>) -> Vec<f64> {
+    pub fn gradient(&self, output: Vec<f64>, expected_output: Vec<f64>) -> OutputGradient {
         use ErrorFunction::*;
         assert_eq!(output.len(), expected_output.len());
         let errors = output

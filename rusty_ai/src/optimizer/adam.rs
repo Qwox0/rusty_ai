@@ -1,10 +1,12 @@
-use super::{Optimizer, DEFAULT_LEARNING_RATE};
+use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
+use crate::gradient::Gradient;
+use crate::util::{EntryDiv, EntrySub, Lerp, ScalarAdd};
 use crate::{
+    gradient::layer::GradientLayer,
     layer::Layer,
     matrix::Matrix,
-    neural_network::{NNOptimizationParts, NeuralNetwork},
-    results::GradientLayer,
-    util::{macros::impl_new, EntryAdd, ScalarMul},
+    neural_network::NeuralNetwork,
+    util::{constructor, EntryMul, ScalarMul},
 };
 
 // stochastic gradient descent
@@ -14,79 +16,59 @@ pub struct Adam {
     pub beta1: f64,
     pub beta2: f64,
     pub epsilon: f64,
-    m: Vec<Matrix<f64>>,
-    m_bias: Vec<f64>,
-    v: Vec<Matrix<f64>>,
-    v_bias: Vec<f64>,
+    m: Vec<GradientLayer>,
+    v: Vec<GradientLayer>,
 }
 
 impl Adam {
-    impl_new! {pub learning_rate: f64, beta1: f64, beta2: f64, epsilon:f64; Default}
-
-    pub(crate) fn init_values(&mut self, layers: &Vec<Layer>) {
-        let layer_count = layers.iter().skip(1).count();
-        self.m = layers
-            .iter()
-            .rev()
-            .map(|l| l.get_weights().get_dimensions())
-            .map(|(w, h)| Matrix::with_zeros(w, h))
-            .collect();
-        self.v = self.m.clone();
-        self.m_bias = vec![0.0; layer_count];
-        self.v_bias = vec![0.0; layer_count];
-    }
+    constructor! { pub new -> learning_rate: f64, beta1: f64, beta2: f64, epsilon:f64; Default }
+    constructor! { pub with_learning_rate -> learning_rate: f64; Default }
 }
 
-impl Optimizer for Adam {
-    fn optimize_weights<'a>(&mut self, nn: NNOptimizationParts, gradient: Vec<GradientLayer>) {
-        let time_step = nn.generation + 1; // generation starts at 0. should start at 1
-        for (((((layer, lgradient), m), m_bias), v), v_bias) in nn
-            .layers
-            .iter_mut()
-            .rev()
+impl IsOptimizer for Adam {
+    fn optimize_weights<'a, const IN: usize, const OUT: usize>(
+        &mut self,
+        nn: &mut NeuralNetwork<IN, OUT>,
+        gradient: Gradient,
+    ) {
+        let time_step = nn.get_generation() + 1; // generation starts at 0. should start at 1
+        for (((layer, lgradient), m), v) in nn
+            .iter_mut_layers()
             .zip(gradient)
             .zip(self.m.iter_mut())
-            .zip(self.m_bias.iter_mut())
             .zip(self.v.iter_mut())
-            .zip(self.v_bias.iter_mut())
         {
-            // update m
-            *m_bias *= self.beta1;
-            *m_bias += lgradient.bias_change * (1.0 - self.beta1);
-            m.mut_mul_scalar(self.beta1).mut_add_entries(
-                lgradient
-                    .weights_change
-                    .clone()
-                    .mul_scalar(1.0 - self.beta1),
-            );
+            m.lerp_mut(&lgradient, self.beta1);
+            v.lerp_mut(lgradient.sqare_entries(), self.beta2);
 
-            // update v
-            *v_bias *= self.beta2;
-            *v_bias += lgradient.bias_change * lgradient.bias_change * (1.0 - self.beta2);
-            let mut v_tmp = lgradient.weights_change.clone();
-            for x in v_tmp.iter_mut() {
-                *x *= *x;
-            }
-            v_tmp.mut_mul_scalar(1.0 - self.beta2);
-            v.mut_mul_scalar(self.beta2).mut_add_entries(v_tmp);
+            let get_correction_factor = |beta: f64| (1.0 - beta.powi(time_step as i32)).recip();
 
-            let v_bias_cor = *v_bias / (1.0 - self.beta2.powi(time_step as i32)) as f64;
-            *layer.get_bias_mut() -= self.learning_rate / (self.epsilon + v_bias_cor.sqrt())
-                * *m_bias
-                / (1.0 - self.beta1.powi(time_step as i32)) as f64;
-            for ((weight, m), v) in layer
-                .get_weights_mut()
-                .iter_mut()
-                .zip(m.iter())
-                .zip(v.iter())
-            {
-                // bias correction
-                let m_bias_cor = m / (1.0 - self.beta1.powi(time_step as i32)) as f64;
-                let v_bias_cor = v / (1.0 - self.beta2.powi(time_step as i32)) as f64;
+            let m_bias_cor = m.clone().mul_scalar(get_correction_factor(self.beta1));
+            let v_bias_cor = v.clone().mul_scalar(get_correction_factor(self.beta2));
 
-                *weight -= self.learning_rate / (self.epsilon + v_bias_cor.sqrt()) * m_bias_cor;
-            }
+            let denominator = v_bias_cor.sqrt_entries().add_scalar(self.epsilon);
+            let change = m_bias_cor
+                .mul_scalar(self.learning_rate)
+                .mul_scalar(0.00001)
+                .div_entries(denominator);
+
+            //println!("{:?}", change);
+
+            layer.sub_entries_mut(&change);
         }
+    }
+
+    fn init_with_layers(&mut self, layers: &Vec<Layer>) {
+        self.m = layers
+            .iter()
+            .map(|layer| {
+                let (w, h) = layer.get_weights().get_dimensions();
+                let weight_gradient = Matrix::with_zeros(w, h);
+                let bias_gradient = layer.get_bias().clone_with_zeros();
+                GradientLayer::new(weight_gradient, bias_gradient)
+            })
+            .collect();
+        self.v = self.m.clone();
     }
 }
 
@@ -96,11 +78,9 @@ impl Default for Adam {
             learning_rate: DEFAULT_LEARNING_RATE,
             beta1: 0.9,
             beta2: 0.999,
-            epsilon: 0.00000001,
+            epsilon: 1e-8,
             m: vec![],
-            m_bias: vec![],
             v: vec![],
-            v_bias: vec![],
         }
     }
 }

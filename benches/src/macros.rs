@@ -5,7 +5,7 @@ macro_rules! make_benches {
             let m = $setup;
             b.iter(|| {
                 for _ in 0..crate::constants::ITERATIONS {
-                    test::black_box(<$type>::$fn(&m $(, $arg )? ));
+                    test::black_box(<$type>::$fn(test::black_box(&m) $(, test::black_box($arg) )? ));
                 }
             })
         }

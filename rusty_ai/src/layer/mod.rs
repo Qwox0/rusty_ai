@@ -1,62 +1,89 @@
+mod add_bias;
+mod bias;
+mod builder;
 mod input;
 
+pub use add_bias::*;
+pub use bias::*;
+pub use builder::*;
 pub use input::InputLayer;
 
 use crate::{
-    activation_function::ActivationFunction::{self, *},
+    activation_function::ActivationFn,
+    gradient::aliases::{
+        BiasGradient, InputGradient, OutputGradient, WeightGradient, WeightedSumGradient,
+    },
+    gradient::layer::GradientLayer,
     matrix::Matrix,
-    results::GradientLayer,
     util::{
-        macros::{impl_getter, impl_new},
-        EntryAdd, EntryMul, ScalarMul,
+        constructor, impl_getter, EntryAdd, EntryMul, EntrySub, Randomize,
+        ScalarMul,
     },
 };
+
+/*
+#[derive(Debug, Clone)]
+pub enum LayerType {
+    Hidden,
+    Output,
+}
+use LayerType::*;
+*/
 
 pub trait IsLayer: std::fmt::Display {
     fn get_neuron_count(&self) -> usize;
     fn calculate(&self, inputs: Vec<f64>) -> Vec<f64>;
 }
 
-#[derive(Debug)]
-pub enum LayerType {
-    Hidden,
-    Output,
-}
-use LayerType::*;
-
 /// Layer: all input weights + bias for all neurons in layer + activation function
 /// The Propagation calculation is done in the same Order
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Layer {
-    layer_type: LayerType,
+    //layer_type: LayerType,
     weights: Matrix<f64>,
-    bias: f64,
-    activation_function: ActivationFunction,
+    bias: LayerBias,
+    activation_function: ActivationFn,
+}
+
+impl IsLayer for Layer {
+    fn get_neuron_count(&self) -> usize {
+        self.weights.get_height()
+    }
+
+    /// An Input layer doesn't change the input, but still multiplies by the identity matrix and
+    /// uses the identity activation function. It might be a good idea to skip the Input layer to
+    /// reduce calculations.
+    fn calculate(&self, inputs: Vec<f64>) -> Vec<f64> {
+        (&self.weights * inputs)
+            .add_bias_mut(&self.bias)
+            .iter()
+            .map(self.activation_function)
+            .collect()
+    }
 }
 
 impl Layer {
-    impl_new! { pub(crate) layer_type: LayerType, weights: Matrix<f64>, bias: f64, activation_function: ActivationFunction }
-    impl_getter! { get_layer_type -> layer_type: &LayerType }
-    impl_getter! { get_weights -> weights: &Matrix<f64> }
-    impl_getter! { get_weights_mut -> weights: &mut Matrix<f64> }
-    impl_getter! { get_bias -> bias: f64 }
-    impl_getter! { get_bias_mut -> bias: &mut f64 }
-    impl_getter! { get_activation_function -> activation_function: &ActivationFunction }
+    constructor! { new -> weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn }
+    impl_getter! { pub get_weights -> weights: &Matrix<f64> }
+    impl_getter! { pub get_weights_mut -> weights: &mut Matrix<f64> }
+    impl_getter! { pub get_bias -> bias: &LayerBias }
+    impl_getter! { pub get_bias_mut -> bias: &mut LayerBias }
+    impl_getter! { pub get_activation_function -> activation_function: &ActivationFn }
 
-    pub fn new_hidden(inputs: usize, neurons: usize, acti_func: ActivationFunction) -> Layer {
-        Layer::new(
-            Hidden,
-            Matrix::new_random(inputs, neurons),
-            rand::random(),
-            acti_func,
-        )
+    pub fn random_with_bias(
+        inputs: usize,
+        neurons: usize,
+        bias: LayerBias,
+        acti_func: ActivationFn,
+    ) -> Layer {
+        Layer::new(Matrix::new_random(inputs, neurons), bias, acti_func)
     }
 
-    pub fn new_output(inputs: usize, neurons: usize, acti_func: ActivationFunction) -> Layer {
-        Layer::new(
-            Output,
-            Matrix::new_random(inputs, neurons),
-            rand::random(),
+    pub fn random(inputs: usize, neurons: usize, acti_func: ActivationFn) -> Layer {
+        Layer::random_with_bias(
+            inputs,
+            neurons,
+            LayerBias::new_multiple(vec![0.0; neurons]).randomize_uniform(0.0..1.0),
             acti_func,
         )
     }
@@ -65,39 +92,29 @@ impl Layer {
         self.weights.get_width()
     }
 
-    pub fn get_neuron_count(&self) -> usize {
-        self.weights.get_height()
-    }
-
-    /// An Input layer doesn't change the input, but still multiplies by the identity matrix and
-    /// uses the identity activation function. It might be a good idea to skip the Input layer to
-    /// reduce calculations.
-    pub fn calculate(&self, inputs: Vec<f64>) -> Vec<f64> {
-        (&self.weights * inputs)
-            .into_iter()
-            .map(|x| x + self.bias)
-            .map(self.activation_function)
-            .collect()
-    }
-
     /// like [`Layer::calculate`] but also calculate the derivatives of the activation function
     pub fn training_calculate(&self, inputs: &Vec<f64>) -> (Vec<f64>, Vec<f64>) {
         (&self.weights * inputs)
-            .into_iter()
-            .map(|x| x + self.bias)
+            .add_bias_mut(&self.bias)
+            .iter()
             .map(|z| {
                 (
-                    self.activation_function.calculate(z),
-                    self.activation_function.derivative(z),
+                    self.activation_function.calculate(*z),
+                    self.activation_function.derivative(*z),
                 )
             })
             .unzip()
     }
 
-    pub(crate) fn iter_neurons(&self) -> impl Iterator<Item = &Vec<f64>> {
+    pub fn iter_neurons(&self) -> impl Iterator<Item = &Vec<f64>> {
         self.weights.iter_rows()
     }
 
+    pub fn iter_mut_neurons(&mut self) -> impl Iterator<Item = &mut Vec<f64>> {
+        self.weights.iter_rows_mut()
+    }
+
+    #[allow(unused)]
     pub(crate) fn backpropagation(
         &self,
         layer_inputs: &Vec<f64>,
@@ -107,26 +124,10 @@ impl Layer {
     ) -> (f64, Matrix<f64>, Vec<f64>) {
         let layer_input_count = self.get_input_count();
         let layer_neuron_count = self.get_neuron_count();
-        assert_eq!(
-            derivative_outputs.len(),
-            layer_neuron_count,
-            "derivatives is the wrong size"
-        );
-        assert_eq!(
-            layer_inputs.len(),
-            layer_input_count,
-            "layer_inputs is the wrong size"
-        );
-        assert_eq!(
-            layer_outputs.len(),
-            layer_neuron_count,
-            "layer_outputs is the wrong size"
-        );
-        assert_eq!(
-            expected_outputs.len(),
-            layer_neuron_count,
-            "expected_output is the wrong size"
-        );
+        assert_eq!(derivative_outputs.len(), layer_neuron_count);
+        assert_eq!(layer_inputs.len(), layer_input_count);
+        assert_eq!(layer_outputs.len(), layer_neuron_count);
+        assert_eq!(expected_outputs.len(), layer_neuron_count);
 
         // variables: dc_dx = dC/dx = partial derivative of the cost function
         //                            with respect to x.
@@ -164,14 +165,14 @@ impl Layer {
                     0.0,
                     // partial derivatives with respect to weights: matrix row i
                     // contains the weights change of connections to layer neuron i.
-                    Matrix::new_unchecked(layer_input_count, layer_neuron_count),
+                    Matrix::new_empty(layer_input_count, layer_neuron_count),
                     // sum of partial derivatives with respect to input (next expected output)
                     vec![0.0; layer_input_count],
                 ),
                 |mut acc, (dc_dbias, dc_dweights, dc_dinputs)| {
                     acc.0 += dc_dbias;
                     acc.1.push_row(dc_dweights);
-                    acc.2.mut_add_entries(&dc_dinputs);
+                    acc.2.add_entries_mut(&dc_dinputs);
                     acc
                 },
             );
@@ -180,90 +181,79 @@ impl Layer {
         (bias_derivative_average, res.1, input_derivative_average)
     }
 
+    #[allow(unused)]
     pub(crate) fn backpropagation2(
         &self,
         derivative_output: Vec<f64>,
         input: &Vec<f64>,
-        output_gradient: Vec<f64>,
-    ) -> (f64, Matrix<f64>, Vec<f64>) {
+        output_gradient: OutputGradient,
+    ) -> (BiasGradient, WeightGradient, InputGradient) {
         let layer_input_count = self.get_input_count();
         let layer_neuron_count = self.get_neuron_count();
+        assert_eq!(derivative_output.len(), layer_neuron_count,);
+        assert_eq!(input.len(), layer_input_count,);
+        assert_eq!(output_gradient.len(), layer_neuron_count,);
 
-        /*
-        #[cfg(debug_assertions)]
-        assert!(self.weights.get(0, 0).unwrap().abs() < 1000000.0);
-        #[cfg(debug_assertions)]
-        assert!(!self.weights.get(0, 0).unwrap().is_nan());
-        */
-        assert_eq!(
-            derivative_output.len(),
-            layer_neuron_count,
-            "derivatives is the wrong size"
-        );
-        assert_eq!(
-            input.len(),
-            layer_input_count,
-            "layer_inputs is the wrong size"
-        );
-        assert_eq!(
-            output_gradient.len(),
-            layer_neuron_count,
-            "layer_outputs is the wrong size"
-        );
-        /*
-        assert_eq!(
-            expected_output.len(),
-            layer_neuron_count,
-            "expected_output is the wrong size"
-        );
+        let weighted_sum_gradient: WeightedSumGradient =
+            output_gradient.mul_entries(derivative_output);
 
-        #[cfg(debug_assertions)]
-        print!(
-            "expected outputs: {:.7?}; {:.7} got: {:.7?}",
-            expected_output,
-            " ".repeat(
-                40usize
-                    .checked_sub(format!("{expected_output:?}").len())
-                    .unwrap_or(2)
-            ),
-            output_gradient
-        );
-        */
+        let bias_gradient: BiasGradient = self.bias.new_matching_gradient(&weighted_sum_gradient);
 
-        let input_gradient = output_gradient.mul_entries(derivative_output);
-        //println!("   -> CHANGE: {:.7?}", input_gradient);
-
-        let bias_change: f64 = input_gradient.iter().sum();
-
-        let mut weight_changes = Matrix::new_unchecked(layer_input_count, layer_neuron_count);
-        for neuron in input_gradient.iter() {
-            weight_changes.push_row(input.clone().mul_scalar(*neuron));
+        let mut weight_gradient: WeightGradient =
+            Matrix::new_empty(layer_input_count, layer_neuron_count);
+        for &neuron in weighted_sum_gradient.iter() {
+            weight_gradient.push_row(input.clone().mul_scalar(neuron));
         }
 
-        let mut input_changes = vec![0.0; layer_input_count];
-        for (weights, change) in self.iter_neurons().zip(input_gradient) {
-            input_changes.mut_add_entries(weights.clone().mul_scalar(change));
+        let mut input_gradient: InputGradient = vec![0.0; layer_input_count];
+        for (weights, change) in self.iter_neurons().zip(weighted_sum_gradient) {
+            input_gradient.add_entries_mut(weights.clone().mul_scalar(change));
         }
 
-        #[cfg(debug_assertions)]
-        {
-            println!("BIAS CHANGE   : {:.7}", bias_change);
-            println!(
-                "WEIGHTS CHANGE: {:?}    (inputs: {:.7?})",
-                weight_changes, input
-            );
-            println!(
-                "INPUTS CHANGE : {:.7?}    (weights: {:.7?})",
-                input_changes, self.weights
-            );
-        }
-
-        (bias_change, weight_changes, input_changes)
+        (bias_gradient, weight_gradient, input_gradient)
     }
 
-    pub fn init_gradient(&self) -> GradientLayer {
+    pub fn init_zero_gradient(&self) -> GradientLayer {
         let (width, height) = self.weights.get_dimensions();
-        GradientLayer::new(Matrix::with_zeros(width, height), 0.0)
+        let bias_change = self.bias.clone_with_zeros();
+        GradientLayer::new(Matrix::with_zeros(width, height), bias_change)
+    }
+}
+
+impl Randomize for Layer {
+    type Sample = f64;
+
+    fn _randomize_mut(
+        &mut self,
+        rng: &mut impl rand::Rng,
+        distr: impl rand::distributions::Distribution<Self::Sample>,
+    ) {
+        self.weights._randomize_mut(rng, &distr);
+        self.bias._randomize_mut(rng, &distr);
+    }
+}
+
+/*
+impl MultiRandom for Layer {
+    type Sample;
+    type Item;
+    type Size;
+
+    fn _random_multiple(
+        rng: &mut impl rand::Rng,
+        distr: impl rand::prelude::Distribution<Self::Sample>,
+        count: Self::Size,
+    ) -> Self {
+        todo!()
+    }
+}
+*/
+
+impl EntrySub<&GradientLayer> for Layer {
+    fn sub_entries_mut(&mut self, rhs: &GradientLayer) -> &mut Self {
+        self.weights.sub_entries_mut(&rhs.weight_gradient);
+        self.bias.sub_entries_mut(&rhs.bias_gradient);
+        self
     }
 }
 
@@ -273,12 +263,6 @@ impl std::fmt::Display for Layer {
             f,
             "{} Bias: {}; {}",
             self.weights, self.bias, self.activation_function
-        )?;
-        if let Output = self.layer_type {
-            let output_count = self.get_neuron_count();
-            let plural_s = if output_count == 1 { "" } else { "s" };
-            write!(f, "\n{} Output{}", output_count, plural_s)?;
-        }
-        Ok(())
+        )
     }
 }

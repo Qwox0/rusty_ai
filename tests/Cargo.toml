@@ -1,0 +1,18 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rusty_ai = { path = "../rusty_ai" }
+
+[[test]]
+name = "pytorch_sine"
+path = "./pytorch/sine.rs"
+
+[[test]]
+name = "pytorch_xor"
+path = "./pytorch/xor.rs"

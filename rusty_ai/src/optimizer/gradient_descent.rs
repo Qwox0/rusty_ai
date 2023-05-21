@@ -1,7 +1,7 @@
-use super::{Optimizer, DEFAULT_LEARNING_RATE};
+use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
 use crate::{
-    neural_network::NNOptimizationParts,
-    results::GradientLayer,
+    gradient::Gradient,
+    neural_network::NeuralNetwork,
     util::{EntrySub, ScalarMul},
 };
 
@@ -11,13 +11,15 @@ pub struct GradientDescent {
     pub learning_rate: f64,
 }
 
-impl Optimizer for GradientDescent {
-    fn optimize_weights<'a>(&mut self, nn: NNOptimizationParts, gradient: Vec<GradientLayer>) {
-        for (layer, gradient) in nn.layers.iter_mut().rev().zip(gradient) {
-            *layer.get_bias_mut() -= self.learning_rate * gradient.bias_change;
-            layer
-                .get_weights_mut()
-                .mut_sub_entries(gradient.weights_change.mul_scalar(self.learning_rate));
+impl IsOptimizer for GradientDescent {
+    fn optimize_weights<'a, const IN: usize, const OUT: usize>(
+        &mut self,
+        nn: &mut NeuralNetwork<IN, OUT>,
+        gradient: Gradient,
+    ) {
+        for (layer, mut gradient) in nn.iter_mut_layers().zip(gradient) {
+            gradient.mul_scalar_mut(self.learning_rate);
+            layer.sub_entries_mut(&gradient);
         }
     }
 }

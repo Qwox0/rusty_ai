@@ -1,13 +1,19 @@
 [workspace]
 members = [
     "rusty_ai",
+
+    "benches",
+    #"examples",
+    "tests",
 ]
-exclude = ["benchmarks", "examples"]
+exclude = []
+#default-members = ["rusty_ai"]
 
 [workspace.package]
 version = "0.1.0"
 
 [workspace.dependencies]
 rusty_ai = { path="./rusty_ai" }
+enum_dispatch = "0.3.11"
 rand = "0.8.5"
 itertools = "0.10.5"

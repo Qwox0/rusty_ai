@@ -1,4 +1,4 @@
-use crate::util::SetLength;
+use crate::util::{constructor, SetLength};
 
 #[derive(Debug)]
 pub struct PropagationResult<const OUT: usize>(pub [f64; OUT]);
@@ -18,4 +18,16 @@ impl<const OUT: usize> Into<[f64; OUT]> for PropagationResult<OUT> {
     fn into(self) -> [f64; OUT] {
         self.0
     }
+}
+
+/// contains the output and output derivatives of every layer
+/// caching this data is useful for backpropagation
+#[derive(Debug)]
+pub struct VerbosePropagation {
+    pub outputs: Vec<Vec<f64>>,
+    pub derivatives: Vec<Vec<f64>>,
+}
+
+impl VerbosePropagation {
+    constructor! { pub new -> outputs: Vec<Vec<f64>>, derivatives: Vec<Vec<f64>> }
 }

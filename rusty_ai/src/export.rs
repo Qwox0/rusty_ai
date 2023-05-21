@@ -1,11 +1,46 @@
+use crate::results::{TrainingsResult, TestsResult};
+use itertools::Itertools;
 use std::{fs::File, io::Write};
 
+pub enum JsVariableType {
+    Var,
+    Let,
+    Const,
+}
+
+impl JsVariableType {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            JsVariableType::Var => "var",
+            JsVariableType::Let => "let",
+            JsVariableType::Const => "const",
+        }
+    }
+}
+
 pub trait ExportToJs {
+    const JS_VARIABLE_TYPE: JsVariableType = JsVariableType::Let;
+    /// defines how the value of the exported js variable looks like
+    fn get_js_value(&self) -> String;
+
+    fn export_to_js_checked(
+        &self,
+        js_file: &mut std::fs::File,
+        variable_name: &str,
+    ) -> std::io::Result<()> {
+        writeln!(
+            js_file,
+            "{} {variable_name} = {};",
+            Self::JS_VARIABLE_TYPE.as_str(),
+            self.get_js_value()
+        )
+    }
+
+    /// like `Self::export_to_js` but panics if file write fails
     fn export_to_js(&self, js_file: &mut File, variable_name: &str) {
         self.export_to_js_checked(js_file, variable_name)
             .expect("could write to file");
     }
-    fn export_to_js_checked(&self, js_file: &mut File, variable_name: &str) -> std::io::Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -32,69 +67,48 @@ impl ExportedVariables {
 // ExportToJs Implentations:
 
 impl ExportToJs for Vec<f64> {
-    fn export_to_js_checked(&self, js_file: &mut File, variable_name: &str) -> std::io::Result<()> {
-        writeln!(js_file, "let {variable_name} = '{:?}';", self)
+    fn get_js_value(&self) -> String {
+        format!("'{:?}'", self)
     }
 }
 
 impl ExportToJs for Vec<[f64; 1]> {
-    fn export_to_js_checked(&self, js_file: &mut File, variable_name: &str) -> std::io::Result<()> {
+    fn get_js_value(&self) -> String {
         self.iter()
             .map(|x| x[0])
             .collect::<Vec<f64>>()
-            .export_to_js_checked(js_file, variable_name)
+            .get_js_value()
     }
 }
 
-//impl<const IN: usize, const OUT: usize> ExportToJs for TestsResult<IN, OUT> {
-impl ExportToJs for TestsResult<1, 1> {
-    fn export_to_js_checked(&self, js_file: &mut File, variable_name: &str) -> std::io::Result<()> {
-        writeln!(
-            js_file,
-            "let {variable_name} = {{ gen: {}, error: '{}', outputs: {:?} }};",
+impl ExportToJs for TestsResult<1> {
+    fn get_js_value(&self) -> String {
+        format!(
+            "{{ gen: {}, error: '{}', outputs: {:?} }}",
             self.generation,
             self.error,
-            self.outputs.iter().flatten().collect::<Vec<&f64>>()
+            self.outputs
+                .iter()
+                .map(|a| a.0)
+                .flatten()
+                .collect::<Vec<f64>>()
         )
     }
 }
 
 impl ExportToJs for ExportedVariables {
-    fn export_to_js_checked(&self, js_file: &mut File, variable_name: &str) -> std::io::Result<()> {
-        // var allows multiple exports with the same variable_name
-        writeln!(
-            js_file,
-            "var {variable_name} = [{}];",
-            self.list.iter().map(ToString::to_string).join(",")
-        )
+    // allow duplicate variable definitions
+    const JS_VARIABLE_TYPE: JsVariableType = JsVariableType::Var;
+    fn get_js_value(&self) -> String {
+        format!("[{}]", self.list.iter().map(ToString::to_string).join(","))
     }
 }
 
 impl<const IN: usize, const OUT: usize> ExportToJs for TrainingsResult<'_, IN, OUT> {
-    fn export_to_js_checked(&self, js_file: &mut File, variable_name: &str) -> std::io::Result<()> {
-        writeln!(
-            js_file,
-            "let {variable_name} = [{{ gen: {}, output: {:?} }}];",
+    fn get_js_value(&self) -> String {
+        format!(
+            "[{{ gen: {}, output: {:?} }}]",
             self.generation, self.output,
         )
     }
 }
-
-// old
-#[macro_export]
-macro_rules! export_to_js {
-    ( $js_file:expr => $( $var:ident = $val:expr ),* ) => {{
-        use std::io::prelude::Write;
-        let file: &mut ::std::fs::File = $js_file;
-        $(
-            writeln!(file, "let {} = {};", stringify!($var), $val).expect("could write to file");
-        )*
-    }};
-    ( $js_file:expr => $( $var:ident ),* ) => {
-        export_to_js!($js_file => $( $var = format!("'{:?}'", $var)),*)
-    };
-}
-pub use export_to_js;
-use itertools::Itertools;
-
-use crate::results::{TestsResult, TrainingsResult};

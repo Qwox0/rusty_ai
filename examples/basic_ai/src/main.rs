@@ -38,18 +38,20 @@ fn main() {
     let relu = ActivationFunction::default_leaky_relu();
     let mut ai = NeuralNetworkBuilder::new()
         .input_layer::<1>()
-        .hidden_layers(&[3, 5, 3], relu)
-        .output_layer::<1>(relu)
+        //.hidden_layers(&[3, 5, 3], relu)
+        .hidden_layers(&[10, 10, 10], relu)
+        .output_layer::<1>(ActivationFunction::Identity)
         .optimizer(OptimizerDispatch::default_gradient_descent())
         .build();
 
-    println!("ai: {}", ai);
+    println!("START: {}", ai);
 
     // create training data
 
-    let training_data = DataList::random_simple(args.training_count, target_fn);
+    let training_data = DataList::random_simple(args.training_count, -10.0..10.0, target_fn);
 
-    let (training_x, training_y): (Vec<f64>, Vec<f64>) = training_data.clone().into_iter_tuple_simple().unzip();
+    let (training_x, training_y): (Vec<f64>, Vec<f64>) =
+        training_data.clone().into_iter_tuple_simple().unzip();
     training_x.export_to_js(&mut js_file, "training_x");
     training_y.export_to_js(&mut js_file, "training_y");
 
@@ -59,7 +61,17 @@ fn main() {
 
     // train
 
-    ai.train(&training_data, 5, 2, false);
+    ai.train(&training_data, 10, 10000, |ai, epoch| {
+        if epoch % 10000 == 0 {
+            println!("epoch: {}", epoch);
+            let test_res = ai.test(training_data.iter());
+            let res_name = format!("gen{}_result", epoch);
+            test_res.export_to_js(&mut js_file, &res_name);
+            result_names.push(&res_name).export(&mut js_file);
+        }
+    });
+
+    println!("TRAINED: {}", ai);
     /*
     for epoch in 1..3 {
         ai.train(DataList::random_simple(5, target_fn).iter());
