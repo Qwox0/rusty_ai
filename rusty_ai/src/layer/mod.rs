@@ -266,7 +266,11 @@ impl std::fmt::Display for Layer {
 
 impl LayerOrLayerBuilder for Layer {
     fn as_layer_with_inputs(self, inputs: usize) -> Layer {
-        assert_eq!(self.get_input_count(), inputs);
+        assert_eq!(
+            self.get_input_count(),
+            inputs,
+            "input count doesn't match previously set value"
+        );
         self
     }
 }

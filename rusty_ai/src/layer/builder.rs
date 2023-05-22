@@ -1,9 +1,11 @@
-use rand::{distributions::Uniform, Rng};
-
 use super::{Layer, LayerBias};
 use crate::prelude::{ActivationFn, Matrix};
+use rand::{distributions::Uniform, Rng};
 
 pub trait LayerOrLayerBuilder {
+    /// Consumes self to create a [`Layer`].
+    /// # Panics
+    /// Panics if `inputs` doesn't match the previously set input value (if it exists)
     fn as_layer_with_inputs(self, inputs: usize) -> Layer;
 }
 
@@ -66,9 +68,7 @@ impl LayerBuilder<Neurons> {
             activation_function: None,
         }
     }
-}
 
-impl LayerBuilder<Neurons> {
     pub fn inputs(self, inputs: usize) -> LayerBuilder<LayerDimensions> {
         let Neurons(neurons) = self.weights;
         let weights = LayerDimensions { inputs, neurons };
@@ -142,11 +142,11 @@ impl LayerOrLayerBuilder for LayerBuilder<Neurons> {
 impl<W: BuildWeights> LayerOrLayerBuilder for LayerBuilder<W> {
     fn as_layer_with_inputs(self, inputs: usize) -> Layer {
         let layer = self.build();
-        assert_eq!(inputs, layer.get_input_count());
+        assert_eq!(
+            inputs,
+            layer.get_input_count(),
+            "input count doesn't match previously set value"
+        );
         layer
     }
-}
-
-fn test() {
-    let builder = LayerBuilder::new(5).inputs(1).build();
 }
