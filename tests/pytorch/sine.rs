@@ -28,7 +28,7 @@ fn sine() {
         .hidden_layer(LayerBuilder::with_weights(w1).bias(b1).build())
         .hidden_layer(LayerBuilder::with_weights(w2).bias(b2).build())
         .hidden_layer(LayerBuilder::with_weights(w3).bias(b3).build())
-        .output_layer_unchecked(
+        .output_layer(
             LayerBuilder::with_weights(w4)
                 .bias(b4)
                 .activation_function(ActivationFn::Identity)
