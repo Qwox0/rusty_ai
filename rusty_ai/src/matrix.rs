@@ -2,6 +2,7 @@ use crate::util::{
     constructor, dot_product, impl_getter, EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, Randomize,
     ScalarAdd, ScalarDiv, ScalarMul, ScalarSub, SetLength,
 };
+use itertools::Itertools;
 use rand::Rng;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Index, IndexMut, Mul};
@@ -37,7 +38,35 @@ impl<T> Matrix<T> {
     impl_getter! { pub get_elements -> elements: &Vec<Vec<T>> }
     impl_getter! { pub get_elements_mut -> elements: &mut Vec<Vec<T>> }
 
-    pub fn from_elements(elements: Vec<Vec<T>>) -> Matrix<T> {
+    pub fn random(
+        width: usize,
+        height: usize,
+        rng: &mut impl Rng,
+        distr: impl rand::distributions::Distribution<T>,
+    ) -> Matrix<T> {
+        let elements = rng
+            .sample_iter(distr)
+            .chunks(width)
+            .into_iter()
+            .map(Iterator::collect)
+            .collect();
+        Matrix::new(width, height, elements)
+    }
+
+    /// Create a [`Matrix`] from a [`Vec`] of Rows.
+    /// ```rust
+    /// # use rusty_ai::prelude::Matrix;
+    /// Matrix::from_rows(vec![vec![1, 0], vec![0, 1]]);
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if the rows don't have the same length:
+    /// ```rust, should_panic
+    /// # use rusty_ai::prelude::Matrix;
+    /// Matrix::from_rows(vec![vec![1, 0], vec![0]]); // -> Panics
+    /// ```
+    pub fn from_rows(elements: Vec<Vec<T>>) -> Matrix<T> {
         let height = elements.len();
         let width = elements.first().map(Vec::len).unwrap_or(0);
         assert!(elements.iter().map(Vec::len).all(|len| len == width));
@@ -119,7 +148,7 @@ impl<T: Ring + Clone> Matrix<T> {
 impl<T: Clone> Matrix<T> {
     /// Uses first row for matrix width. All other rows are lengthed with `default` or shortend to
     /// fit dimensions.
-    pub fn from_rows(rows: Vec<Vec<T>>, default: T) -> Matrix<T> {
+    pub fn from_rows_or(rows: Vec<Vec<T>>, default: T) -> Matrix<T> {
         let width = rows.get(0).map(Vec::len).unwrap_or(0);
         let height = rows.len();
         Matrix {

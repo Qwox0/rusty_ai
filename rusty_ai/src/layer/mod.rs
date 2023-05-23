@@ -60,12 +60,23 @@ impl IsLayer for Layer {
 }
 
 impl Layer {
-    constructor! { new -> weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn }
     impl_getter! { pub get_weights -> weights: &Matrix<f64> }
     impl_getter! { pub get_weights_mut -> weights: &mut Matrix<f64> }
     impl_getter! { pub get_bias -> bias: &LayerBias }
     impl_getter! { pub get_bias_mut -> bias: &mut LayerBias }
     impl_getter! { pub get_activation_function -> activation_function: &ActivationFn }
+
+    fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
+        assert!(match &bias {
+            LayerBias::OnePerLayer(_) => true,
+            LayerBias::OnePerNeuron(vec) => vec.len() == weights.get_height(),
+        });
+        Self {
+            weights,
+            bias,
+            activation_function,
+        }
+    }
 
     pub fn random_with_bias(
         inputs: usize,
