@@ -1,3 +1,4 @@
+use crate::layer::LayerOrLayerBuilder;
 use crate::prelude::*;
 use crate::{
     layer::{InputLayer, IsLayer},
@@ -80,8 +81,10 @@ impl<EF> NeuralNetworkBuilder<NoLayer, NoLayer, EF, NoOptimizer> {
 impl<LL: InputOrHidden, EF, const IN: usize> NeuralNetworkBuilder<Input<IN>, LL, EF, NoOptimizer> {
     pub fn hidden_layer(
         mut self,
-        layer: Layer,
+        layer: impl LayerOrLayerBuilder,
     ) -> NeuralNetworkBuilder<Input<IN>, Hidden, EF, NoOptimizer> {
+        let inputs = self.last_neuron_count();
+        let layer = layer.as_layer_with_inputs(inputs);
         self.layers.push(layer);
         update_phantom!(self)
     }
@@ -110,20 +113,23 @@ impl<LL: InputOrHidden, EF, const IN: usize> NeuralNetworkBuilder<Input<IN>, LL,
     }
 
     /// make sure OUT matches layer
-    pub fn output_layer_unchecked<const OUT: usize>(
+    pub fn output_layer<const OUT: usize>(
         mut self,
-        layer: Layer,
+        layer: impl LayerOrLayerBuilder,
     ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, EF, NoOptimizer> {
+        let inputs = self.last_neuron_count();
+        let layer = layer.as_layer_with_inputs(inputs);
+        assert_eq!(layer.get_neuron_count(), OUT);
         self.layers.push(layer);
         update_phantom!(self)
     }
 
-    pub fn output_layer<const OUT: usize>(
+    pub fn output_layer_random<const OUT: usize>(
         self,
         act_func: ActivationFn,
     ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, EF, NoOptimizer> {
         let layer = Layer::random(self.last_neuron_count(), OUT, act_func);
-        self.output_layer_unchecked(layer)
+        self.output_layer(layer)
     }
 
     pub fn last_neuron_count(&self) -> usize {

@@ -15,10 +15,7 @@ use crate::{
     },
     gradient::layer::GradientLayer,
     matrix::Matrix,
-    util::{
-        constructor, impl_getter, EntryAdd, EntryMul, EntrySub, Randomize,
-        ScalarMul,
-    },
+    util::{constructor, impl_getter, EntryAdd, EntryMul, EntrySub, Randomize, ScalarMul},
 };
 
 /*
@@ -264,5 +261,16 @@ impl std::fmt::Display for Layer {
             "{} Bias: {}; {}",
             self.weights, self.bias, self.activation_function
         )
+    }
+}
+
+impl LayerOrLayerBuilder for Layer {
+    fn as_layer_with_inputs(self, inputs: usize) -> Layer {
+        assert_eq!(
+            self.get_input_count(),
+            inputs,
+            "input count doesn't match previously set value"
+        );
+        self
     }
 }

@@ -1,95 +1,119 @@
 use super::{Layer, LayerBias};
 use crate::prelude::{ActivationFn, Matrix};
+use rand::{distributions::Uniform, Rng};
 
-// Markers
-pub struct InputsMissing;
+pub trait LayerOrLayerBuilder {
+    /// Consumes self to create a [`Layer`].
+    /// # Panics
+    /// Panics if `inputs` doesn't match the previously set input value (if it exists)
+    fn as_layer_with_inputs(self, inputs: usize) -> Layer;
+}
 
-/// # Fields
-/// `inputs`: required
-/// `neurons`: required
-/// `bias`: not required (default: `ActivationFn::default_relu()`)
-/// `activation_function`: not required (default: `ActivationFn::default_relu()`)
-pub struct LayerBuilder<I> {
-    inputs: I,
+// Weights Markers
+pub struct Neurons(usize);
+pub struct LayerDimensions {
+    inputs: usize,
     neurons: usize,
-    weights: Option<Matrix<f64>>,
-    bias: Option<LayerBias>,
+}
+pub struct WeightsInitialized(Matrix<f64>);
+
+pub trait BuildWeights {
+    fn build_weights(self) -> Matrix<f64>;
+}
+impl BuildWeights for LayerDimensions {
+    fn build_weights(self) -> Matrix<f64> {
+        todo!()
+    }
+}
+impl BuildWeights for WeightsInitialized {
+    fn build_weights(self) -> Matrix<f64> {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+enum BiasMarker {
+    OnePerNeuron { neurons: usize },
+    Initialized(LayerBias),
+}
+
+impl BiasMarker {
+    fn build_bias(self) -> LayerBias {
+        match self {
+            BiasMarker::OnePerNeuron { neurons } => LayerBias::OnePerNeuron(
+                rand::thread_rng()
+                    .sample_iter(Uniform::from(0.0..1.0))
+                    .take(neurons)
+                    .collect(),
+            ),
+            BiasMarker::Initialized(bias) => bias,
+        }
+    }
+}
+
+const DEFAULT_ACTIVATION_FN: ActivationFn = ActivationFn::default_relu();
+
+#[derive(Debug, Clone)]
+pub struct LayerBuilder<W> {
+    weights: W,
+    bias: BiasMarker,
     activation_function: Option<ActivationFn>,
 }
 
-impl LayerBuilder<InputsMissing> {
-    pub fn new(neurons: usize) -> LayerBuilder<InputsMissing> {
+impl LayerBuilder<Neurons> {
+    pub fn new(neurons: usize) -> LayerBuilder<Neurons> {
         LayerBuilder {
-            inputs: InputsMissing,
-            neurons,
-            weights: None,
-            bias: None,
+            weights: Neurons(neurons),
+            bias: BiasMarker::OnePerNeuron { neurons },
             activation_function: None,
         }
     }
 
-    pub fn inputs(self, inputs: usize) -> LayerBuilder<usize> {
-        LayerBuilder { inputs, ..self }
+    pub fn inputs(self, inputs: usize) -> LayerBuilder<LayerDimensions> {
+        let Neurons(neurons) = self.weights;
+        let weights = LayerDimensions { inputs, neurons };
+        LayerBuilder { weights, ..self }
     }
 
-    pub fn weights_checked(self, weights: Matrix<f64>) -> LayerBuilder<usize> {
-        assert_eq!(self.neurons, weights.get_height());
-        LayerBuilder {
-            inputs: weights.get_width(),
-            weights: Some(weights),
-            ..self
-        }
+    pub fn weights_checked(self, weights: Matrix<f64>) -> LayerBuilder<WeightsInitialized> {
+        assert_eq!(self.weights.0, weights.get_height());
+        self.weights_unchecked(weights)
     }
 }
 
-impl LayerBuilder<usize> {
-    pub fn with_inputs(inputs: usize, neurons: usize) -> LayerBuilder<usize> {
+impl LayerBuilder<LayerDimensions> {
+    pub fn with_inputs(inputs: usize, neurons: usize) -> LayerBuilder<LayerDimensions> {
         LayerBuilder::new(neurons).inputs(inputs)
     }
 
-    pub fn with_weights(weights: Matrix<f64>) -> LayerBuilder<usize> {
-        LayerBuilder::new(0).weights(weights)
-    }
-
     fn get_dimensions(&self) -> (usize, usize) {
-        (self.inputs, self.neurons)
+        (self.weights.inputs, self.weights.neurons)
     }
 
-    pub fn weights_checked(self, weights: Matrix<f64>) -> LayerBuilder<usize> {
+    /// initializes `weights` to a specific value.
+    /// # Panics
+    /// This panics if the dimensions of `weights` don't match previously set layer dimensions.
+    pub fn weights_checked(self, weights: Matrix<f64>) -> LayerBuilder<WeightsInitialized> {
         assert_eq!(self.get_dimensions(), weights.get_dimensions());
-        LayerBuilder {
-            inputs: weights.get_width(),
-            weights: Some(weights),
-            ..self
-        }
-    }
-
-    pub fn build(self) -> Layer {
-        let activation_function = self
-            .activation_function
-            .unwrap_or(ActivationFn::default_relu());
-        let weights = self.weights.unwrap_or(todo!());
-        let bias = self.bias.unwrap_or(todo!());
-        Layer {
-            weights,
-            bias,
-            activation_function,
-        }
+        self.weights_unchecked(weights)
     }
 }
 
-impl<I> LayerBuilder<I> {
-    pub fn weights(self, weights: Matrix<f64>) -> LayerBuilder<usize> {
-        LayerBuilder {
-            inputs: weights.get_width(),
-            neurons: weights.get_height(),
-            weights: Some(weights),
-            ..self
-        }
+impl LayerBuilder<WeightsInitialized> {
+    pub fn with_weights(weights: Matrix<f64>) -> LayerBuilder<WeightsInitialized> {
+        LayerBuilder::new(0).weights_unchecked(weights)
+    }
+}
+
+impl<W> LayerBuilder<W> {
+    /// initializes `weights` to a specific value. This ignores any previously set layer dimensions.
+    pub fn weights_unchecked(self, weights: Matrix<f64>) -> LayerBuilder<WeightsInitialized> {
+        let weights = WeightsInitialized(weights);
+        LayerBuilder { weights, ..self }
     }
 
-    pub fn bias(mut self, bias: LayerBias) -> Self {
-        self.bias = Some(bias);
+    pub fn bias(mut self, bias: LayerBias) -> LayerBuilder<W> {
+        self.bias = BiasMarker::Initialized(bias);
         self
     }
 
@@ -99,6 +123,30 @@ impl<I> LayerBuilder<I> {
     }
 }
 
-fn test() {
-    let builder = LayerBuilder::new(5).inputs(1).build();
+impl<W: BuildWeights> LayerBuilder<W> {
+    pub fn build(self) -> Layer {
+        Layer {
+            weights: self.weights.build_weights(),
+            bias: self.bias.build_bias(),
+            activation_function: self.activation_function.unwrap_or(DEFAULT_ACTIVATION_FN),
+        }
+    }
+}
+
+impl LayerOrLayerBuilder for LayerBuilder<Neurons> {
+    fn as_layer_with_inputs(self, inputs: usize) -> Layer {
+        self.inputs(inputs).build()
+    }
+}
+
+impl<W: BuildWeights> LayerOrLayerBuilder for LayerBuilder<W> {
+    fn as_layer_with_inputs(self, inputs: usize) -> Layer {
+        let layer = self.build();
+        assert_eq!(
+            inputs,
+            layer.get_input_count(),
+            "input count doesn't match previously set value"
+        );
+        layer
+    }
 }

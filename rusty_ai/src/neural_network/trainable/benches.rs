@@ -200,7 +200,7 @@ fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
     let ai = NeuralNetworkBuilder::new()
         .input_layer()
         .hidden_layers_random(&[100, 100, 100], ActivationFn::default_relu())
-        .output_layer(ActivationFn::Identity)
+        .output_layer_random(ActivationFn::Identity)
         .gradient_descent_optimizer(GradientDescent::default())
         .build();
 
