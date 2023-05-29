@@ -163,7 +163,7 @@ impl<EF: GetErrFn, const IN: usize, const OUT: usize>
         self.optimizer(Optimizer::Adam(optimizer))
     }
 
-    pub fn gradient_descent_optimizer(
+    pub fn sgd_optimizer(
         self,
         optimizer: GradientDescent,
     ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, EF, HasOptimizer> {

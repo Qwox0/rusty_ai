@@ -1,14 +1,16 @@
 mod entrywise_arithmetic;
 mod lerp;
 mod macros;
-mod scalar_arithmetic;
 mod random;
+mod rng;
+mod scalar_arithmetic;
 
 pub use entrywise_arithmetic::*;
 pub use lerp::*;
 pub(crate) use macros::*;
-pub use scalar_arithmetic::*;
 pub use random::*;
+pub use rng::*;
+pub use scalar_arithmetic::*;
 
 pub fn dot_product<T>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
 where

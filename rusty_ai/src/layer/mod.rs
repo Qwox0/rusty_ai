@@ -67,10 +67,13 @@ impl Layer {
     impl_getter! { pub get_activation_function -> activation_function: &ActivationFn }
 
     fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
-        assert!(match &bias {
-            LayerBias::OnePerLayer(_) => true,
-            LayerBias::OnePerNeuron(vec) => vec.len() == weights.get_height(),
-        });
+        if let Some(bias_neurons) = bias.get_neuron_count() {
+            assert_eq!(
+                weights.get_height(),
+                bias_neurons,
+                "Weights and Bias don't have matching neuron counts."
+            );
+        }
         Self {
             weights,
             bias,

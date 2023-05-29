@@ -48,6 +48,13 @@ impl LayerBias {
         }
     }
 
+    pub fn get_neuron_count(&self) -> Option<usize> {
+        match self {
+            LayerBias::OnePerLayer(_) => None,
+            LayerBias::OnePerNeuron(vec) => Some(vec.len()),
+        }
+    }
+
     pub fn sqare_entries_mut(&mut self) -> &mut LayerBias {
         match self {
             LayerBias::OnePerLayer(x) => *x *= *x,

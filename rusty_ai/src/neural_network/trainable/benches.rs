@@ -4,10 +4,12 @@ use std::{
     thread::{JoinHandle, ScopedJoinHandle},
 };
 
+use rand::{distributions::Uniform, Rng, SeedableRng};
 use rayon::prelude::*;
 use test::black_box;
 
 use crate::{
+    data::DataBuilder,
     prelude::*,
     util::{EntryAdd, MultiRandom},
 };
@@ -197,16 +199,26 @@ impl ParallelSlice<Pair<1, 1>> for PairList<1, 1> {
 
 fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
     const SEED: u64 = 69420;
+    let layer_builder = LayerBuilder::neurons(100)
+        .activation_function(ActivationFn::default_relu())
+        .seed(SEED);
     let ai = NeuralNetworkBuilder::new()
         .input_layer()
-        .hidden_layers_random(&[100, 100, 100], ActivationFn::default_relu())
-        .output_layer_random(ActivationFn::Identity)
-        .gradient_descent_optimizer(GradientDescent::default())
+        .hidden_layer(LayerBuilder::neurons(100).seed(SEED))
+        .hidden_layer(LayerBuilder::neurons(100).seed(SEED + 1))
+        .hidden_layer(LayerBuilder::neurons(100).seed(SEED + 2))
+        .output_layer(
+            LayerBuilder::neurons(1)
+                .seed(SEED + 3)
+                .activation_function(ActivationFn::Identity),
+        )
+        .sgd_optimizer(GradientDescent::default())
         .build();
 
-    //let data = ValueList::random_uniform_seeded_multiple(-5.0..5.0, SEED, data_count) .gen_pairs(|a| [a[0].sin()]);
-
-    let data = todo!();
+    let data = DataBuilder::uniform(-5.0..5.0)
+        .seed(SEED)
+        .build(data_count)
+        .gen_pairs(|x| [x[0].sin()]);
 
     (ai, data)
 }
@@ -215,16 +227,20 @@ macro_rules! make_bench {
     ( $fn:ident ) => {
         mod $fn {
             use super::*;
+            /*
             #[bench]
             fn bench(b: &mut test::Bencher) {
                 let (mut ai, data) = setup(100);
+                panic!("{:?}", ai);
                 let data = data.as_slice();
 
                 b.iter(|| black_box(BackpropBenches::$fn(black_box(&mut ai), black_box(&data))))
             }
+            */
             #[test]
             fn test() {
                 let (mut ai, data) = setup(100);
+                panic!("{:?}", ai);
                 let data = data.as_slice();
 
                 BackpropBenches::$fn(&mut ai, &data);

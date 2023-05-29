@@ -25,17 +25,16 @@ fn sine() {
 
     let mut ai = NeuralNetworkBuilder::new()
         .input_layer::<1>()
-        .hidden_layer(LayerBuilder::with_weights(w1).bias(b1).build())
-        .hidden_layer(LayerBuilder::with_weights(w2).bias(b2).build())
-        .hidden_layer(LayerBuilder::with_weights(w3).bias(b3).build())
+        .hidden_layer(LayerBuilder::with_weights(w1).bias(b1))
+        .hidden_layer(LayerBuilder::with_weights(w2).bias(b2))
+        .hidden_layer(LayerBuilder::with_weights(w3).bias(b3))
         .output_layer(
             LayerBuilder::with_weights(w4)
                 .bias(b4)
-                .activation_function(ActivationFn::Identity)
-                .build(),
+                .activation_function(ActivationFn::Identity),
         )
         .error_function(ErrorFunction::SquaredError)
-        .gradient_descent_optimizer(GradientDescent {
+        .sgd_optimizer(GradientDescent {
             learning_rate: 0.01,
         })
         .build();
