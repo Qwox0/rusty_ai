@@ -200,9 +200,9 @@ impl ParallelSlice<Pair<1, 1>> for PairList<1, 1> {
 fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
     const SEED: u64 = 69420;
     let layer_builder = LayerBuilder::neurons(100)
-        .activation_function(ActivationFn::default_relu())
-        .seed(SEED);
-    let ai = NeuralNetworkBuilder::new()
+        .activation_function(ActivationFn::default_relu());
+    let ai = NeuralNetworkBuilder::default()
+        .rng_seed(SEED)
         .input_layer()
         .hidden_layer(LayerBuilder::neurons(100).seed(SEED))
         .hidden_layer(LayerBuilder::neurons(100).seed(SEED + 1))
@@ -214,6 +214,7 @@ fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
         )
         .sgd_optimizer(GradientDescent::default())
         .build();
+    assert!(false);
 
     let data = DataBuilder::uniform(-5.0..5.0)
         .seed(SEED)
@@ -227,7 +228,6 @@ macro_rules! make_bench {
     ( $fn:ident ) => {
         mod $fn {
             use super::*;
-            /*
             #[bench]
             fn bench(b: &mut test::Bencher) {
                 let (mut ai, data) = setup(100);
@@ -236,7 +236,6 @@ macro_rules! make_bench {
 
                 b.iter(|| black_box(BackpropBenches::$fn(black_box(&mut ai), black_box(&data))))
             }
-            */
             #[test]
             fn test() {
                 let (mut ai, data) = setup(100);
@@ -252,9 +251,26 @@ macro_rules! make_bench {
     };
 }
 
+/*
 make_bench! { single_thread }
 make_bench! { single_thread2 }
 make_bench! { arc_mutex }
 make_bench! { mpsc_out }
 make_bench! { spmc_in }
 make_bench! { rayon_iter }
+*/
+
+#[cfg(test)]
+mod testasdf {
+    use super::*;
+
+    #[test]
+    fn testasdf() {
+        let data_count = 10;
+        let a = setup(data_count);
+        let b = setup(data_count);
+        println!("{:?}", a);
+        println!("{:?}", b);
+        assert!(false);
+    }
+}

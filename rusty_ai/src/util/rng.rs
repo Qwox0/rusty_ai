@@ -50,3 +50,33 @@ impl rand::RngCore for RngWrapper {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rand::{distributions::Uniform, prelude::Distribution};
+
+    use super::*;
+    #[test]
+    fn test() {
+        let mut a = Uniform::from(0.0..1.0).sample_iter(RngWrapper::new(Some(10)));
+        let a = a.next().unwrap();
+        println!("1 {:?}", a);
+
+        let mut b = Uniform::from(0.0..1.0).sample_iter(RngWrapper::new(Some(10)));
+        let b = b.next().unwrap();
+        println!("1 {:?}", b);
+
+        assert_eq!(a, b);
+
+        let mut rng = RngWrapper::new(Some(10));
+        let mut a = Uniform::from(0.0..1.0).sample_iter(&mut rng);
+        let a = a.next().unwrap();
+        println!("2 {:?}", a);
+
+        let mut b = Uniform::from(0.0..1.0).sample_iter(&mut rng);
+        let b = b.next().unwrap();
+        println!("2 {:?}", b);
+
+        assert_ne!(a, b);
+    }
+}

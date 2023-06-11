@@ -1,8 +1,11 @@
 use crate::util::{
     constructor, dot_product, impl_getter, EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, Randomize,
-    ScalarAdd, ScalarDiv, ScalarMul, ScalarSub, SetLength,
+    RngWrapper, ScalarAdd, ScalarDiv, ScalarMul, ScalarSub, SetLength,
 };
 use itertools::Itertools;
+use rand::distributions::uniform::UniformDuration;
+use rand::distributions::DistIter;
+use rand::prelude::Distribution;
 use rand::Rng;
 use std::fmt::{Debug, Display};
 use std::ops::{Add, Index, IndexMut, Mul};
@@ -38,18 +41,16 @@ impl<T> Matrix<T> {
     impl_getter! { pub get_elements -> elements: &Vec<Vec<T>> }
     impl_getter! { pub get_elements_mut -> elements: &mut Vec<Vec<T>> }
 
-    pub fn random(
-        width: usize,
-        height: usize,
-        rng: &mut impl Rng,
-        distr: impl rand::distributions::Distribution<T>,
-    ) -> Matrix<T> {
-        let elements = rng
-            .sample_iter(distr)
+    /// # Panics
+    /// Panics if the iterator is too small.
+    pub fn from_iter(width: usize, height: usize, iter: impl Iterator<Item = T>) -> Matrix<T> {
+        let elements: Vec<_> = iter
             .chunks(width)
             .into_iter()
             .map(Iterator::collect)
             .collect();
+        assert_eq!(elements.len(), height);
+        assert_eq!(elements.last().map(Vec::len), Some(width));
         Matrix::new(width, height, elements)
     }
 
@@ -167,13 +168,19 @@ impl<T: Clone> Matrix<T> {
 }
 
 impl Matrix<f64> {
-    pub fn new_random(width: usize, height: usize) -> Matrix<f64> {
-        let mut rng = rand::thread_rng();
+    pub fn new_random(
+        width: usize,
+        height: usize,
+        rng: &mut DistIter<impl Distribution<f64>, RngWrapper, f64>,
+    ) -> Matrix<f64> {
         Matrix {
             width,
             height,
-            elements: (0..height)
-                .map(|_| (0..width).map(|_| rng.gen_range(-0.1..0.1)).collect())
+            elements: rng
+                .chunks(width)
+                .into_iter()
+                .take(height)
+                .map(Iterator::collect)
                 .collect(),
         }
     }

@@ -23,7 +23,7 @@ fn sine() {
 
     let relu = ActivationFn::default_relu();
 
-    let mut ai = NeuralNetworkBuilder::new()
+    let mut ai = NeuralNetworkBuilder::default()
         .input_layer::<1>()
         .hidden_layer(LayerBuilder::with_weights(w1).bias(b1))
         .hidden_layer(LayerBuilder::with_weights(w2).bias(b2))

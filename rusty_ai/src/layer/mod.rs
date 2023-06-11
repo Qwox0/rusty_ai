@@ -7,6 +7,11 @@ pub use add_bias::*;
 pub use bias::*;
 pub use builder::*;
 pub use input::InputLayer;
+use rand::{
+    distributions::{DistIter, Uniform},
+    prelude::Distribution,
+    Rng,
+};
 
 use crate::{
     activation_function::ActivationFn,
@@ -15,7 +20,9 @@ use crate::{
     },
     gradient::layer::GradientLayer,
     matrix::Matrix,
-    util::{constructor, impl_getter, EntryAdd, EntryMul, EntrySub, Randomize, ScalarMul},
+    util::{
+        constructor, impl_getter, EntryAdd, EntryMul, EntrySub, Randomize, RngWrapper, ScalarMul,
+    },
 };
 
 /*
@@ -66,7 +73,7 @@ impl Layer {
     impl_getter! { pub get_bias_mut -> bias: &mut LayerBias }
     impl_getter! { pub get_activation_function -> activation_function: &ActivationFn }
 
-    fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
+    pub fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
         if let Some(bias_neurons) = bias.get_neuron_count() {
             assert_eq!(
                 weights.get_height(),
@@ -81,22 +88,33 @@ impl Layer {
         }
     }
 
+    /// # Panics
+    /// Panics if the iterator is too small.
+    pub fn from_iter(
+        inputs: usize,
+        neurons: usize,
+        mut iter: impl Iterator<Item = f64>,
+        acti_func: ActivationFn,
+    ) -> Layer {
+        let weights = Matrix::from_iter(inputs, neurons, &mut iter);
+        let bias = LayerBias::from_iter_multiple(neurons, iter);
+        Layer::new(weights, bias, acti_func)
+    }
+
     pub fn random_with_bias(
+        rng: &mut DistIter<impl Distribution<f64>, RngWrapper, f64>,
         inputs: usize,
         neurons: usize,
         bias: LayerBias,
         acti_func: ActivationFn,
     ) -> Layer {
-        Layer::new(Matrix::new_random(inputs, neurons), bias, acti_func)
+        Layer::new(Matrix::new_random(inputs, neurons, rng), bias, acti_func)
     }
 
     pub fn random(inputs: usize, neurons: usize, acti_func: ActivationFn) -> Layer {
-        Layer::random_with_bias(
-            inputs,
-            neurons,
-            LayerBias::new_multiple(vec![0.0; neurons]).randomize_uniform(0.0..1.0),
-            acti_func,
-        )
+        let mut rng = RngWrapper::new(None).sample_iter(Uniform::from(0.0..1.0));
+        let bias = LayerBias::from_iter_multiple(neurons, &mut rng);
+        Layer::random_with_bias(&mut rng, inputs, neurons, bias, acti_func)
     }
 
     pub fn get_input_count(&self) -> usize {

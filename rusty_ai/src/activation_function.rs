@@ -21,6 +21,12 @@ pub enum ActivationFn {
     Sigmoid,
 }
 
+impl Default for ActivationFn {
+    fn default() -> Self {
+        ActivationFn::default_relu()
+    }
+}
+
 impl ActivationFn {
     pub const fn default_relu() -> ActivationFn {
         ActivationFn::ReLU(1.0)

@@ -65,11 +65,13 @@ impl<D: Distribution<f64>> RandomWeights<D> {
 impl<D: Distribution<f64>> Buildable for RandomWeights<D> {
     type OUT = Matrix<f64>;
     fn build(self, rng: &mut crate::util::RngWrapper) -> Self::OUT {
-        Matrix::random(self.inputs, self.neurons, rng, &self.distr)
+        //Matrix::from_iter(self.inputs, self.neurons, &self.distr)
+        todo!()
     }
 
     fn clone_build(&mut self, rng: &mut RngWrapper) -> Self::OUT {
-        Matrix::random(self.inputs, self.neurons, rng, &self.distr)
+        //Matrix::from_iter(self.inputs, self.neurons, rng, &self.distr)
+        todo!()
     }
 }
 
