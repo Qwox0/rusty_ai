@@ -101,6 +101,7 @@ impl Layer {
         Layer::new(weights, bias, acti_func)
     }
 
+    /*
     pub fn random_with_bias(
         rng: &mut DistIter<impl Distribution<f64>, RngWrapper, f64>,
         inputs: usize,
@@ -116,6 +117,7 @@ impl Layer {
         let bias = LayerBias::from_iter_multiple(neurons, &mut rng);
         Layer::random_with_bias(&mut rng, inputs, neurons, bias, acti_func)
     }
+    */
 
     pub fn get_input_count(&self) -> usize {
         self.weights.get_width()

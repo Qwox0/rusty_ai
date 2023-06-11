@@ -102,11 +102,11 @@ where
         self,
     ) -> NeuralNetworkBuilder<Input<N>, Input<N>, NoOptimizer, RngWrapper, D> {
         // lock initilizer
-        let initilizer = RngWrapper::new(self.rng.seed);
+        let rng = RngWrapper::new(self.rng.seed);
         NeuralNetworkBuilder {
             input: PhantomData,
             last_layer: PhantomData,
-            rng: initilizer,
+            rng,
             ..self
         }
     }
@@ -117,6 +117,10 @@ where
     LL: InputOrHidden,
     D: Distribution<f64>,
 {
+    fn get_rng_iter<'a>(&'a mut self) -> impl Iterator<Item = f64> + 'a {
+        (&self.distr).sample_iter(&mut self.rng)
+    }
+
     pub fn hidden_layer(
         mut self,
         layer: impl LayerOrLayerBuilder,
@@ -132,8 +136,10 @@ where
         neurons: usize,
     ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, RngWrapper, D> {
         let inputs = self.last_neuron_count();
-        let rng_iter = (&self.distr).sample_iter(&mut self.rng);
-        let layer = Layer::from_iter(inputs, neurons, rng_iter, self.default_activation_function);
+        //let rng_iter = (&self.distr).sample_iter(&mut self.rng);
+        let act_fn = self.default_activation_function;
+        let rng_iter = self.get_rng_iter();
+        let layer = Layer::from_iter(inputs, neurons, rng_iter, act_fn);
         self.hidden_layer(layer)
     }
 
