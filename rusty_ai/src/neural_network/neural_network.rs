@@ -4,7 +4,7 @@ use crate::{
     data::Pair,
     error_function::ErrorFunction,
     gradient::Gradient,
-    layer::{InputLayer, IsLayer, Layer},
+    layer::{IsLayer, Layer},
     prelude::VerbosePropagation,
     results::{PropagationResult, TestsResult},
     traits::Propagator,
@@ -13,7 +13,6 @@ use crate::{
 
 #[derive(Debug)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
-    input_layer: InputLayer<IN>,
     layers: Vec<Layer>,
     error_function: ErrorFunction,
     generation: usize,
@@ -25,12 +24,10 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
 
     /// use [`NeuralNetworkBuilder`] instead!
     pub(crate) fn new(
-        input_layer: InputLayer<IN>,
         layers: Vec<Layer>,
         error_function: ErrorFunction,
     ) -> NeuralNetwork<IN, OUT> {
         NeuralNetwork {
-            input_layer,
             layers,
             error_function,
             generation: 0,
@@ -166,22 +163,20 @@ impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN
 
 impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, OUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let get_plural_s = |x: usize| if x == 1 { "" } else { "s" };
         write!(
             f,
-            "{}\n{}",
-            self.input_layer,
+            "{} Input{}\n{}\n{} Output{}",
+            IN,
+            get_plural_s(IN),
             self.layers
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<String>>()
-                .join("\n")
-        )?;
-        if let Some(output_layer) = self.layers.last() {
-            let output_count = output_layer.get_neuron_count();
-            let plural_s = if output_count == 1 { "" } else { "s" };
-            write!(f, "\n{} Output{}", output_count, plural_s)?;
-        }
-        Ok(())
+                .join("\n"),
+            OUT,
+            get_plural_s(OUT),
+        )
     }
 }
 

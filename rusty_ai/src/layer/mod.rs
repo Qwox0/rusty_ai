@@ -1,17 +1,10 @@
 mod add_bias;
 mod bias;
 mod builder;
-mod input;
 
 pub use add_bias::*;
 pub use bias::*;
 pub use builder::*;
-pub use input::InputLayer;
-use rand::{
-    distributions::{DistIter, Uniform},
-    prelude::Distribution,
-    Rng,
-};
 
 use crate::{
     activation_function::ActivationFn,

@@ -24,15 +24,16 @@ fn sine() {
     let relu = ActivationFn::default_relu();
 
     let mut ai = NeuralNetworkBuilder::default()
-        .inputs::<1>()
-        .hidden_layer(LayerBuilder::with_weights(w1).bias(b1))
-        .hidden_layer(LayerBuilder::with_weights(w2).bias(b2))
-        .hidden_layer(LayerBuilder::with_weights(w3).bias(b3))
-        .output_layer(
+        .input::<1>()
+        .layer(LayerBuilder::with_weights(w1).bias(b1))
+        .layer(LayerBuilder::with_weights(w2).bias(b2))
+        .layer(LayerBuilder::with_weights(w3).bias(b3))
+        .layer(
             LayerBuilder::with_weights(w4)
                 .bias(b4)
                 .activation_function(ActivationFn::Identity),
         )
+        .output()
         .error_function(ErrorFunction::SquaredError)
         .sgd_optimizer(GradientDescent {
             learning_rate: 0.01,
