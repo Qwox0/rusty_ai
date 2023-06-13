@@ -1,4 +1,4 @@
-use crate::layer::{BiasType, LayerOrLayerBuilder};
+use crate::layer::LayerOrLayerBuilder;
 use crate::prelude::*;
 use crate::util::RngWrapper;
 use crate::{
@@ -25,13 +25,49 @@ pub struct NoOptimizer;
 pub struct HasOptimizer(Optimizer);
 
 // Rng Markers
-pub struct InitRng {
-    pub seed: Option<u64>,
+#[derive(Debug)]
+enum RngIter<D> {
+    New { seed: Option<u64>, distr: D },
+    Locked { rng: RngWrapper, distr: D },
+}
+
+impl<D: Distribution<f64>> RngIter<D> {
+    fn set_distr<ND: Distribution<f64>>(self, distr: ND) -> RngIter<ND> {
+        use RngIter::*;
+        match self {
+            New { seed, .. } => New { seed, distr },
+            Locked { rng, .. } => Locked { rng, distr },
+        }
+    }
+
+    fn get_seed_mut(&mut self) -> Option<&mut Option<u64>> {
+        match self {
+            RngIter::New { seed, .. } => Some(seed),
+            RngIter::Locked { .. } => None,
+        }
+    }
+
+    fn lock(self) -> Self {
+        match self {
+            RngIter::New { seed, distr } => RngIter::Locked {
+                rng: RngWrapper::new(seed),
+                distr,
+            },
+            x => x,
+        }
+    }
+
+    fn get_rng_iter<'a>(&'a mut self) -> impl Iterator<Item = f64> + 'a {
+        match self {
+            RngIter::New { .. } => panic!("RngIter must be locked first!"),
+            RngIter::Locked { rng, ref distr } => distr.sample_iter(rng),
+        }
+    }
 }
 
 // Builder
 #[derive(Debug)]
-pub struct NeuralNetworkBuilder<IN, LAST, OPT, RNG, D> {
+pub struct NeuralNetworkBuilder<IN, LAST, OPT, D> {
     layers: Vec<Layer>,
     input: PhantomData<IN>,
     last_layer: PhantomData<LAST>,
@@ -39,12 +75,11 @@ pub struct NeuralNetworkBuilder<IN, LAST, OPT, RNG, D> {
     optimizer: OPT,
 
     // for generation
-    rng: RNG,
-    distr: D,
+    rng: RngIter<D>,
     default_activation_function: ActivationFn,
 }
 
-impl Default for NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, InitRng, Uniform<f64>> {
+impl Default for NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, Uniform<f64>> {
     fn default() -> Self {
         NeuralNetworkBuilder {
             layers: vec![],
@@ -52,8 +87,10 @@ impl Default for NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, InitRng, Un
             last_layer: PhantomData,
             error_function: None,
             optimizer: NoOptimizer,
-            rng: InitRng { seed: None },
-            distr: Uniform::from(0.0..1.0),
+            rng: RngIter::New {
+                seed: None,
+                distr: Uniform::new(0.0, 1.0),
+            },
             default_activation_function: ActivationFn::default(),
         }
     }
@@ -69,7 +106,10 @@ macro_rules! update_phantom {
     };
 }
 
-impl<IN, LAST, OPT, INIT, D> NeuralNetworkBuilder<IN, LAST, OPT, INIT, D> {
+impl<IN, LAST, OPT, D> NeuralNetworkBuilder<IN, LAST, OPT, D>
+where
+    D: Distribution<f64>,
+{
     pub fn error_function(mut self, error_function: ErrorFunction) -> Self {
         let _ = self.error_function.insert(error_function);
         self
@@ -79,52 +119,47 @@ impl<IN, LAST, OPT, INIT, D> NeuralNetworkBuilder<IN, LAST, OPT, INIT, D> {
     pub fn rng_distribution<ND: Distribution<f64>>(
         self,
         distr: ND,
-    ) -> NeuralNetworkBuilder<IN, LAST, OPT, INIT, ND> {
-        NeuralNetworkBuilder { distr, ..self }
-    }
-}
-
-impl<D> NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, InitRng, D>
-where
-    D: Distribution<f64>,
-{
-    pub fn rng_seed(mut self, seed: u64) -> Self {
-        let _ = self.rng.seed.insert(seed);
-        self
+    ) -> NeuralNetworkBuilder<IN, LAST, OPT, ND> {
+        let rng = self.rng.set_distr(distr);
+        NeuralNetworkBuilder { rng, ..self }
     }
 
     pub fn default_activation_function(mut self, act_func: ActivationFn) -> Self {
         self.default_activation_function = act_func;
         self
     }
+}
 
-    pub fn input_layer<const N: usize>(
-        self,
-    ) -> NeuralNetworkBuilder<Input<N>, Input<N>, NoOptimizer, RngWrapper, D> {
-        // lock initilizer
-        let rng = RngWrapper::new(self.rng.seed);
-        NeuralNetworkBuilder {
-            input: PhantomData,
-            last_layer: PhantomData,
-            rng,
-            ..self
-        }
+impl<D> NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, D>
+where
+    D: Distribution<f64>,
+{
+    pub fn rng_seed(mut self, seed: u64) -> Self {
+        let _ = self
+            .rng
+            .get_seed_mut()
+            .expect("RngIter is unlocked")
+            .insert(seed);
+        self
+    }
+
+    pub fn inputs<const N: usize>(
+        mut self,
+    ) -> NeuralNetworkBuilder<Input<N>, Input<N>, NoOptimizer, D> {
+        self.rng = self.rng.lock();
+        update_phantom!(self)
     }
 }
 
-impl<LL, D, const IN: usize> NeuralNetworkBuilder<Input<IN>, LL, NoOptimizer, RngWrapper, D>
+impl<LL, D, const IN: usize> NeuralNetworkBuilder<Input<IN>, LL, NoOptimizer, D>
 where
     LL: InputOrHidden,
     D: Distribution<f64>,
 {
-    fn get_rng_iter<'a>(&'a mut self) -> impl Iterator<Item = f64> + 'a {
-        (&self.distr).sample_iter(&mut self.rng)
-    }
-
     pub fn hidden_layer(
         mut self,
         layer: impl LayerOrLayerBuilder,
-    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, RngWrapper, D> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, D> {
         let inputs = self.last_neuron_count();
         let layer = layer.as_layer_with_inputs(inputs);
         self.layers.push(layer);
@@ -134,34 +169,38 @@ where
     pub fn hidden_layer_random(
         mut self,
         neurons: usize,
-    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, RngWrapper, D> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, D> {
         let inputs = self.last_neuron_count();
-        //let rng_iter = (&self.distr).sample_iter(&mut self.rng);
         let act_fn = self.default_activation_function;
-        let rng_iter = self.get_rng_iter();
+        let rng_iter = self.rng.get_rng_iter();
         let layer = Layer::from_iter(inputs, neurons, rng_iter, act_fn);
         self.hidden_layer(layer)
     }
 
-    /// panics if `neurons_per_layer.len() == 0`
+    /// # Panics
+    /// Panics if `neurons_per_layer.len() == 0`
     pub fn hidden_layers_random(
         mut self,
         neurons_per_layer: &[usize],
-        act_fn: ActivationFn,
-    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, RngWrapper, D> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, D> {
         assert!(neurons_per_layer.len() > 0);
         let last_count = self.last_neuron_count();
-        for (last, count) in once(&last_count).chain(neurons_per_layer).tuple_windows() {
-            self.layers.push(Layer::random(*last, *count, act_fn));
+        let act_fn = self.default_activation_function;
+        let mut rng_iter = self.rng.get_rng_iter();
+        for (&last, &count) in once(&last_count).chain(neurons_per_layer).tuple_windows() {
+            self.layers
+                .push(Layer::from_iter(last, count, &mut rng_iter, act_fn));
         }
+        drop(rng_iter);
         update_phantom!(self)
     }
 
-    /// make sure OUT matches layer
+    /// # Panics
+    /// Panics if OUT doesn't match neuron count of the provided layer
     pub fn output_layer<const OUT: usize>(
         mut self,
         layer: impl LayerOrLayerBuilder,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer, RngWrapper, D> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer, D> {
         let inputs = self.last_neuron_count();
         let layer = layer.as_layer_with_inputs(inputs);
         assert_eq!(layer.get_neuron_count(), OUT);
@@ -170,10 +209,12 @@ where
     }
 
     pub fn output_layer_random<const OUT: usize>(
-        self,
+        mut self,
         act_func: ActivationFn,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer, RngWrapper, D> {
-        let layer = Layer::random(self.last_neuron_count(), OUT, act_func);
+    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer, D> {
+        let inputs = self.last_neuron_count();
+        let rng_iter = self.rng.get_rng_iter();
+        let layer = Layer::from_iter(inputs, OUT, rng_iter, act_func);
         self.output_layer(layer)
     }
 
@@ -186,7 +227,7 @@ where
 }
 
 impl<D, const IN: usize, const OUT: usize>
-    NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer, RngWrapper, D>
+    NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer, D>
 where
     D: Distribution<f64>,
 {
@@ -202,7 +243,7 @@ where
     pub fn optimizer(
         self,
         optimizer: Optimizer,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, RngWrapper, D> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, D> {
         let optimizer = HasOptimizer(optimizer);
         NeuralNetworkBuilder { optimizer, ..self }
     }
@@ -210,20 +251,20 @@ where
     pub fn adam_optimizer(
         self,
         optimizer: Adam,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, RngWrapper, D> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, D> {
         self.optimizer(Optimizer::Adam(optimizer))
     }
 
     pub fn sgd_optimizer(
         self,
         optimizer: GradientDescent,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, RngWrapper, D> {
+    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, D> {
         self.optimizer(Optimizer::GradientDescent(optimizer))
     }
 }
 
 impl<D, const IN: usize, const OUT: usize>
-    NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, RngWrapper, D>
+    NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, D>
 where
     D: Distribution<f64>,
 {
@@ -237,5 +278,20 @@ where
             self.error_function.unwrap_or_default(),
         );
         TrainableNeuralNetwork::new(network, optimizer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::{distributions::Uniform, Rng};
+
+    use crate::prelude::Layer;
+
+    #[test]
+    fn testasdf() {
+        let mut rng_iter = rand::thread_rng().sample_iter(Uniform::from(0.0..1.0));
+        let l1 = Layer::from_iter(3, 2, &mut rng_iter, crate::prelude::ActivationFn::Identity);
+        let l2 = Layer::from_iter(3, 2, &mut rng_iter, crate::prelude::ActivationFn::Identity);
+        panic!()
     }
 }

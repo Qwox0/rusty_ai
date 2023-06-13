@@ -203,7 +203,7 @@ fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
         .activation_function(ActivationFn::default_relu());
     let ai = NeuralNetworkBuilder::default()
         .rng_seed(SEED)
-        .input_layer()
+        .inputs()
         .hidden_layer(LayerBuilder::neurons(100).seed(SEED))
         .hidden_layer(LayerBuilder::neurons(100).seed(SEED + 1))
         .hidden_layer(LayerBuilder::neurons(100).seed(SEED + 2))

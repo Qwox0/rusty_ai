@@ -71,7 +71,7 @@ fn xor() {
     let relu = ActivationFn::default_relu();
 
     let mut ai = NeuralNetworkBuilder::default()
-        .input_layer::<2>()
+        .inputs::<2>()
         .hidden_layer(LayerBuilder::with_weights(w1).bias(b1))
         .hidden_layer(LayerBuilder::with_weights(w2).bias(b2))
         .hidden_layer(LayerBuilder::with_weights(w3).bias(b3))
