@@ -1,24 +1,23 @@
-use crate::layer::LayerOrLayerBuilder;
 use crate::prelude::*;
 use crate::util::RngWrapper;
-use crate::{
-    layer::IsLayer,
-    optimizer::IsOptimizer,
-};
+use crate::{layer::IsLayer, optimizer::IsOptimizer};
 use itertools::Itertools;
 use rand::distributions::Uniform;
 use rand::prelude::Distribution;
 use std::{iter::once, marker::PhantomData};
 
-// Layer Markers
-pub struct NoLayer;
-pub struct Input<const N: usize>;
-pub struct Hidden;
-pub struct Output<const N: usize>;
+// Dimension Markers
+pub struct NoDim;
+pub struct In<const IN: usize>;
+pub struct InOut<const IN: usize, const OUT: usize>;
 
-pub trait InputOrHidden {}
-impl<const N: usize> InputOrHidden for Input<N> {}
-impl InputOrHidden for Hidden {}
+// Layer parts Markers
+pub struct NoParts;
+pub struct LayerParts {
+    weights: Matrix<f64>,
+    bias: Option<LayerBias>,
+    activation_function: Option<ActivationFn>,
+}
 
 // Optimizer Markers
 pub struct NoOptimizer;
@@ -65,26 +64,42 @@ impl<D: Distribution<f64>> RngIter<D> {
     }
 }
 
+#[derive(Debug)]
+enum BiasType {
+    OnePerLayer,
+    OnePerNeuron,
+}
+
+impl BiasType {
+    fn get_matching_bias(&self, neurons: usize, iter: impl Iterator<Item = f64>) -> LayerBias {
+        match self {
+            BiasType::OnePerLayer => LayerBias::from_iter_singular(iter),
+            BiasType::OnePerNeuron => LayerBias::from_iter_multiple(neurons, iter),
+        }
+    }
+}
+
 // Builder
 #[derive(Debug)]
-pub struct NeuralNetworkBuilder<IN, LAST, OPT, D> {
+pub struct NeuralNetworkBuilder<DIM, LP, OPT, D> {
     layers: Vec<Layer>,
-    input: PhantomData<IN>,
-    last_layer: PhantomData<LAST>,
+    dim: PhantomData<DIM>,
+    layer_parts: LP,
     error_function: Option<ErrorFunction>,
     optimizer: OPT,
 
     // for generation
     rng: RngIter<D>,
     default_activation_function: ActivationFn,
+    default_bias_type: BiasType,
 }
 
-impl Default for NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, Uniform<f64>> {
+impl Default for NeuralNetworkBuilder<NoDim, NoParts, NoOptimizer, Uniform<f64>> {
     fn default() -> Self {
         NeuralNetworkBuilder {
             layers: vec![],
-            input: PhantomData,
-            last_layer: PhantomData,
+            dim: PhantomData,
+            layer_parts: NoParts,
             error_function: None,
             optimizer: NoOptimizer,
             rng: RngIter::New {
@@ -92,6 +107,7 @@ impl Default for NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, Uniform<f64
                 distr: Uniform::new(0.0, 1.0),
             },
             default_activation_function: ActivationFn::default(),
+            default_bias_type: BiasType::OnePerNeuron,
         }
     }
 }
@@ -99,8 +115,7 @@ impl Default for NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, Uniform<f64
 macro_rules! update_phantom {
     ( $builder:expr ) => {
         NeuralNetworkBuilder {
-            input: PhantomData,
-            last_layer: PhantomData,
+            dim: PhantomData,
             ..$builder
         }
     };
@@ -128,9 +143,19 @@ where
         self.default_activation_function = act_func;
         self
     }
+
+    pub fn one_bias_per_layer(mut self) -> Self {
+        self.default_bias_type = BiasType::OnePerLayer;
+        self
+    }
+
+    pub fn one_bias_per_neuron(mut self) -> Self {
+        self.default_bias_type = BiasType::OnePerNeuron;
+        self
+    }
 }
 
-impl<D> NeuralNetworkBuilder<NoLayer, NoLayer, NoOptimizer, D>
+impl<D> NeuralNetworkBuilder<NoDim, NoParts, NoOptimizer, D>
 where
     D: Distribution<f64>,
 {
@@ -143,46 +168,38 @@ where
         self
     }
 
-    pub fn input<const N: usize>(
-        mut self,
-    ) -> NeuralNetworkBuilder<Input<N>, Input<N>, NoOptimizer, D> {
+    pub fn input<const N: usize>(mut self) -> NeuralNetworkBuilder<In<N>, NoParts, NoOptimizer, D> {
         self.rng = self.rng.lock();
         update_phantom!(self)
     }
 }
 
-impl<LL, D, const IN: usize> NeuralNetworkBuilder<Input<IN>, LL, NoOptimizer, D>
+impl<D, const IN: usize> NeuralNetworkBuilder<In<IN>, NoParts, NoOptimizer, D>
 where
-    LL: InputOrHidden,
     D: Distribution<f64>,
 {
-    pub fn layer(
-        mut self,
-        layer: impl LayerOrLayerBuilder,
-    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, D> {
-        let inputs = self.last_neuron_count();
-        let layer = layer.as_layer_with_inputs(inputs);
+    pub fn layer(mut self, layer: Layer) -> Self {
+        assert_eq!(
+            layer.get_input_count(),
+            self.last_neuron_count(),
+            "input count doesn't match previously set value"
+        );
         self.layers.push(layer);
-        update_phantom!(self)
+        self
     }
 
-    pub fn layer_random(
-        mut self,
-        neurons: usize,
-    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, D> {
+    pub fn random_layer(mut self, neurons: usize) -> Self {
         let inputs = self.last_neuron_count();
-        let act_fn = self.default_activation_function;
-        let rng_iter = self.rng.get_rng_iter();
-        let layer = Layer::from_iter(inputs, neurons, rng_iter, act_fn);
+        let mut rng_iter = self.rng.get_rng_iter();
+        let weights = Matrix::from_iter(inputs, neurons, &mut rng_iter);
+        let bias = self.default_bias_type.get_matching_bias(neurons, rng_iter);
+        let layer = Layer::new(weights, bias, self.default_activation_function);
         self.layer(layer)
     }
 
     /// # Panics
     /// Panics if `neurons_per_layer.len() == 0`
-    pub fn layers_random(
-        mut self,
-        neurons_per_layer: &[usize],
-    ) -> NeuralNetworkBuilder<Input<IN>, Hidden, NoOptimizer, D> {
+    pub fn random_layers(mut self, neurons_per_layer: &[usize]) -> Self {
         assert!(neurons_per_layer.len() > 0);
         let last_count = self.last_neuron_count();
         let act_fn = self.default_activation_function;
@@ -195,6 +212,10 @@ where
         update_phantom!(self)
     }
 
+    pub fn layer_with_weights_and_bias(self, weights: Matrix<f64>, bias: LayerBias) -> Self {
+        self.layer_weights(weights).layer_bias(bias).build_layer()
+    }
+
     fn last_neuron_count(&self) -> usize {
         self.layers
             .last()
@@ -202,15 +223,65 @@ where
             .unwrap_or(IN)
     }
 
+    /// # Panics
+    /// Panics if OUT doesn't match the the neuron count of the last layer.
     pub fn output<const OUT: usize>(
         self,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer, D> {
+    ) -> NeuralNetworkBuilder<InOut<IN, OUT>, NoParts, NoOptimizer, D> {
+        assert_eq!(self.last_neuron_count(), OUT);
         update_phantom!(self)
     }
 }
 
+impl<LP, D, const IN: usize> NeuralNetworkBuilder<In<IN>, LP, NoOptimizer, D> {
+    pub fn layer_weights(
+        self,
+        weights: Matrix<f64>,
+    ) -> NeuralNetworkBuilder<In<IN>, LayerParts, NoOptimizer, D> {
+        let layer_parts = LayerParts {
+            weights,
+            bias: None,
+            activation_function: None,
+        };
+        NeuralNetworkBuilder {
+            layer_parts,
+            ..self
+        }
+    }
+}
+
+impl<D, const IN: usize> NeuralNetworkBuilder<In<IN>, LayerParts, NoOptimizer, D>
+where
+    D: Distribution<f64>,
+{
+    pub fn layer_bias(mut self, bias: LayerBias) -> Self {
+        let _ = self.layer_parts.bias.insert(bias);
+        self
+    }
+
+    pub fn build_layer(mut self) -> NeuralNetworkBuilder<In<IN>, NoParts, NoOptimizer, D> {
+        let bias = self.layer_parts.bias.take().unwrap_or_else(|| {
+            let neurons = self.layer_parts.weights.get_width();
+            self.default_bias_type
+                .get_matching_bias(neurons, self.rng.get_rng_iter())
+        });
+        let weights = self.layer_parts.weights;
+        let activation_function = self
+            .layer_parts
+            .activation_function
+            .take()
+            .unwrap_or(self.default_activation_function);
+        let layer = Layer::new(weights, bias, activation_function);
+        NeuralNetworkBuilder {
+            layer_parts: NoParts,
+            ..self
+        }
+        .layer(layer)
+    }
+}
+
 impl<D, const IN: usize, const OUT: usize>
-    NeuralNetworkBuilder<Input<IN>, Output<OUT>, NoOptimizer, D>
+    NeuralNetworkBuilder<InOut<IN, OUT>, NoParts, NoOptimizer, D>
 where
     D: Distribution<f64>,
 {
@@ -222,7 +293,7 @@ where
     pub fn optimizer(
         self,
         optimizer: Optimizer,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, D> {
+    ) -> NeuralNetworkBuilder<InOut<IN, OUT>, NoParts, HasOptimizer, D> {
         let optimizer = HasOptimizer(optimizer);
         NeuralNetworkBuilder { optimizer, ..self }
     }
@@ -230,20 +301,20 @@ where
     pub fn adam_optimizer(
         self,
         optimizer: Adam,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, D> {
+    ) -> NeuralNetworkBuilder<InOut<IN, OUT>, NoParts, HasOptimizer, D> {
         self.optimizer(Optimizer::Adam(optimizer))
     }
 
     pub fn sgd_optimizer(
         self,
         optimizer: GradientDescent,
-    ) -> NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, D> {
+    ) -> NeuralNetworkBuilder<InOut<IN, OUT>, NoParts, HasOptimizer, D> {
         self.optimizer(Optimizer::GradientDescent(optimizer))
     }
 }
 
 impl<D, const IN: usize, const OUT: usize>
-    NeuralNetworkBuilder<Input<IN>, Output<OUT>, HasOptimizer, D>
+    NeuralNetworkBuilder<InOut<IN, OUT>, NoParts, HasOptimizer, D>
 where
     D: Distribution<f64>,
 {

@@ -68,18 +68,13 @@ fn xor() {
     ]]));
     let b4 = LayerBias::OnePerNeuron([-0.47832936152865413].to_vec());
 
-    let relu = ActivationFn::default_relu();
-
     let mut ai = NeuralNetworkBuilder::default()
         .input::<2>()
-        .layer(LayerBuilder::with_weights(w1).bias(b1))
-        .layer(LayerBuilder::with_weights(w2).bias(b2))
-        .layer(LayerBuilder::with_weights(w3).bias(b3))
-        .layer(
-            LayerBuilder::with_weights(w4)
-                .bias(b4)
-                .activation_function(ActivationFn::Identity),
-        )
+        .layer_with_weights_and_bias(w1, b1)
+        .layer_with_weights_and_bias(w2, b2)
+        .layer_with_weights_and_bias(w3, b3)
+        .default_activation_function(ActivationFn::Identity)
+        .layer_with_weights_and_bias(w4, b4)
         .output()
         .error_function(ErrorFunction::SquaredError)
         .sgd_optimizer(GradientDescent {

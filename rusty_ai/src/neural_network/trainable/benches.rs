@@ -199,23 +199,18 @@ impl ParallelSlice<Pair<1, 1>> for PairList<1, 1> {
 
 fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
     const SEED: u64 = 69420;
-    let layer_builder =
-        LayerBuilder::neurons(100).activation_function(ActivationFn::default_relu());
     let ai = NeuralNetworkBuilder::default()
         .rng_seed(SEED)
+        .default_activation_function(ActivationFn::default_relu())
         .input()
-        .layer(LayerBuilder::neurons(100).seed(SEED))
-        .layer(LayerBuilder::neurons(100).seed(SEED + 1))
-        .layer(LayerBuilder::neurons(100).seed(SEED + 2))
-        .layer(
-            LayerBuilder::neurons(1)
-                .seed(SEED + 3)
-                .activation_function(ActivationFn::Identity),
-        )
+        .random_layer(100)
+        .random_layer(100)
+        .random_layer(100)
+        .default_activation_function(ActivationFn::Identity)
+        .random_layer(1)
         .output()
         .sgd_optimizer(GradientDescent::default())
         .build();
-    assert!(false);
 
     let data = DataBuilder::uniform(-5.0..5.0)
         .seed(SEED)

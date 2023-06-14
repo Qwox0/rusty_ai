@@ -1,9 +1,10 @@
 use crate::util::impl_fn_traits;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum ActivationFn {
     /// Identity(x) = x
     /// Identity(x) = 1
+    #[default]
     Identity,
 
     /// values: (ReLU'(0))
@@ -19,12 +20,6 @@ pub enum ActivationFn {
     /// Sigmoid(x) = 1/(1 + exp(-x)) = exp(x)/(exp(x) + 1)
     /// Sigmoid'(x) = e^(-x)/(1+e^(-x))^2 = e^x/(1+e^x)^2
     Sigmoid,
-}
-
-impl Default for ActivationFn {
-    fn default() -> Self {
-        ActivationFn::default_relu()
-    }
 }
 
 impl ActivationFn {

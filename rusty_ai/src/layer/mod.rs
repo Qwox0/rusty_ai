@@ -1,10 +1,7 @@
 mod add_bias;
 mod bias;
-mod builder;
-
 pub use add_bias::*;
 pub use bias::*;
-pub use builder::*;
 
 use crate::{
     activation_function::ActivationFn,
@@ -87,11 +84,11 @@ impl Layer {
         inputs: usize,
         neurons: usize,
         mut iter: impl Iterator<Item = f64>,
-        acti_func: ActivationFn,
+        acti_fn: ActivationFn,
     ) -> Layer {
         let weights = Matrix::from_iter(inputs, neurons, &mut iter);
         let bias = LayerBias::from_iter_multiple(neurons, iter);
-        Layer::new(weights, bias, acti_func)
+        Layer::new(weights, bias, acti_fn)
     }
 
     /*
@@ -288,16 +285,5 @@ impl std::fmt::Display for Layer {
             "{} Bias: {}; {}",
             self.weights, self.bias, self.activation_function
         )
-    }
-}
-
-impl LayerOrLayerBuilder for Layer {
-    fn as_layer_with_inputs(self, inputs: usize) -> Layer {
-        assert_eq!(
-            self.get_input_count(),
-            inputs,
-            "input count doesn't match previously set value"
-        );
-        self
     }
 }

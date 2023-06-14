@@ -34,7 +34,13 @@ pub struct Matrix<T: Sized> {
     elements: Vec<Vec<T>>,
 }
 
-impl<T:Debug> Matrix<T>  {
+impl<T> Matrix<T> {
+    constructor! { new -> width: usize, height: usize, elements: Vec<Vec<T>> }
+    impl_getter! { pub get_width -> width: usize }
+    impl_getter! { pub get_height -> height: usize }
+    impl_getter! { pub get_elements -> elements: &Vec<Vec<T>> }
+    impl_getter! { pub get_elements_mut -> elements: &mut Vec<Vec<T>> }
+
     /// # Panics
     /// Panics if the iterator is too small.
     pub fn from_iter(width: usize, height: usize, iter: impl Iterator<Item = T>) -> Matrix<T> {
@@ -48,16 +54,6 @@ impl<T:Debug> Matrix<T>  {
         assert_eq!(elements.last().map(Vec::len), Some(width));
         Matrix::new(width, height, elements)
     }
-
-}
-
-impl<T> Matrix<T> {
-    constructor! { new -> width: usize, height: usize, elements: Vec<Vec<T>> }
-    impl_getter! { pub get_width -> width: usize }
-    impl_getter! { pub get_height -> height: usize }
-    impl_getter! { pub get_elements -> elements: &Vec<Vec<T>> }
-    impl_getter! { pub get_elements_mut -> elements: &mut Vec<Vec<T>> }
-
 
     /// Create a [`Matrix`] from a [`Vec`] of Rows.
     /// ```rust
