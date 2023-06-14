@@ -1,9 +1,10 @@
 use crate::util::impl_fn_traits;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum ActivationFn {
     /// Identity(x) = x
     /// Identity(x) = 1
+    #[default]
     Identity,
 
     /// values: (ReLU'(0))

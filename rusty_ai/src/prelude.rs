@@ -4,7 +4,7 @@ pub use crate::{
     error_function::ErrorFunction,
     gradient::layer::GradientLayer,
     gradient::Gradient,
-    layer::{Layer, LayerBias, LayerBuilder},
+    layer::{Layer, LayerBias},
     matrix::Matrix,
     neural_network::{NeuralNetwork, NeuralNetworkBuilder, TrainableNeuralNetwork},
     optimizer::{Adam, GradientDescent, Optimizer},

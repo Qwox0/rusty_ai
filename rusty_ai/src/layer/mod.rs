@@ -1,12 +1,7 @@
 mod add_bias;
 mod bias;
-mod builder;
-mod input;
-
 pub use add_bias::*;
 pub use bias::*;
-pub use builder::*;
-pub use input::InputLayer;
 
 use crate::{
     activation_function::ActivationFn,
@@ -15,7 +10,9 @@ use crate::{
     },
     gradient::layer::GradientLayer,
     matrix::Matrix,
-    util::{constructor, impl_getter, EntryAdd, EntryMul, EntrySub, Randomize, ScalarMul},
+    util::{
+        constructor, impl_getter, EntryAdd, EntryMul, EntrySub, Randomize, RngWrapper, ScalarMul,
+    },
 };
 
 /*
@@ -60,30 +57,57 @@ impl IsLayer for Layer {
 }
 
 impl Layer {
-    constructor! { new -> weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn }
     impl_getter! { pub get_weights -> weights: &Matrix<f64> }
     impl_getter! { pub get_weights_mut -> weights: &mut Matrix<f64> }
     impl_getter! { pub get_bias -> bias: &LayerBias }
     impl_getter! { pub get_bias_mut -> bias: &mut LayerBias }
     impl_getter! { pub get_activation_function -> activation_function: &ActivationFn }
 
+    pub fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
+        if let Some(bias_neurons) = bias.get_neuron_count() {
+            assert_eq!(
+                weights.get_height(),
+                bias_neurons,
+                "Weights and Bias don't have matching neuron counts."
+            );
+        }
+        Self {
+            weights,
+            bias,
+            activation_function,
+        }
+    }
+
+    /// # Panics
+    /// Panics if the iterator is too small.
+    pub fn from_iter(
+        inputs: usize,
+        neurons: usize,
+        mut iter: impl Iterator<Item = f64>,
+        acti_fn: ActivationFn,
+    ) -> Layer {
+        let weights = Matrix::from_iter(inputs, neurons, &mut iter);
+        let bias = LayerBias::from_iter_multiple(neurons, iter);
+        Layer::new(weights, bias, acti_fn)
+    }
+
+    /*
     pub fn random_with_bias(
+        rng: &mut DistIter<impl Distribution<f64>, RngWrapper, f64>,
         inputs: usize,
         neurons: usize,
         bias: LayerBias,
         acti_func: ActivationFn,
     ) -> Layer {
-        Layer::new(Matrix::new_random(inputs, neurons), bias, acti_func)
+        Layer::new(Matrix::new_random(inputs, neurons, rng), bias, acti_func)
     }
 
     pub fn random(inputs: usize, neurons: usize, acti_func: ActivationFn) -> Layer {
-        Layer::random_with_bias(
-            inputs,
-            neurons,
-            LayerBias::new_multiple(vec![0.0; neurons]).randomize_uniform(0.0..1.0),
-            acti_func,
-        )
+        let mut rng = RngWrapper::new(None).sample_iter(Uniform::from(0.0..1.0));
+        let bias = LayerBias::from_iter_multiple(neurons, &mut rng);
+        Layer::random_with_bias(&mut rng, inputs, neurons, bias, acti_func)
     }
+    */
 
     pub fn get_input_count(&self) -> usize {
         self.weights.get_width()
@@ -261,16 +285,5 @@ impl std::fmt::Display for Layer {
             "{} Bias: {}; {}",
             self.weights, self.bias, self.activation_function
         )
-    }
-}
-
-impl LayerOrLayerBuilder for Layer {
-    fn as_layer_with_inputs(self, inputs: usize) -> Layer {
-        assert_eq!(
-            self.get_input_count(),
-            inputs,
-            "input count doesn't match previously set value"
-        );
-        self
     }
 }

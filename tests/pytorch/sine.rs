@@ -6,36 +6,32 @@ fn sine() {
         arr.into_iter().map(Vec::from).collect()
     }
 
-    let w1 = Matrix::from_elements(vec([[0.2654893009262182], [0.13379694515812643]]));
+    let w1 = Matrix::from_rows(vec([[0.2654893009262182], [0.13379694515812643]]));
     let b1 = LayerBias::OnePerNeuron([-0.3220212329837344, 0.839882040384166].to_vec());
-    let w2 = Matrix::from_elements(vec([
+    let w2 = Matrix::from_rows(vec([
         [0.16532130582925397, 0.07010053781757337],
         [-0.5854114069916742, 0.6643306908932561],
     ]));
     let b2 = LayerBias::OnePerNeuron([-0.35676113792377323, -0.06590416343319068].to_vec());
-    let w3 = Matrix::from_elements(vec([
+    let w3 = Matrix::from_rows(vec([
         [-0.488072052229262, 0.3707835128103556],
         [0.14340687126247803, -0.06900138303413593],
     ]));
     let b3 = LayerBias::OnePerNeuron([-0.5220346327969696, -0.47481103449761164].to_vec());
-    let w4 = Matrix::from_elements(vec([[0.14407180895539873, 0.1776979799751251]]));
+    let w4 = Matrix::from_rows(vec([[0.14407180895539873, 0.1776979799751251]]));
     let b4 = LayerBias::OnePerNeuron([0.5294013892421578].to_vec());
 
-    let relu = ActivationFn::default_relu();
-
-    let mut ai = NeuralNetworkBuilder::new()
-        .input_layer::<1>()
-        .hidden_layer(LayerBuilder::with_weights(w1).bias(b1).build())
-        .hidden_layer(LayerBuilder::with_weights(w2).bias(b2).build())
-        .hidden_layer(LayerBuilder::with_weights(w3).bias(b3).build())
-        .output_layer(
-            LayerBuilder::with_weights(w4)
-                .bias(b4)
-                .activation_function(ActivationFn::Identity)
-                .build(),
-        )
+    let mut ai = NeuralNetworkBuilder::default()
+        .default_activation_function(ActivationFn::default_relu())
+        .input::<1>()
+        .layer_with_weights_and_bias(w1, b1)
+        .layer_with_weights_and_bias(w2, b2)
+        .layer_with_weights_and_bias(w3, b3)
+        .default_activation_function(ActivationFn::Identity)
+        .layer_with_weights_and_bias(w4, b4)
+        .output()
         .error_function(ErrorFunction::SquaredError)
-        .gradient_descent_optimizer(GradientDescent {
+        .sgd_optimizer(GradientDescent {
             learning_rate: 0.01,
         })
         .build();

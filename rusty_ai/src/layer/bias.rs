@@ -1,8 +1,11 @@
+use rand::{distributions::DistIter, prelude::Distribution, Rng};
+
 use super::AddBias;
 use crate::{
     gradient::aliases::{BiasGradient, WeightedSumGradient},
     util::{
-        EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, Randomize, ScalarAdd, ScalarDiv, ScalarMul,
+        EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, Randomize, RngWrapper, ScalarAdd, ScalarDiv,
+        ScalarMul,
     },
 };
 
@@ -19,6 +22,20 @@ impl LayerBias {
 
     pub fn new_multiple(bias: Vec<f64>) -> LayerBias {
         LayerBias::OnePerNeuron(bias)
+    }
+
+    /// # Panics
+    /// Panics if the iterator is too small.
+    pub fn from_iter_singular(mut iter: impl Iterator<Item = f64>) -> LayerBias {
+        LayerBias::new_singular(iter.next().unwrap())
+    }
+
+    /// # Panics
+    /// Panics if the iterator is too small.
+    pub fn from_iter_multiple(count: usize, iter: impl Iterator<Item = f64>) -> LayerBias {
+        let vec: Vec<_> = iter.take(count).collect();
+        assert_eq!(vec.len(), count);
+        LayerBias::new_multiple(vec)
     }
 
     pub fn fill(mut self, value: f64) -> LayerBias {
@@ -45,6 +62,13 @@ impl LayerBias {
         match self {
             OnePerLayer(_) => OnePerLayer(weighted_sum_gradient.iter().sum()),
             OnePerNeuron(_) => OnePerNeuron(weighted_sum_gradient.clone()),
+        }
+    }
+
+    pub fn get_neuron_count(&self) -> Option<usize> {
+        match self {
+            LayerBias::OnePerLayer(_) => None,
+            LayerBias::OnePerNeuron(vec) => Some(vec.len()),
         }
     }
 

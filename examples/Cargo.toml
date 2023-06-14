@@ -11,3 +11,16 @@ edition = "2021"
 
 [workspace.dependencies]
 rusty_ai = { path = "../rusty_ai" }
+
+[[example]]
+name = "basic_ai"
+path = "basic_ai"
+
+[[example]]
+name = "sine"
+path = "sine"
+
+[[example]]
+name = "xor"
+path = "xor"
+

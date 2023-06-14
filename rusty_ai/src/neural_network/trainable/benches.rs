@@ -4,10 +4,12 @@ use std::{
     thread::{JoinHandle, ScopedJoinHandle},
 };
 
+use rand::{distributions::Uniform, Rng, SeedableRng};
 use rayon::prelude::*;
 use test::black_box;
 
 use crate::{
+    data::DataBuilder,
     prelude::*,
     util::{EntryAdd, MultiRandom},
 };
@@ -197,16 +199,23 @@ impl ParallelSlice<Pair<1, 1>> for PairList<1, 1> {
 
 fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
     const SEED: u64 = 69420;
-    let ai = NeuralNetworkBuilder::new()
-        .input_layer()
-        .hidden_layers_random(&[100, 100, 100], ActivationFn::default_relu())
-        .output_layer_random(ActivationFn::Identity)
-        .gradient_descent_optimizer(GradientDescent::default())
+    let ai = NeuralNetworkBuilder::default()
+        .rng_seed(SEED)
+        .default_activation_function(ActivationFn::default_relu())
+        .input()
+        .random_layer(100)
+        .random_layer(100)
+        .random_layer(100)
+        .default_activation_function(ActivationFn::Identity)
+        .random_layer(1)
+        .output()
+        .sgd_optimizer(GradientDescent::default())
         .build();
 
-    //let data = ValueList::random_uniform_seeded_multiple(-5.0..5.0, SEED, data_count) .gen_pairs(|a| [a[0].sin()]);
-
-    let data = todo!();
+    let data = DataBuilder::uniform(-5.0..5.0)
+        .seed(SEED)
+        .build(data_count)
+        .gen_pairs(|x| [x[0].sin()]);
 
     (ai, data)
 }
@@ -218,6 +227,7 @@ macro_rules! make_bench {
             #[bench]
             fn bench(b: &mut test::Bencher) {
                 let (mut ai, data) = setup(100);
+                panic!("{:?}", ai);
                 let data = data.as_slice();
 
                 b.iter(|| black_box(BackpropBenches::$fn(black_box(&mut ai), black_box(&data))))
@@ -225,6 +235,7 @@ macro_rules! make_bench {
             #[test]
             fn test() {
                 let (mut ai, data) = setup(100);
+                panic!("{:?}", ai);
                 let data = data.as_slice();
 
                 BackpropBenches::$fn(&mut ai, &data);
@@ -236,9 +247,26 @@ macro_rules! make_bench {
     };
 }
 
+/*
 make_bench! { single_thread }
 make_bench! { single_thread2 }
 make_bench! { arc_mutex }
 make_bench! { mpsc_out }
 make_bench! { spmc_in }
 make_bench! { rayon_iter }
+*/
+
+#[cfg(test)]
+mod testasdf {
+    use super::*;
+
+    #[test]
+    fn testasdf() {
+        let data_count = 10;
+        let a = setup(data_count);
+        let b = setup(data_count);
+        println!("{:?}", a);
+        println!("{:?}", b);
+        assert!(false);
+    }
+}
