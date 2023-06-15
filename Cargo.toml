@@ -1,8 +1,9 @@
 [workspace]
+resolver = "2"
 members = [
     "rusty_ai",
 
-    "benches",
+    #"benches",
     #"examples",
     "tests",
 ]
@@ -10,6 +11,7 @@ exclude = []
 #default-members = ["rusty_ai"]
 
 [workspace.package]
+edition = "2021"
 version = "0.1.0"
 
 [workspace.dependencies]
