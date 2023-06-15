@@ -2,7 +2,6 @@ mod entrywise_arithmetic;
 mod lerp;
 mod macros;
 mod norm;
-mod random;
 mod rng;
 mod scalar_arithmetic;
 
@@ -10,7 +9,6 @@ pub use entrywise_arithmetic::*;
 pub use lerp::*;
 pub(crate) use macros::*;
 pub use norm::*;
-pub use random::*;
 pub use rng::*;
 pub use scalar_arithmetic::*;
 

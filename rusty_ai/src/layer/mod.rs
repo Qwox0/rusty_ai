@@ -10,9 +10,7 @@ use crate::{
     },
     gradient::layer::GradientLayer,
     matrix::Matrix,
-    util::{
-        constructor, impl_getter, EntryAdd, EntryMul, EntrySub, Randomize, RngWrapper, ScalarMul,
-    },
+    util::{impl_getter, EntryAdd, EntryMul, EntrySub, ScalarMul},
 };
 
 /*
@@ -90,24 +88,6 @@ impl Layer {
         let bias = LayerBias::from_iter_multiple(neurons, iter);
         Layer::new(weights, bias, acti_fn)
     }
-
-    /*
-    pub fn random_with_bias(
-        rng: &mut DistIter<impl Distribution<f64>, RngWrapper, f64>,
-        inputs: usize,
-        neurons: usize,
-        bias: LayerBias,
-        acti_func: ActivationFn,
-    ) -> Layer {
-        Layer::new(Matrix::new_random(inputs, neurons, rng), bias, acti_func)
-    }
-
-    pub fn random(inputs: usize, neurons: usize, acti_func: ActivationFn) -> Layer {
-        let mut rng = RngWrapper::new(None).sample_iter(Uniform::from(0.0..1.0));
-        let bias = LayerBias::from_iter_multiple(neurons, &mut rng);
-        Layer::random_with_bias(&mut rng, inputs, neurons, bias, acti_func)
-    }
-    */
 
     pub fn get_input_count(&self) -> usize {
         self.weights.get_width()
@@ -240,35 +220,6 @@ impl Layer {
         GradientLayer::new(Matrix::with_zeros(width, height), bias_change)
     }
 }
-
-impl Randomize for Layer {
-    type Sample = f64;
-
-    fn _randomize_mut(
-        &mut self,
-        rng: &mut impl rand::Rng,
-        distr: impl rand::distributions::Distribution<Self::Sample>,
-    ) {
-        self.weights._randomize_mut(rng, &distr);
-        self.bias._randomize_mut(rng, &distr);
-    }
-}
-
-/*
-impl MultiRandom for Layer {
-    type Sample;
-    type Item;
-    type Size;
-
-    fn _random_multiple(
-        rng: &mut impl rand::Rng,
-        distr: impl rand::prelude::Distribution<Self::Sample>,
-        count: Self::Size,
-    ) -> Self {
-        todo!()
-    }
-}
-*/
 
 impl EntrySub<&GradientLayer> for Layer {
     fn sub_entries_mut(&mut self, rhs: &GradientLayer) -> &mut Self {

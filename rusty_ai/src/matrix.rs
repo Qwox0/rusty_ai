@@ -1,9 +1,8 @@
 use crate::util::{
-    constructor, dot_product, impl_getter, EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, Randomize,
+    constructor, dot_product, impl_getter, EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp,
     RngWrapper, ScalarAdd, ScalarDiv, ScalarMul, ScalarSub, SetLength,
 };
 use itertools::Itertools;
-use rand::distributions::uniform::UniformDuration;
 use rand::distributions::DistIter;
 use rand::prelude::Distribution;
 use rand::Rng;
@@ -184,18 +183,6 @@ impl Matrix<f64> {
                 .map(Iterator::collect)
                 .collect(),
         }
-    }
-}
-
-impl<T> Randomize for Matrix<T> {
-    type Sample = T;
-
-    fn _randomize_mut(
-        &mut self,
-        rng: &mut impl rand::Rng,
-        distr: impl rand::distributions::Distribution<Self::Sample>,
-    ) {
-        self.iter_mut().for_each(|x| *x = rng.sample(&distr));
     }
 }
 

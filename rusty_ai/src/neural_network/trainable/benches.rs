@@ -1,18 +1,13 @@
 extern crate test;
-use std::{
-    sync::{Arc, Mutex},
-    thread::{JoinHandle, ScopedJoinHandle},
-};
-
-use rand::{distributions::Uniform, Rng, SeedableRng};
-use rayon::prelude::*;
-use test::black_box;
 
 use crate::{
     data::DataBuilder,
     prelude::*,
-    util::{EntryAdd, MultiRandom, ScalarDiv},
+    util::{EntryAdd, ScalarDiv},
 };
+use rayon::prelude::*;
+use std::{sync::Mutex, thread::ScopedJoinHandle};
+use test::black_box;
 
 fn calc_grad(nn: &TrainableNeuralNetwork<1, 1>, data: &[Pair<1, 1>]) -> Gradient {
     let mut gradient = nn.network.init_zero_gradient();

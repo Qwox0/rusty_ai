@@ -1,5 +1,4 @@
 use super::{Pair, PairList};
-use crate::util::Randomize;
 
 #[derive(Debug, Clone)]
 pub struct ValueList<const DIM: usize>(pub Vec<[f64; DIM]>);
@@ -7,18 +6,6 @@ pub struct ValueList<const DIM: usize>(pub Vec<[f64; DIM]>);
 impl<const DIM: usize> From<Vec<[f64; DIM]>> for ValueList<DIM> {
     fn from(values: Vec<[f64; DIM]>) -> Self {
         ValueList(values)
-    }
-}
-
-impl<const DIM: usize> Randomize for ValueList<DIM> {
-    type Sample = f64;
-
-    fn _randomize_mut(
-        &mut self,
-        rng: &mut impl rand::Rng,
-        distr: impl rand::distributions::Distribution<Self::Sample>,
-    ) {
-        todo!()
     }
 }
 

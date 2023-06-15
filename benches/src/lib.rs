@@ -1,7 +1,6 @@
 #![feature(test)]
 extern crate test;
 
-pub(crate) mod constants;
 pub(crate) mod macros;
 
 

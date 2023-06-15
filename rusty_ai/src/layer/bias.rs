@@ -1,15 +1,9 @@
-use std::{iter::once, marker::PhantomData, ptr::NonNull};
-
-use rand::{distributions::DistIter, prelude::Distribution, Rng};
-
 use super::AddBias;
 use crate::{
     gradient::aliases::{BiasGradient, WeightedSumGradient},
-    util::{
-        EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, Randomize, RngWrapper, ScalarAdd, ScalarDiv,
-        ScalarMul,
-    },
+    util::{EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, ScalarAdd, ScalarDiv, ScalarMul},
 };
+use rand::{prelude::Distribution, Rng};
 
 #[derive(Debug, Clone)]
 pub enum LayerBias {
@@ -106,21 +100,6 @@ impl AddBias for LayerBias {
             _ => panic!("Cannot add different LayerBias Variants"),
         }
         biases.0
-    }
-}
-
-impl Randomize for LayerBias {
-    type Sample = f64;
-
-    fn _randomize_mut(
-        &mut self,
-        rng: &mut impl rand::Rng,
-        distr: impl rand::distributions::Distribution<Self::Sample>,
-    ) {
-        match self {
-            LayerBias::OnePerLayer(x) => *x = rng.sample(distr),
-            LayerBias::OnePerNeuron(vec) => vec._randomize_mut(rng, distr),
-        }
     }
 }
 
