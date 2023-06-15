@@ -10,8 +10,8 @@ rusty_ai = { path = "../rusty_ai" }
 
 [[test]]
 name = "pytorch_sine"
-path = "./pytorch/sine.rs"
+path = "./tests/pytorch/sine.rs"
 
 [[test]]
 name = "pytorch_xor"
-path = "./pytorch/xor.rs"
+path = "./tests/pytorch/xor.rs"
