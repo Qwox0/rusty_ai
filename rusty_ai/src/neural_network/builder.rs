@@ -6,6 +6,8 @@ use rand::distributions::Uniform;
 use rand::prelude::Distribution;
 use std::{iter::once, marker::PhantomData};
 
+use super::trainable::ClipGradientNorm;
+
 // Dimension Markers
 pub struct NoDim;
 pub struct In<const IN: usize>;
@@ -86,12 +88,15 @@ pub struct NeuralNetworkBuilder<DIM, LP, OPT, D> {
     dim: PhantomData<DIM>,
     layer_parts: LP,
     error_function: Option<ErrorFunction>,
-    optimizer: OPT,
 
     // for generation
     rng: RngIter<D>,
     default_activation_function: ActivationFn,
     default_bias_type: BiasType,
+
+    // for trainable neural network
+    optimizer: OPT,
+    clip_grad_norm: Option<ClipGradientNorm>,
 }
 
 impl Default for NeuralNetworkBuilder<NoDim, NoParts, NoOptimizer, Uniform<f64>> {
@@ -101,13 +106,14 @@ impl Default for NeuralNetworkBuilder<NoDim, NoParts, NoOptimizer, Uniform<f64>>
             dim: PhantomData,
             layer_parts: NoParts,
             error_function: None,
-            optimizer: NoOptimizer,
             rng: RngIter::New {
                 seed: None,
                 distr: Uniform::new(0.0, 1.0),
             },
             default_activation_function: ActivationFn::default(),
             default_bias_type: BiasType::OnePerNeuron,
+            optimizer: NoOptimizer,
+            clip_grad_norm: None,
         }
     }
 }
@@ -318,11 +324,19 @@ impl<D, const IN: usize, const OUT: usize>
 where
     D: Distribution<f64>,
 {
+    pub fn clip_gradient_norm(mut self, max_norm: f64, norm_type: Norm) -> Self {
+        let _ = self.clip_grad_norm.insert(ClipGradientNorm {
+            norm_type,
+            max_norm,
+        });
+        self
+    }
+
     /// builds a trainable neural network
     pub fn build(self) -> TrainableNeuralNetwork<IN, OUT> {
         let mut optimizer = self.optimizer.0;
         optimizer.init_with_layers(&self.layers);
         let network = NeuralNetwork::new(self.layers, self.error_function.unwrap_or_default());
-        TrainableNeuralNetwork::new(network, optimizer)
+        TrainableNeuralNetwork::new(network, optimizer, self.clip_grad_norm)
     }
 }

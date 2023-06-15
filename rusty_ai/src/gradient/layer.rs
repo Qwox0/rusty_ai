@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use super::aliases::{BiasGradient, WeightGradient};
 use crate::{
     layer::{AddBias, LayerBias},
@@ -38,6 +40,11 @@ impl GradientLayer {
         self.bias_gradient.sqrt_entries_mut();
         self.weight_gradient.iter_mut().for_each(|x| *x = x.sqrt());
         self
+    }
+
+    pub fn iter_numbers(&self) -> impl Iterator<Item = &f64> {
+        let iter = self.weight_gradient.iter();
+        iter.chain(self.bias_gradient.iter_numbers())
     }
 }
 

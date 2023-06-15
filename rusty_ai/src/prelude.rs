@@ -10,4 +10,5 @@ pub use crate::{
     optimizer::{Adam, GradientDescent, Optimizer},
     results::{PropagationResult, TestsResult, VerbosePropagation},
     traits::{Propagator, Trainable},
+    util::Norm,
 };

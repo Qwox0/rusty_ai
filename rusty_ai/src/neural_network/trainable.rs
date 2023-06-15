@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::util::{Norm, ScalarDiv};
 use crate::{
     optimizer::IsOptimizer,
     traits::{Propagator, Trainable},
@@ -6,13 +7,20 @@ use crate::{
 };
 
 #[derive(Debug)]
+pub struct ClipGradientNorm {
+    pub norm_type: Norm,
+    pub max_norm: f64,
+}
+
+#[derive(Debug)]
 pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
     network: NeuralNetwork<IN, OUT>,
     optimizer: Optimizer,
+    clip_gradient_norm: Option<ClipGradientNorm>,
 }
 
 impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
-    constructor! { pub(crate) new -> network: NeuralNetwork<IN, OUT>, optimizer: Optimizer }
+    constructor! { pub(crate) new -> network: NeuralNetwork<IN, OUT>, optimizer: Optimizer, clip_gradient_norm: Option<ClipGradientNorm> }
 
     /// calculates the outputs and derivatives of all layers
     fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation {
@@ -48,34 +56,6 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
             callback(epoch, &self.network);
         }
     }
-        /*
-        fn join(rx: Receiver<Option<usize>>, max: usize) -> Option<usize> {
-            let mut found = 0;
-            while let Ok(x) = rx.recv() {
-                if x.is_some() {
-                    return x;
-                }
-                found += 1;
-                if found == max {
-                    return None;
-                }
-            }
-
-            return None;
-        }
-        fn my_multithread(data: &'static [u8]) -> Option<usize> {
-            let regions = (data.len() / CPUS) + 1; // +1: round up instead of down
-            let (tx, rx) = std::sync::mpsc::channel();
-            for (idx, chunk) in data.chunks(regions).enumerate() {
-                let inner_tx = tx.clone();
-                std::thread::spawn(move || {
-                    _ = inner_tx.send(david_a_perez(chunk).map(|x| x + regions * idx));
-                });
-            }
-
-            return join(rx, CPUS);
-        }
-        */
 
     fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>) {
         let mut data_count = 0;
@@ -94,8 +74,15 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
         }
         */
 
+        if let Some(clip_gradient_norm) = &self.clip_gradient_norm {
+            let iter = gradient.iter_numbers().cloned();
+            let norm = clip_gradient_norm.norm_type.calculate(iter);
+            let clip_factor = clip_gradient_norm.max_norm / (norm + 1e-6); // 1e-6 copied from: https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_
+            gradient.mul_scalar_mut(clip_factor);
+        }
+
         // average of all gradients
-        gradient.normalize(data_count);
+        gradient.div_scalar_mut(data_count as f64);
 
         self.optimize(gradient);
     }

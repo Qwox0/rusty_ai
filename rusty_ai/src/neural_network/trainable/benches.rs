@@ -11,7 +11,7 @@ use test::black_box;
 use crate::{
     data::DataBuilder,
     prelude::*,
-    util::{EntryAdd, MultiRandom},
+    util::{EntryAdd, MultiRandom, ScalarDiv},
 };
 
 fn calc_grad(nn: &TrainableNeuralNetwork<1, 1>, data: &[Pair<1, 1>]) -> Gradient {
@@ -44,14 +44,14 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
                 &mut gradient,
             );
         }
-        gradient.normalize(data_count);
+        gradient.div_scalar_mut(data_count as f64);
         self.optimize(gradient);
     }
 
     fn single_thread2(&mut self, data: &[Pair<1, 1>]) {
         let data_count = data.len();
         let mut gradient = calc_grad(self, data);
-        gradient.normalize(data_count);
+        gradient.div_scalar_mut(data_count as f64);
         self.optimize(gradient);
     }
 
@@ -156,7 +156,7 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
                 })
         });
 
-        gradient.normalize(data_count);
+        gradient.div_scalar_mut(data_count as f64);
         self.optimize(gradient);
     }
 
@@ -178,7 +178,7 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
                 || self.network.init_zero_gradient(),
                 |acc, a| acc.add_entries(a),
             );
-        gradient.normalize(data_count);
+        gradient.div_scalar_mut(data_count as f64);
         self.optimize(gradient);
     }
 }
@@ -199,13 +199,14 @@ impl ParallelSlice<Pair<1, 1>> for PairList<1, 1> {
 
 fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
     const SEED: u64 = 69420;
+    const NEURON_COUNT: usize = 5;
     let ai = NeuralNetworkBuilder::default()
         .rng_seed(SEED)
         .default_activation_function(ActivationFn::default_relu())
         .input()
-        .random_layer(100)
-        .random_layer(100)
-        .random_layer(100)
+        .random_layer(NEURON_COUNT)
+        .random_layer(NEURON_COUNT)
+        .random_layer(NEURON_COUNT)
         .default_activation_function(ActivationFn::Identity)
         .random_layer(1)
         .output()
@@ -227,7 +228,6 @@ macro_rules! make_bench {
             #[bench]
             fn bench(b: &mut test::Bencher) {
                 let (mut ai, data) = setup(100);
-                panic!("{:?}", ai);
                 let data = data.as_slice();
 
                 b.iter(|| black_box(BackpropBenches::$fn(black_box(&mut ai), black_box(&data))))
@@ -235,38 +235,22 @@ macro_rules! make_bench {
             #[test]
             fn test() {
                 let (mut ai, data) = setup(100);
-                panic!("{:?}", ai);
                 let data = data.as_slice();
 
                 BackpropBenches::$fn(&mut ai, &data);
 
                 let res = ai.test_propagate(data);
-                panic!("{:?}", res.error);
+                assert_eq!(res.error, 7538.635825747491);
             }
         }
     };
 }
 
-/*
 make_bench! { single_thread }
+/*
 make_bench! { single_thread2 }
-make_bench! { arc_mutex }
-make_bench! { mpsc_out }
+//make_bench! { arc_mutex }
+//make_bench! { mpsc_out }
 make_bench! { spmc_in }
 make_bench! { rayon_iter }
 */
-
-#[cfg(test)]
-mod testasdf {
-    use super::*;
-
-    #[test]
-    fn testasdf() {
-        let data_count = 10;
-        let a = setup(data_count);
-        let b = setup(data_count);
-        println!("{:?}", a);
-        println!("{:?}", b);
-        assert!(false);
-    }
-}

@@ -1,3 +1,5 @@
+use std::{iter::once, marker::PhantomData, ptr::NonNull};
+
 use rand::{distributions::DistIter, prelude::Distribution, Rng};
 
 use super::AddBias;
@@ -86,6 +88,10 @@ impl LayerBias {
             LayerBias::OnePerNeuron(vec) => vec.iter_mut().for_each(|x| *x = x.sqrt()),
         }
         self
+    }
+
+    pub fn iter_numbers<'a>(&'a self) -> IterLayerBias<'a> {
+        IterLayerBias::new(self)
     }
 }
 
@@ -188,3 +194,38 @@ impl std::fmt::Display for LayerBias {
         }
     }
 }
+
+pub struct IterLayerBias<'b> {
+    bias: &'b LayerBias,
+    idx: usize,
+    len: usize,
+}
+
+impl<'b> IterLayerBias<'b> {
+    pub fn new(bias: &'b LayerBias) -> Self {
+        let len = bias.get_neuron_count().unwrap_or(1);
+        IterLayerBias { bias, idx: 0, len }
+    }
+}
+
+impl<'b> Iterator for IterLayerBias<'b> {
+    type Item = &'b f64;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx == self.len {
+            return None;
+        }
+        let idx = self.idx;
+        self.idx += 1;
+        match self.bias {
+            LayerBias::OnePerLayer(f) => Some(f),
+            LayerBias::OnePerNeuron(v) => v.get(idx),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.len;
+        (exact, Some(exact))
+    }
+}
+
+impl<'b> ExactSizeIterator for IterLayerBias<'b> {}

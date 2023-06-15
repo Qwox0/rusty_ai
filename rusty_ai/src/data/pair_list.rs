@@ -27,6 +27,11 @@ impl<const IN: usize, const OUT: usize> From<Vec<([f64; IN], [f64; OUT])>> for P
 }
 
 impl<const IN: usize, const OUT: usize> PairList<IN, OUT> {
+    pub fn with_fn(inputs: Vec<[f64; IN]>, f: impl Fn([f64; IN]) -> [f64; OUT]) -> Self {
+        let outputs = inputs.iter().map(Clone::clone).map(f).collect();
+        PairList::from_vecs(inputs, outputs)
+    }
+
     pub fn from_vecs(vec_in: Vec<[f64; IN]>, vec_out: Vec<[f64; OUT]>) -> Self {
         vec_in.into_iter().zip(vec_out).collect_vec().into()
     }

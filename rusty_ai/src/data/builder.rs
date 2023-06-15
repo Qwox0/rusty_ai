@@ -1,10 +1,7 @@
-use std::ops::Range;
-
-use rand::{distributions::Uniform, prelude::Distribution, Rng};
-
-use crate::util::RngWrapper;
-
 use super::{Pair, ValueList};
+use crate::util::RngWrapper;
+use rand::{distributions::Uniform, prelude::Distribution, Rng};
+use std::ops::Range;
 
 pub struct DataBuilder<D: Distribution<f64>> {
     distr: D,

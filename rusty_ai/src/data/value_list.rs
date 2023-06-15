@@ -1,5 +1,5 @@
 use super::{Pair, PairList};
-use crate::util::{MultiRandom, Random, Randomize};
+use crate::util::Randomize;
 
 #[derive(Debug, Clone)]
 pub struct ValueList<const DIM: usize>(pub Vec<[f64; DIM]>);

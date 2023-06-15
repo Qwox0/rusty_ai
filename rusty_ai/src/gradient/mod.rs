@@ -1,9 +1,8 @@
 pub mod aliases;
 pub mod layer;
 
-use crate::util::{ScalarDiv, ScalarMul, EntryAdd};
-
 use self::layer::GradientLayer;
+use crate::util::{EntryAdd, ScalarDiv, ScalarMul};
 
 pub struct Gradient {
     layers: Vec<GradientLayer>,
@@ -28,14 +27,21 @@ impl Gradient {
         self.layers.iter_mut()
     }
 
-    pub fn normalize(&mut self, data_count: usize) {
-        self.div_scalar_mut(data_count as f64);
+    pub fn iter_numbers(&self) -> impl Iterator<Item = &f64> {
+        self.layers.iter().map(|l| l.iter_numbers()).flatten()
     }
 }
 
 impl EntryAdd for Gradient {
     fn add_entries_mut(&mut self, rhs: Self) -> &mut Self {
         self.layers.add_entries_mut(rhs.layers);
+        self
+    }
+}
+
+impl ScalarMul for Gradient {
+    fn mul_scalar_mut(&mut self, scalar: f64) -> &mut Self {
+        self.layers.mul_scalar_mut(scalar);
         self
     }
 }

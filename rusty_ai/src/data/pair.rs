@@ -1,8 +1,5 @@
-use rand::{distributions::uniform::SampleRange, prelude::Distribution, Rng};
-use std::{
-    fmt::Display,
-    ops::{Range, RangeBounds},
-};
+use rand::{distributions::uniform::SampleRange, Rng};
+use std::fmt::Display;
 
 /// an input-expected output-pair.
 /// Is used to contain an expected output for training or to contain the output calculated during
