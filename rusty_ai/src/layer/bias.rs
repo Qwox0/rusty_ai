@@ -1,5 +1,3 @@
-use crate::util::{EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, ScalarAdd, ScalarDiv, ScalarMul};
-
 #[derive(Debug, Clone)]
 pub struct LayerBias(Vec<f64>);
 
@@ -50,44 +48,6 @@ impl LayerBias {
 
     pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, f64> {
         self.0.iter_mut()
-    }
-}
-
-macro_rules! impl_entrywise_arithmetic {
-    ( $trait:ident : $fn:ident ) => {
-        impl $trait<&LayerBias> for LayerBias {
-            fn $fn(&mut self, rhs: &LayerBias) -> &mut Self {
-                self.0.$fn(rhs.get_vec());
-                self
-            }
-        }
-    };
-}
-
-impl_entrywise_arithmetic! { EntryAdd: add_entries_mut }
-impl_entrywise_arithmetic! { EntrySub: sub_entries_mut }
-impl_entrywise_arithmetic! { EntryMul: mul_entries_mut }
-impl_entrywise_arithmetic! { EntryDiv: div_entries_mut }
-
-macro_rules! impl_scalar_arithmetic {
-    ( $trait:ident : $fn:ident ) => {
-        impl $trait for LayerBias {
-            fn $fn(&mut self, scalar: f64) -> &mut Self {
-                self.0.$fn(scalar);
-                self
-            }
-        }
-    };
-}
-
-impl_scalar_arithmetic! { ScalarAdd : add_scalar_mut }
-impl_scalar_arithmetic! { ScalarMul : mul_scalar_mut }
-impl_scalar_arithmetic! { ScalarDiv : div_scalar_mut }
-
-impl Lerp<&LayerBias> for LayerBias {
-    fn lerp_mut(&mut self, other: &LayerBias, blend: f64) -> &mut Self {
-        self.0.lerp_mut(other.get_vec(), blend);
-        self
     }
 }
 

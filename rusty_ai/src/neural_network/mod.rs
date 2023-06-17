@@ -7,11 +7,10 @@ use crate::{
     data::Pair,
     error_function::ErrorFunction,
     gradient::Gradient,
-    layer::{IsLayer, Layer},
-    prelude::VerbosePropagation,
+    layer::Layer,
     results::{PropagationResult, TestsResult},
     traits::{IterLayerParams, Propagator},
-    util::{impl_getter, EntryAdd},
+    util::impl_getter,
 };
 
 #[derive(Debug)]
@@ -38,10 +37,6 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         self.layers.iter()
     }
 
-    pub(crate) fn iter_mut_layers(&mut self) -> core::slice::IterMut<Layer> {
-        self.layers.iter_mut()
-    }
-
     pub(crate) fn increment_generation(&mut self) {
         self.generation += 1;
     }
@@ -51,75 +46,6 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
             .map(Layer::init_zero_gradient)
             .collect::<Vec<_>>()
             .into()
-    }
-
-    ///    L-1                   L
-    /// o_(L-1)_0
-    ///                      z_0 -> o_L_0
-    /// o_(L-1)_1    w_ij                    C
-    ///                      z_1 -> o_L_1
-    /// o_(L-1)_2
-    ///         j              i        i
-    /// n_(L-1) = 3           n_L = 2
-    ///
-    /// L: current Layer with n_L Neurons called L_1, L_2, ..., L_n
-    /// L-1: previous Layer with n_(L-1) Neurons
-    /// o_L_i: output of Neuron L_i
-    /// e_i: expected output of Neuron L_i
-    /// Cost: C = 0.5 * ∑ (o_L_i - e_i)^2 from i = 1 to n_L
-    /// -> dC/do_L_i = o_L_i - e_i
-    ///
-    /// f: activation function
-    /// activation: o_L_i = f(z_i)
-    /// -> do_L_i/dz_i = f'(z_i)
-    ///
-    /// -> dC/dz_i = dC/do_L_i * do_L_i/dz_i = (o_L_i - e_i) * f'(z_i)
-    ///
-    /// w_ij: weight of connection from (L-1)_j to L_i
-    /// b_L: bias of Layer L
-    /// weighted sum: z_i = b_L + ∑ w_ij * o_(L-1)_j from j = 1 to n_(L-1)
-    /// -> dz_i/dw_ij      = o_(L-1)_j
-    /// -> dz_i/do_(L-1)_j = w_ij
-    /// -> dz_i/dw_ij      = 1
-    ///
-    ///
-    /// dC/dw_ij      = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
-    ///               = (o_L_i - e_i) *     f'(z_i) *  o_(L-1)_j
-    /// dC/do_(L-1)_j = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
-    ///               = (o_L_i - e_i) *     f'(z_i) *       w_ij
-    /// dC/db_L       = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
-    ///               = (o_L_i - e_i) *     f'(z_i)
-    pub fn backpropagation(
-        &self,
-        verbose_prop: VerbosePropagation,
-        expected_output: &[f64; OUT],
-        gradient: &mut Gradient,
-    ) {
-        let mut outputs = verbose_prop.outputs;
-        let last_output = outputs.pop().expect("There is an output layer");
-        let expected_output = expected_output.to_vec();
-
-        // derivatives of the cost function with respect to the output of the neurons in the last layer.
-        let last_output_gradient = self.error_function.gradient(last_output, expected_output); // dC/do_L_i; i = last
-        let inputs_rev = outputs.into_iter().rev();
-
-        self.layers
-            .iter()
-            .zip(verbose_prop.derivatives)
-            .zip(gradient.iter_mut_layers())
-            .rev()
-            .zip(inputs_rev)
-            .fold(
-                last_output_gradient,
-                |current_output_gradient, (((layer, derivative_output), gradient), input)| {
-                    // dc_dx = partial derivative of the cost function with respect to x.
-                    let (layer_gradient, input_gradient) =
-                        layer.backpropagation2(derivative_output, input, current_output_gradient);
-
-                    gradient.add_entries_mut(layer_gradient);
-                    input_gradient
-                },
-            );
     }
 }
 
@@ -139,13 +65,6 @@ impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN
     fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
         self.iter_layers()
             .fold(input.to_vec(), |acc, layer| layer.calculate(acc))
-            /*
-            .fold(input.to_vec(), |acc, layer| {
-                let res = layer.calculate(acc);
-                println!("{:?}", res);
-                res
-            })
-            */
             .into()
     }
 

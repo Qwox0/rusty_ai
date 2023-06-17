@@ -2,10 +2,7 @@ pub mod aliases;
 pub mod layer;
 
 use self::layer::GradientLayer;
-use crate::{
-    traits::IterLayerParams,
-    util::{EntryAdd, ScalarDiv, ScalarMul},
-};
+use crate::traits::IterLayerParams;
 
 #[derive(Debug, Clone)]
 pub struct Gradient {
@@ -44,27 +41,6 @@ impl IterLayerParams for Gradient {
 
     fn iter_mut_layers<'a>(&'a mut self) -> impl Iterator<Item = &'a mut Self::Layer> {
         self.layers.iter_mut()
-    }
-}
-
-impl EntryAdd for Gradient {
-    fn add_entries_mut(&mut self, rhs: Self) -> &mut Self {
-        self.layers.add_entries_mut(rhs.layers);
-        self
-    }
-}
-
-impl ScalarMul for Gradient {
-    fn mul_scalar_mut(&mut self, scalar: f64) -> &mut Self {
-        self.layers.mul_scalar_mut(scalar);
-        self
-    }
-}
-
-impl ScalarDiv for Gradient {
-    fn div_scalar_mut(&mut self, scalar: f64) -> &mut Self {
-        self.layers.div_scalar_mut(scalar);
-        self
     }
 }
 

@@ -1,9 +1,17 @@
+use itertools::Itertools;
+
 use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
 use crate::gradient::Gradient;
-use crate::{
-    gradient::layer::GradientLayer, layer::Layer, matrix::Matrix, neural_network::NeuralNetwork,
-    util::constructor,
-};
+use crate::traits::IterLayerParams;
+use crate::util::Lerp;
+use crate::{layer::Layer, neural_network::NeuralNetwork, util::constructor};
+
+// Markers
+#[derive(Debug)]
+struct AdamData {
+    m: Gradient,
+    v: Gradient,
+}
 
 // stochastic gradient descent
 #[derive(Debug)]
@@ -12,8 +20,7 @@ pub struct Adam {
     pub beta1: f64,
     pub beta2: f64,
     pub epsilon: f64,
-    m: Vec<GradientLayer>,
-    v: Vec<GradientLayer>,
+    data: Option<AdamData>,
 }
 
 impl Adam {
@@ -27,47 +34,36 @@ impl IsOptimizer for Adam {
         nn: &mut NeuralNetwork<IN, OUT>,
         gradient: &Gradient,
     ) {
-        let time_step = nn.get_generation() + 1; // generation starts at 0. should start at 1
-        todo!();
-        /*
-        for (((layer, lgradient), m), v) in nn
-            .iter_mut_layers()
-            .zip(gradient.iter_layers())
-            .zip(self.m.iter_mut())
-            .zip(self.v.iter_mut())
-        {
-            m.lerp_mut(lgradient, self.beta1);
-            v.lerp_mut(lgradient.sqare_entries(), self.beta2);
+        let time_step = (nn.get_generation() + 1) as i32; // generation starts at 0. should start at 1
+        let AdamData { m, v } = self
+            .data
+            .as_mut()
+            .expect("Adam Optimizer needs to be initialized with layers first!");
 
-            let get_correction_factor = |beta: f64| (1.0 - beta.powi(time_step as i32)).recip();
+        nn.iter_mut_parameters()
+            .zip(gradient.iter_parameters())
+            .zip(m.iter_mut_parameters())
+            .zip(v.iter_mut_parameters())
+            .for_each(|(((x, dx), m), v)| {
+                m.lerp_mut(*dx, self.beta1);
+                v.lerp_mut(dx * dx, self.beta2);
 
-            let m_bias_cor = m.clone().mul_scalar(get_correction_factor(self.beta1));
-            let v_bias_cor = v.clone().mul_scalar(get_correction_factor(self.beta2));
+                let m_bias_cor = *m / (1.0 - self.beta1.powi(time_step));
+                let v_bias_cor = *v / (1.0 - self.beta2.powi(time_step));
 
-            let denominator = v_bias_cor.sqrt_entries().add_scalar(self.epsilon);
-            let change = m_bias_cor
-                .mul_scalar(self.learning_rate)
-                .mul_scalar(0.00001)
-                .div_entries(denominator);
-
-            //println!("{:?}", change);
-
-            layer.sub_entries_mut(&change);
-        }
-        */
+                let denominator = v_bias_cor * v_bias_cor + self.epsilon;
+                *x -= m_bias_cor * self.learning_rate / denominator;
+            });
     }
 
     fn init_with_layers(&mut self, layers: &Vec<Layer>) {
-        self.m = layers
+        let m: Gradient = layers
             .iter()
-            .map(|layer| {
-                let (w, h) = layer.get_weights().get_dimensions();
-                let weight_gradient = Matrix::with_zeros(w, h);
-                let bias_gradient = layer.get_bias().clone_with_zeros();
-                GradientLayer::new(weight_gradient, bias_gradient)
-            })
-            .collect();
-        self.v = self.m.clone();
+            .map(Layer::init_zero_gradient)
+            .collect_vec()
+            .into();
+        let v = m.clone();
+        let _ = self.data.insert(AdamData { m, v });
     }
 }
 
@@ -78,8 +74,7 @@ impl Default for Adam {
             beta1: 0.9,
             beta2: 0.999,
             epsilon: 1e-8,
-            m: vec![],
-            v: vec![],
+            data: None,
         }
     }
 }

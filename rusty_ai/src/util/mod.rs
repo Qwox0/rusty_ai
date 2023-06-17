@@ -3,14 +3,12 @@ mod lerp;
 mod macros;
 mod norm;
 mod rng;
-mod scalar_arithmetic;
 
 pub use entrywise_arithmetic::*;
 pub use lerp::*;
 pub(crate) use macros::*;
 pub use norm::*;
 pub use rng::*;
-pub use scalar_arithmetic::*;
 
 pub fn dot_product<T>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
 where

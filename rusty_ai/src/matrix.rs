@@ -1,7 +1,4 @@
-use crate::util::{
-    constructor, dot_product, impl_getter, EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp,
-    RngWrapper, ScalarAdd, ScalarDiv, ScalarMul, ScalarSub, SetLength,
-};
+use crate::util::{constructor, dot_product, impl_getter, RngWrapper, SetLength};
 use itertools::Itertools;
 use rand::distributions::DistIter;
 use rand::prelude::Distribution;
@@ -116,18 +113,6 @@ impl<T> Matrix<T> {
         (self.width, self.height)
     }
 }
-/*
-
-impl<T> IntoIterator for Matrix<T> {
-    type Item = &'a Vec<T>;
-
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter_rows()
-    }
-}
-*/
 
 impl<T: Ring + Clone> Matrix<T> {
     pub fn with_zeros(width: usize, height: usize) -> Matrix<T> {
@@ -182,46 +167,6 @@ impl Matrix<f64> {
                 .map(Iterator::collect)
                 .collect(),
         }
-    }
-}
-
-macro_rules! impl_entrywise_arithmetic {
-    ( $trait:ident : $fn:ident ) => {
-        impl $trait<&Matrix<f64>> for Matrix<f64> {
-            fn $fn(&mut self, rhs: &Matrix<f64>) -> &mut Self {
-                assert_eq!(self.get_dimensions(), rhs.get_dimensions());
-                self.elements.$fn(&rhs.elements);
-                self
-            }
-        }
-    };
-}
-
-impl_entrywise_arithmetic! { EntryAdd: add_entries_mut }
-impl_entrywise_arithmetic! { EntrySub: sub_entries_mut }
-impl_entrywise_arithmetic! { EntryMul: mul_entries_mut }
-impl_entrywise_arithmetic! { EntryDiv: div_entries_mut }
-
-macro_rules! impl_scalar_arithmetic {
-    ( $trait:ident : $fn:ident ) => {
-        impl $trait for Matrix<f64> {
-            fn $fn(&mut self, scalar: f64) -> &mut Self {
-                self.elements.$fn(scalar);
-                self
-            }
-        }
-    };
-}
-
-impl_scalar_arithmetic! { ScalarAdd : add_scalar_mut }
-impl_scalar_arithmetic! { ScalarSub : sub_scalar_mut }
-impl_scalar_arithmetic! { ScalarMul : mul_scalar_mut }
-impl_scalar_arithmetic! { ScalarDiv : div_scalar_mut }
-
-impl Lerp<&Matrix<f64>> for Matrix<f64> {
-    fn lerp_mut(&mut self, other: &Matrix<f64>, blend: f64) -> &mut Self {
-        self.elements.lerp_mut(&other.elements, blend);
-        self
     }
 }
 
