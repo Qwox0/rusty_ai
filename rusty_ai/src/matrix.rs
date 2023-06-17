@@ -5,8 +5,7 @@ use crate::util::{
 use itertools::Itertools;
 use rand::distributions::DistIter;
 use rand::prelude::Distribution;
-use rand::Rng;
-use std::fmt::{Debug, Display};
+use std::fmt::{Debug, Display, Write};
 use std::ops::{Add, Index, IndexMut, Mul};
 
 pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
@@ -275,34 +274,55 @@ impl<T> IndexMut<(usize, usize)> for Matrix<T> {
     }
 }
 
-impl<T: Display> Display for Matrix<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: Display> Matrix<T> {
+    pub fn to_string_with_title(&self, title: impl ToString) -> Result<String, std::fmt::Error> {
+        let title = title.to_string();
+        let mut title = title.trim();
+
         let column_widths = self.elements.iter().fold(vec![0; self.width], |acc, row| {
             row.iter()
                 .zip(acc)
-                .map(|(e, max)| std::cmp::max(max, e.to_string().len()))
+                .map(|(e, max)| e.to_string().len().max(max))
                 .collect()
         });
 
-        let full_padding =
-            " ".repeat(column_widths.len() + column_widths.iter().sum::<usize>() + 1);
-        write!(
-            f,
-            "┌{0}┐\n{1}\n└{0}┘",
-            full_padding,
-            self.elements
-                .iter()
-                .map(|row| {
-                    row.iter()
-                        .zip(column_widths.iter())
-                        .map(|(t, width)| format!("{t:^width$}"))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
-                .map(|row_str| format!("│ {row_str} │"))
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
+        let content_width = column_widths.len() + column_widths.iter().sum::<usize>() - 1;
+        let content = self
+            .elements
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .zip(column_widths.iter())
+                    .map(|(t, width)| format!("{t:^width$}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .map(|row_str| format!("│ {row_str} │"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let title_len = title.chars().count();
+        if title_len > content_width {
+            title = title.split_at(content_width).0
+        }
+
+        let pad_width = content_width.checked_sub(title_len).unwrap_or(0);
+        let pre_title_pad = " ".repeat(pad_width.div_floor(2));
+        let post_title_pad = " ".repeat(pad_width.div_ceil(2));
+
+        let mut buf = String::with_capacity((content_width + 4) * (self.height + 2));
+
+        writeln!(&mut buf, "┌ {}{}{} ┐", pre_title_pad, title, post_title_pad)?;
+        writeln!(&mut buf, "{}", content)?;
+        write!(&mut buf, "└ {} ┘", " ".repeat(content_width))?;
+        Ok(buf)
+    }
+}
+
+impl<T: Display> Display for Matrix<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = self.to_string_with_title("")?;
+        write!(f, "{}", text)
     }
 }
 

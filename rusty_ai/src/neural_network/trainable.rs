@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::traits::IterLayerParams;
 use crate::util::{Norm, ScalarDiv};
 use crate::{
     optimizer::IsOptimizer,
@@ -15,12 +16,28 @@ pub struct ClipGradientNorm {
 #[derive(Debug)]
 pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
     network: NeuralNetwork<IN, OUT>,
+    gradient: Gradient,
+    retain_gradient: bool,
     optimizer: Optimizer,
     clip_gradient_norm: Option<ClipGradientNorm>,
 }
 
 impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
-    constructor! { pub(crate) new -> network: NeuralNetwork<IN, OUT>, optimizer: Optimizer, clip_gradient_norm: Option<ClipGradientNorm> }
+    pub(crate) fn new(
+        network: NeuralNetwork<IN, OUT>,
+        optimizer: Optimizer,
+        retain_gradient: bool,
+        clip_gradient_norm: Option<ClipGradientNorm>,
+    ) -> Self {
+        let gradient = network.init_zero_gradient();
+        Self {
+            network,
+            gradient,
+            retain_gradient,
+            optimizer,
+            clip_gradient_norm,
+        }
+    }
 
     /// calculates the outputs and derivatives of all layers
     fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation {
@@ -36,6 +53,12 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
             derivatives.push(derivative);
         }
         VerbosePropagation::new(outputs, derivatives)
+    }
+
+    fn optimize(&mut self) {
+        self.optimizer
+            .optimize_weights(&mut self.network, &self.gradient);
+        self.network.increment_generation();
     }
 }
 
@@ -58,33 +81,31 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
     }
 
     fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>) {
-        let mut data_count = 0;
-        let mut gradient = self.network.init_zero_gradient();
+        if !self.retain_gradient {
+            self.gradient = self.network.init_zero_gradient();
+        }
+
         for (input, expected_output) in data_pairs.into_iter().map(Into::into) {
             self.network.backpropagation(
                 self.verbose_propagate(input),
                 expected_output,
-                &mut gradient,
+                &mut self.gradient,
             );
-            data_count += 1;
         }
-        /*
-        if data_count < 5 {
-            eprintln!("WARN: Small training sets result in inaccurate gradients which might cause exploding weight values!")
-        }
-        */
 
         if let Some(clip_gradient_norm) = &self.clip_gradient_norm {
-            let iter = gradient.iter_numbers().cloned();
+            let iter = self.gradient.iter_parameters().cloned();
             let norm = clip_gradient_norm.norm_type.calculate(iter);
-            let clip_factor = clip_gradient_norm.max_norm / (norm + 1e-6); // 1e-6 copied from: https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_
-            gradient.mul_scalar_mut(clip_factor);
+            if norm > clip_gradient_norm.max_norm {
+                let clip_factor = clip_gradient_norm.max_norm / (norm + 1e-6); // 1e-6 copied from: https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_
+                self.gradient.mul_scalar_mut(clip_factor);
+            }
+        } else {
+            #[cfg(debug_assertions)]
+            eprintln!("WARN: It is recommended to clip the gradient")
         }
 
-        // average of all gradients
-        gradient.div_scalar_mut(data_count as f64);
-
-        self.optimize(gradient);
+        self.optimize()
     }
 
     /*
@@ -111,11 +132,6 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
         self.optimize(gradient);
     }
     */
-
-    fn optimize(&mut self, gradient: Gradient) {
-        self.optimizer.optimize_weights(&mut self.network, gradient);
-        self.network.increment_generation();
-    }
 }
 
 impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
@@ -140,7 +156,8 @@ impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for TrainableNeuralN
 
 impl<const IN: usize, const OUT: usize> std::fmt::Display for TrainableNeuralNetwork<IN, OUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n; Optimizer: {:?}", self.network, self.optimizer)
+        writeln!(f, "{}", self.network)?;
+        write!(f, "Optimizer: {}", self.optimizer)
     }
 }
 

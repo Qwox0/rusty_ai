@@ -1,10 +1,14 @@
 #![feature(unboxed_closures)]
+#![feature(return_position_impl_trait_in_trait)]
 #![feature(associated_type_defaults)]
 #![feature(test)]
 #![feature(fn_traits)]
 #![feature(type_changing_struct_update)]
 #![feature(iter_array_chunks)]
+#![feature(int_roundings)]
 #![feature(portable_simd)]
+
+#![feature(ptr_sub_ptr)]
 
 pub mod activation_function;
 pub mod data;

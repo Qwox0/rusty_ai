@@ -96,6 +96,7 @@ pub struct NeuralNetworkBuilder<DIM, LP, OPT, D> {
 
     // for trainable neural network
     optimizer: OPT,
+    retain_gradient: bool,
     clip_grad_norm: Option<ClipGradientNorm>,
 }
 
@@ -113,6 +114,7 @@ impl Default for NeuralNetworkBuilder<NoDim, NoParts, NoOptimizer, Uniform<f64>>
             default_activation_function: ActivationFn::default(),
             default_bias_type: BiasType::OnePerNeuron,
             optimizer: NoOptimizer,
+            retain_gradient: true,
             clip_grad_norm: None,
         }
     }
@@ -157,6 +159,11 @@ where
 
     pub fn one_bias_per_neuron(mut self) -> Self {
         self.default_bias_type = BiasType::OnePerNeuron;
+        self
+    }
+
+    pub fn retain_gradient(mut self, retain_gradient: bool) -> Self {
+        self.retain_gradient = retain_gradient;
         self
     }
 }
@@ -337,6 +344,11 @@ where
         let mut optimizer = self.optimizer.0;
         optimizer.init_with_layers(&self.layers);
         let network = NeuralNetwork::new(self.layers, self.error_function.unwrap_or_default());
-        TrainableNeuralNetwork::new(network, optimizer, self.clip_grad_norm)
+        TrainableNeuralNetwork::new(
+            network,
+            optimizer,
+            self.retain_gradient,
+            self.clip_grad_norm,
+        )
     }
 }

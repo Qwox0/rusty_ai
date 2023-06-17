@@ -1,5 +1,6 @@
 use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
 use crate::gradient::Gradient;
+use crate::traits::IterLayerParams;
 use crate::util::{EntryDiv, EntrySub, Lerp, ScalarAdd};
 use crate::{
     gradient::layer::GradientLayer,
@@ -29,16 +30,18 @@ impl IsOptimizer for Adam {
     fn optimize_weights<'a, const IN: usize, const OUT: usize>(
         &mut self,
         nn: &mut NeuralNetwork<IN, OUT>,
-        gradient: Gradient,
+        gradient: &Gradient,
     ) {
         let time_step = nn.get_generation() + 1; // generation starts at 0. should start at 1
+        todo!();
+        /*
         for (((layer, lgradient), m), v) in nn
             .iter_mut_layers()
-            .zip(gradient)
+            .zip(gradient.iter_layers())
             .zip(self.m.iter_mut())
             .zip(self.v.iter_mut())
         {
-            m.lerp_mut(&lgradient, self.beta1);
+            m.lerp_mut(lgradient, self.beta1);
             v.lerp_mut(lgradient.sqare_entries(), self.beta2);
 
             let get_correction_factor = |beta: f64| (1.0 - beta.powi(time_step as i32)).recip();
@@ -56,6 +59,7 @@ impl IsOptimizer for Adam {
 
             layer.sub_entries_mut(&change);
         }
+        */
     }
 
     fn init_with_layers(&mut self, layers: &Vec<Layer>) {
