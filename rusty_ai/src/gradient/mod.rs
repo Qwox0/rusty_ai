@@ -3,7 +3,7 @@ pub mod layer;
 
 use self::layer::GradientLayer;
 use crate::{
-    traits::{IterParams, IterLayerParams},
+    traits::IterLayerParams,
     util::{EntryAdd, ScalarDiv, ScalarMul},
 };
 

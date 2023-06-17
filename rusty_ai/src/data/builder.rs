@@ -1,4 +1,4 @@
-use super::{Pair, ValueList};
+use super::ValueList;
 use crate::util::RngWrapper;
 use rand::{distributions::Uniform, prelude::Distribution, Rng};
 use std::ops::Range;
