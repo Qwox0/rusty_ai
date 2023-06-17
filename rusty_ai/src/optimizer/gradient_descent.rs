@@ -1,10 +1,5 @@
 use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
-use crate::{
-    gradient::Gradient,
-    neural_network::NeuralNetwork,
-    traits::IterLayerParams,
-    util::{EntrySub, ScalarMul},
-};
+use crate::{gradient::Gradient, neural_network::NeuralNetwork, traits::IterLayerParams};
 
 // stochastic gradient descent
 #[derive(Debug)]

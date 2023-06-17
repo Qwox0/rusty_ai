@@ -1,4 +1,4 @@
-use crate::{gradient::Gradient, prelude::*};
+use crate::prelude::*;
 
 pub trait Propagator<const IN: usize, const OUT: usize> {
     fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT>;

@@ -1,13 +1,12 @@
 use std::iter::once;
 
-use super::aliases::{BiasGradient, WeightGradient};
+use super::aliases::{BiasGradient, WeightGradient, WeightedSumGradient};
 use crate::{
-    layer::{AddBias, LayerBias},
+    layer::LayerBias,
     matrix::Matrix,
-    traits::{IterParams, impl_IterParams},
+    traits::{impl_IterParams, IterParams},
     util::{
         constructor, EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, ScalarAdd, ScalarDiv, ScalarMul,
-        ScalarSub,
     },
 };
 
@@ -22,12 +21,28 @@ pub struct GradientLayer {
 impl GradientLayer {
     constructor! { pub new -> weight_gradient: Matrix<f64>, bias_gradient: LayerBias }
 
+    pub fn from_backpropagation(
+        weighted_sum_gradient: WeightedSumGradient,
+        input: Vec<f64>,
+    ) -> GradientLayer {
+        let layer_input_count = input.len();
+        let layer_neuron_count = weighted_sum_gradient.len();
+        let bias_gradient: BiasGradient = LayerBias::from(weighted_sum_gradient.clone());
+
+        let mut weight_gradient: WeightGradient =
+            Matrix::new_empty(layer_input_count, layer_neuron_count);
+        for &neuron in weighted_sum_gradient.iter() {
+            weight_gradient.push_row(input.clone().mul_scalar(neuron));
+        }
+        GradientLayer::new(weight_gradient, bias_gradient)
+    }
+
     pub fn add_next_backpropagation(
         &mut self,
         next_weights_change: WeightGradient,
         next_bias_change: BiasGradient,
     ) {
-        self.bias_gradient.add_bias_mut(&next_bias_change);
+        self.bias_gradient.add_entries_mut(&next_bias_change);
         self.weight_gradient.add_entries_mut(&next_weights_change);
     }
 
@@ -89,8 +104,7 @@ impl Lerp<&GradientLayer> for GradientLayer {
 
 impl std::fmt::Display for GradientLayer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let bias_plural = self.bias_gradient.get_neuron_count().is_some();
-        let bias_header = format!("Bias{}:", if bias_plural { "es" } else { "" });
+        let bias_header = "Biases:".to_string();
         let bias_str_iter =
             once(bias_header).chain(self.bias_gradient.iter().map(ToString::to_string));
         let bias_column_width = bias_str_iter.clone().map(|s| s.len()).max().unwrap_or(0);

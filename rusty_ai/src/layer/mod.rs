@@ -1,21 +1,14 @@
-mod add_bias;
 mod bias;
-use std::iter::once;
-
-pub use add_bias::*;
-pub use bias::*;
-use itertools::Itertools;
-
 use crate::{
     activation_function::ActivationFn,
-    gradient::aliases::{
-        BiasGradient, InputGradient, OutputGradient, WeightGradient, WeightedSumGradient,
-    },
+    gradient::aliases::{InputGradient, OutputGradient, WeightedSumGradient},
     gradient::layer::GradientLayer,
     matrix::Matrix,
     traits::{impl_IterParams, IterParams},
     util::{impl_getter, EntryAdd, EntryMul, EntrySub, ScalarMul},
 };
+pub use bias::*;
+use std::iter::once;
 
 /*
 #[derive(Debug, Clone)]
@@ -51,7 +44,7 @@ impl IsLayer for Layer {
     /// reduce calculations.
     fn calculate(&self, inputs: Vec<f64>) -> Vec<f64> {
         (&self.weights * inputs)
-            .add_bias_mut(&self.bias)
+            .add_entries_mut(self.bias.get_vec())
             .iter()
             .map(self.activation_function)
             .collect()
@@ -66,13 +59,11 @@ impl Layer {
     impl_getter! { pub get_activation_function -> activation_function: &ActivationFn }
 
     pub fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
-        if let Some(bias_neurons) = bias.get_neuron_count() {
-            assert_eq!(
-                weights.get_height(),
-                bias_neurons,
-                "Weights and Bias don't have matching neuron counts."
-            );
-        }
+        assert_eq!(
+            weights.get_height(),
+            bias.get_neuron_count(),
+            "Weights and Bias don't have matching neuron counts."
+        );
         Self {
             weights,
             bias,
@@ -89,7 +80,7 @@ impl Layer {
         acti_fn: ActivationFn,
     ) -> Layer {
         let weights = Matrix::from_iter(inputs, neurons, &mut iter);
-        let bias = LayerBias::from_iter_multiple(neurons, iter);
+        let bias = LayerBias::from_iter(neurons, iter);
         Layer::new(weights, bias, acti_fn)
     }
 
@@ -100,7 +91,7 @@ impl Layer {
     /// like [`Layer::calculate`] but also calculate the derivatives of the activation function
     pub fn training_calculate(&self, inputs: &Vec<f64>) -> (Vec<f64>, Vec<f64>) {
         (&self.weights * inputs)
-            .add_bias_mut(&self.bias)
+            .add_entries_mut(self.bias.get_vec())
             .iter()
             .map(|z| {
                 (
@@ -190,32 +181,27 @@ impl Layer {
     pub(crate) fn backpropagation2(
         &self,
         derivative_output: Vec<f64>,
-        input: &Vec<f64>,
+        input: Vec<f64>,
         output_gradient: OutputGradient,
-    ) -> (BiasGradient, WeightGradient, InputGradient) {
+    ) -> (GradientLayer, InputGradient) {
         let layer_input_count = self.get_input_count();
         let layer_neuron_count = self.get_neuron_count();
-        assert_eq!(derivative_output.len(), layer_neuron_count,);
-        assert_eq!(input.len(), layer_input_count,);
-        assert_eq!(output_gradient.len(), layer_neuron_count,);
+        assert_eq!(derivative_output.len(), layer_neuron_count);
+        assert_eq!(input.len(), layer_input_count);
+        assert_eq!(output_gradient.len(), layer_neuron_count);
 
         let weighted_sum_gradient: WeightedSumGradient =
             output_gradient.mul_entries(derivative_output);
 
-        let bias_gradient: BiasGradient = self.bias.new_matching_gradient(&weighted_sum_gradient);
-
-        let mut weight_gradient: WeightGradient =
-            Matrix::new_empty(layer_input_count, layer_neuron_count);
-        for &neuron in weighted_sum_gradient.iter() {
-            weight_gradient.push_row(input.clone().mul_scalar(neuron));
-        }
+        let layer_gradient =
+            GradientLayer::from_backpropagation(weighted_sum_gradient.clone(), input);
 
         let mut input_gradient: InputGradient = vec![0.0; layer_input_count];
         for (weights, change) in self.iter_neurons().zip(weighted_sum_gradient) {
             input_gradient.add_entries_mut(weights.clone().mul_scalar(change));
         }
 
-        (bias_gradient, weight_gradient, input_gradient)
+        (layer_gradient, input_gradient)
     }
 
     pub fn init_zero_gradient(&self) -> GradientLayer {
@@ -244,8 +230,7 @@ impl std::fmt::Display for Layer {
             "Layer ({inputs} -> {outputs}; {}):",
             self.activation_function
         )?;
-        let bias_plural = self.bias.get_neuron_count().is_some();
-        let bias_header = format!("Bias{}:", if bias_plural { "es" } else { "" });
+        let bias_header = "Biases:".to_string();
         let bias_str_iter = once(bias_header).chain(self.bias.iter().map(ToString::to_string));
         let bias_column_width = bias_str_iter.clone().map(|s| s.len()).max().unwrap_or(0);
         let mut bias_lines = bias_str_iter.map(|s| format!("{s:^bias_column_width$}"));

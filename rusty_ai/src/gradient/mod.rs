@@ -3,7 +3,7 @@ pub mod layer;
 
 use self::layer::GradientLayer;
 use crate::{
-    traits::{IterParams, IterLayerParams},
+    traits::IterLayerParams,
     util::{EntryAdd, ScalarDiv, ScalarMul},
 };
 
@@ -29,7 +29,7 @@ impl Gradient {
 
     pub fn set_zero(&mut self) {
         for l in self.layers.iter_mut() {
-            l.bias_gradient.fill_mut(0.0);
+            l.bias_gradient.fill(0.0);
             l.weight_gradient.iter_mut().for_each(|x| *x = 0.0);
         }
     }

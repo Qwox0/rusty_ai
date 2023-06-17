@@ -1,10 +1,10 @@
 use crate::prelude::*;
 use crate::traits::IterLayerParams;
-use crate::util::{Norm, ScalarDiv};
+use crate::util::Norm;
 use crate::{
     optimizer::IsOptimizer,
     traits::{Propagator, Trainable},
-    util::{constructor, ScalarMul},
+    util::ScalarMul,
 };
 
 #[derive(Debug)]
