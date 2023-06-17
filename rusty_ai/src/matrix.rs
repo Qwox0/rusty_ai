@@ -113,18 +113,6 @@ impl<T> Matrix<T> {
         (self.width, self.height)
     }
 }
-/*
-
-impl<T> IntoIterator for Matrix<T> {
-    type Item = &'a Vec<T>;
-
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter_rows()
-    }
-}
-*/
 
 impl<T: Ring + Clone> Matrix<T> {
     pub fn with_zeros(width: usize, height: usize) -> Matrix<T> {

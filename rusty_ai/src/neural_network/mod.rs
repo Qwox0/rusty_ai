@@ -65,13 +65,6 @@ impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN
     fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
         self.iter_layers()
             .fold(input.to_vec(), |acc, layer| layer.calculate(acc))
-            /*
-            .fold(input.to_vec(), |acc, layer| {
-                let res = layer.calculate(acc);
-                println!("{:?}", res);
-                res
-            })
-            */
             .into()
     }
 

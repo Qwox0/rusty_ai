@@ -172,31 +172,6 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
 
         self.optimize()
     }
-
-    /*
-    fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a DataPair<IN, OUT>>) {
-        let mut data_count = 0;
-        let mut gradient = self.network.init_zero_gradient();
-        for (input, expected_output) in data_pairs.into_iter().map(Into::into) {
-            self.network.backpropagation(
-                self.verbose_propagate(input),
-                expected_output,
-                &mut gradient,
-            );
-            data_count += 1;
-        }
-        /*
-        if data_count < 5 {
-            eprintln!("WARN: Small training sets result in inaccurate gradients which might cause exploding weight values!")
-        }
-        */
-
-        // average of all gradients
-        gradient.normalize(data_count);
-
-        self.optimize(gradient);
-    }
-    */
 }
 
 impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
