@@ -1,11 +1,4 @@
-mod add_bias;
 mod bias;
-use std::iter::once;
-
-pub use add_bias::*;
-pub use bias::*;
-use itertools::Itertools;
-
 use crate::{
     activation_function::ActivationFn,
     gradient::aliases::{
@@ -16,6 +9,8 @@ use crate::{
     traits::{impl_IterParams, IterParams},
     util::{impl_getter, EntryAdd, EntryMul, EntrySub, ScalarMul},
 };
+pub use bias::*;
+use std::iter::once;
 
 /*
 #[derive(Debug, Clone)]
@@ -51,7 +46,7 @@ impl IsLayer for Layer {
     /// reduce calculations.
     fn calculate(&self, inputs: Vec<f64>) -> Vec<f64> {
         (&self.weights * inputs)
-            .add_bias_mut(&self.bias)
+            .add_entries_mut(self.bias.get_vec())
             .iter()
             .map(self.activation_function)
             .collect()
@@ -66,13 +61,11 @@ impl Layer {
     impl_getter! { pub get_activation_function -> activation_function: &ActivationFn }
 
     pub fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
-        if let Some(bias_neurons) = bias.get_neuron_count() {
-            assert_eq!(
-                weights.get_height(),
-                bias_neurons,
-                "Weights and Bias don't have matching neuron counts."
-            );
-        }
+        assert_eq!(
+            weights.get_height(),
+            bias.get_neuron_count(),
+            "Weights and Bias don't have matching neuron counts."
+        );
         Self {
             weights,
             bias,
@@ -89,7 +82,7 @@ impl Layer {
         acti_fn: ActivationFn,
     ) -> Layer {
         let weights = Matrix::from_iter(inputs, neurons, &mut iter);
-        let bias = LayerBias::from_iter_multiple(neurons, iter);
+        let bias = LayerBias::from_iter(neurons, iter);
         Layer::new(weights, bias, acti_fn)
     }
 
@@ -100,7 +93,7 @@ impl Layer {
     /// like [`Layer::calculate`] but also calculate the derivatives of the activation function
     pub fn training_calculate(&self, inputs: &Vec<f64>) -> (Vec<f64>, Vec<f64>) {
         (&self.weights * inputs)
-            .add_bias_mut(&self.bias)
+            .add_entries_mut(self.bias.get_vec())
             .iter()
             .map(|z| {
                 (
@@ -244,8 +237,7 @@ impl std::fmt::Display for Layer {
             "Layer ({inputs} -> {outputs}; {}):",
             self.activation_function
         )?;
-        let bias_plural = self.bias.get_neuron_count().is_some();
-        let bias_header = format!("Bias{}:", if bias_plural { "es" } else { "" });
+        let bias_header = "Biases:".to_string();
         let bias_str_iter = once(bias_header).chain(self.bias.iter().map(ToString::to_string));
         let bias_column_width = bias_str_iter.clone().map(|s| s.len()).max().unwrap_or(0);
         let mut bias_lines = bias_str_iter.map(|s| format!("{s:^bias_column_width$}"));

@@ -66,21 +66,6 @@ impl<D: Distribution<f64>> RngIter<D> {
     }
 }
 
-#[derive(Debug)]
-enum BiasType {
-    OnePerLayer,
-    OnePerNeuron,
-}
-
-impl BiasType {
-    fn get_matching_bias(&self, neurons: usize, iter: impl Iterator<Item = f64>) -> LayerBias {
-        match self {
-            BiasType::OnePerLayer => LayerBias::from_iter_singular(iter),
-            BiasType::OnePerNeuron => LayerBias::from_iter_multiple(neurons, iter),
-        }
-    }
-}
-
 // Builder
 #[derive(Debug)]
 pub struct NeuralNetworkBuilder<DIM, LP, OPT, D> {
@@ -92,7 +77,6 @@ pub struct NeuralNetworkBuilder<DIM, LP, OPT, D> {
     // for generation
     rng: RngIter<D>,
     default_activation_function: ActivationFn,
-    default_bias_type: BiasType,
 
     // for trainable neural network
     optimizer: OPT,
@@ -112,7 +96,6 @@ impl Default for NeuralNetworkBuilder<NoDim, NoParts, NoOptimizer, Uniform<f64>>
                 distr: Uniform::new(0.0, 1.0),
             },
             default_activation_function: ActivationFn::default(),
-            default_bias_type: BiasType::OnePerNeuron,
             optimizer: NoOptimizer,
             retain_gradient: true,
             clip_grad_norm: None,
@@ -149,16 +132,6 @@ where
 
     pub fn default_activation_function(mut self, act_func: ActivationFn) -> Self {
         self.default_activation_function = act_func;
-        self
-    }
-
-    pub fn one_bias_per_layer(mut self) -> Self {
-        self.default_bias_type = BiasType::OnePerLayer;
-        self
-    }
-
-    pub fn one_bias_per_neuron(mut self) -> Self {
-        self.default_bias_type = BiasType::OnePerNeuron;
         self
     }
 
@@ -205,7 +178,7 @@ where
         let inputs = self.last_neuron_count();
         let mut rng_iter = self.rng.get_rng_iter();
         let weights = Matrix::from_iter(inputs, neurons, &mut rng_iter);
-        let bias = self.default_bias_type.get_matching_bias(neurons, rng_iter);
+        let bias = LayerBias::from_iter(neurons, rng_iter);
         let layer = Layer::new(weights, bias, self.default_activation_function);
         self.layer(layer)
     }
@@ -275,8 +248,7 @@ where
     pub fn build_layer(mut self) -> NeuralNetworkBuilder<In<IN>, NoParts, NoOptimizer, D> {
         let bias = self.layer_parts.bias.take().unwrap_or_else(|| {
             let neurons = self.layer_parts.weights.get_width();
-            self.default_bias_type
-                .get_matching_bias(neurons, self.rng.get_rng_iter())
+            LayerBias::from_iter(neurons, self.rng.get_rng_iter())
         });
         let weights = self.layer_parts.weights;
         let activation_function = self
