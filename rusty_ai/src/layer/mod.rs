@@ -1,11 +1,11 @@
 mod bias;
 use crate::{
     activation_function::ActivationFn,
-    gradient::aliases::{InputGradient, OutputGradient, WeightedSumGradient},
+    gradient::aliases::{InputGradient, OutputGradient},
     gradient::layer::GradientLayer,
     matrix::Matrix,
     traits::{impl_IterParams, IterParams},
-    util::{impl_getter, EntryAdd, EntryMul, EntrySub, ScalarMul},
+    util::{impl_getter, EntryAdd},
 };
 pub use bias::*;
 use std::iter::once;
@@ -28,7 +28,6 @@ pub trait IsLayer: std::fmt::Display {
 /// The Propagation calculation is done in the same Order
 #[derive(Debug, Clone)]
 pub struct Layer {
-    //layer_type: LayerType,
     weights: Matrix<f64>,
     bias: LayerBias,
     activation_function: ActivationFn,
@@ -91,26 +90,26 @@ impl Layer {
     /// like [`Layer::calculate`] but also calculate the derivatives of the activation function
     pub fn training_calculate(&self, inputs: &Vec<f64>) -> (Vec<f64>, Vec<f64>) {
         (&self.weights * inputs)
-            .add_entries_mut(self.bias.get_vec())
-            .iter()
+            .add_entries(self.bias.get_vec())
+            .into_iter()
             .map(|z| {
                 (
-                    self.activation_function.calculate(*z),
-                    self.activation_function.derivative(*z),
+                    self.activation_function.calculate(z),
+                    self.activation_function.derivative(z),
                 )
             })
             .unzip()
     }
 
-    pub fn iter_neurons(&self) -> impl Iterator<Item = &Vec<f64>> {
-        self.weights.iter_rows()
+    pub fn iter_neurons(&self) -> impl Iterator<Item = (&Vec<f64>, &f64)> {
+        self.weights.iter_rows().zip(self.bias.iter())
     }
 
-    pub fn iter_mut_neurons(&mut self) -> impl Iterator<Item = &mut Vec<f64>> {
-        self.weights.iter_rows_mut()
+    pub fn iter_mut_neurons(&mut self) -> impl Iterator<Item = (&mut Vec<f64>, &mut f64)> {
+        self.weights.iter_rows_mut().zip(self.bias.iter_mut())
     }
 
-    #[allow(unused)]
+    /*
     pub(crate) fn backpropagation(
         &self,
         layer_inputs: &Vec<f64>,
@@ -176,32 +175,44 @@ impl Layer {
         let input_derivative_average = res.2.mul_scalar(1.0 / layer_neuron_count as f64);
         (bias_derivative_average, res.1, input_derivative_average)
     }
+    */
 
-    #[allow(unused)]
     pub(crate) fn backpropagation2(
         &self,
         derivative_output: Vec<f64>,
         input: Vec<f64>,
         output_gradient: OutputGradient,
-    ) -> (GradientLayer, InputGradient) {
-        let layer_input_count = self.get_input_count();
-        let layer_neuron_count = self.get_neuron_count();
-        assert_eq!(derivative_output.len(), layer_neuron_count);
-        assert_eq!(input.len(), layer_input_count);
-        assert_eq!(output_gradient.len(), layer_neuron_count);
+        gradient: &mut GradientLayer,
+    ) -> InputGradient {
+        let input_count = self.get_input_count();
+        let neuron_count = self.get_neuron_count();
+        assert_eq!(derivative_output.len(), neuron_count);
+        assert_eq!(input.len(), input_count);
+        assert_eq!(output_gradient.len(), neuron_count);
 
-        let weighted_sum_gradient: WeightedSumGradient =
-            output_gradient.mul_entries(derivative_output);
+        let mut input_gradient = vec![0.0; input_count];
 
-        let layer_gradient =
-            GradientLayer::from_backpropagation(weighted_sum_gradient.clone(), input);
+        self.iter_neurons()
+            .zip(gradient.iter_mut_neurons())
+            .zip(derivative_output)
+            .zip(output_gradient)
+            .for_each(
+                |((((weights, _), (weights_grad, bias_grad)), act_derivative), out_grad)| {
+                    let weighted_sum_gradient = out_grad * act_derivative;
 
-        let mut input_gradient: InputGradient = vec![0.0; layer_input_count];
-        for (weights, change) in self.iter_neurons().zip(weighted_sum_gradient) {
-            input_gradient.add_entries_mut(weights.clone().mul_scalar(change));
-        }
+                    *bias_grad += weighted_sum_gradient;
 
-        (layer_gradient, input_gradient)
+                    for (weight_grad, input) in weights_grad.iter_mut().zip(&input) {
+                        *weight_grad += input * weighted_sum_gradient;
+                    }
+
+                    for (weight, input_grad) in weights.iter().zip(&mut input_gradient) {
+                        *input_grad += weight * weighted_sum_gradient;
+                    }
+                },
+            );
+
+        input_gradient
     }
 
     pub fn init_zero_gradient(&self) -> GradientLayer {
@@ -212,14 +223,6 @@ impl Layer {
 }
 
 impl_IterParams! {Layer: weights, bias }
-
-impl EntrySub<&GradientLayer> for Layer {
-    fn sub_entries_mut(&mut self, rhs: &GradientLayer) -> &mut Self {
-        self.weights.sub_entries_mut(&rhs.weight_gradient);
-        self.bias.sub_entries_mut(&rhs.bias_gradient);
-        self
-    }
-}
 
 impl std::fmt::Display for Layer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -1,22 +1,15 @@
 extern crate test;
 
-use crate::{
-    data::DataBuilder,
-    prelude::*,
-    util::{EntryAdd, ScalarDiv},
-};
+use crate::{data::DataBuilder, prelude::*};
 use rayon::prelude::*;
 use std::{sync::Mutex, thread::ScopedJoinHandle};
 use test::black_box;
 
-fn calc_grad(nn: &TrainableNeuralNetwork<1, 1>, data: &[Pair<1, 1>]) -> Gradient {
-    let mut gradient = nn.network.init_zero_gradient();
+fn calc_grad(nn: &mut TrainableNeuralNetwork<1, 1>, data: &[Pair<1, 1>]) {
     for pair in data {
         let (input, expected_output) = pair.into();
-        nn.network
-            .backpropagation(nn.verbose_propagate(input), expected_output, &mut gradient);
+        nn.backpropagation(nn.verbose_propagate(input), expected_output);
     }
-    gradient
 }
 
 trait BackpropBenches {
@@ -28,6 +21,7 @@ trait BackpropBenches {
     fn rayon_iter(&mut self, data: &[Pair<1, 1>]);
 }
 
+/*
 impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
     fn single_thread(&mut self, data: &[Pair<1, 1>]) {
         let data_count = data.len();
@@ -177,6 +171,7 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
         self.optimize();
     }
 }
+*/
 
 impl<'a> IntoParallelIterator for &'a PairList<1, 1> {
     type Item = &'a Pair<1, 1>;
@@ -241,7 +236,7 @@ macro_rules! make_bench {
     };
 }
 
-make_bench! { single_thread }
+//make_bench! { single_thread }
 /*
 make_bench! { single_thread2 }
 //make_bench! { arc_mutex }

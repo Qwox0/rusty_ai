@@ -10,7 +10,7 @@ pub trait EntryAdd<Rhs = Self>: Sized {
     }
 }
 
-pub trait EntrySub<Rhs = Self>: Sized {
+trait EntrySub<Rhs = Self>: Sized {
     /// performs subtraction entrywise by mutating `self` in place.
     /// "`self` = `self` - `rhs`"
     fn sub_entries_mut(&mut self, rhs: Rhs) -> &mut Self;
@@ -22,7 +22,7 @@ pub trait EntrySub<Rhs = Self>: Sized {
     }
 }
 
-pub trait EntryMul<Rhs = Self>: Sized {
+trait EntryMul<Rhs = Self>: Sized {
     /// performs multiplication entrywise by mutating `self` in place.
     /// "`self` = `self` * `rhs`"
     fn mul_entries_mut(&mut self, rhs: Rhs) -> &mut Self;
@@ -34,7 +34,7 @@ pub trait EntryMul<Rhs = Self>: Sized {
     }
 }
 
-pub trait EntryDiv<Rhs = Self>: Sized {
+trait EntryDiv<Rhs = Self>: Sized {
     /// performs division entrywise by mutating `self` in place.
     /// "`self` = `self` / `rhs`"
     fn div_entries_mut(&mut self, rhs: Rhs) -> &mut Self;

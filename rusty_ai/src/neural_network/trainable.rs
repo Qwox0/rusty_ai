@@ -4,7 +4,6 @@ use crate::util::Norm;
 use crate::{
     optimizer::IsOptimizer,
     traits::{Propagator, Trainable},
-    util::ScalarMul,
 };
 
 #[derive(Debug)]
@@ -55,6 +54,81 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         VerbosePropagation::new(outputs, derivatives)
     }
 
+    /// Propagate a [`VerbosePropagation`] Result backwards through the Neural Network. This
+    /// modifies the internal [`Gradient`].
+    /// # Math
+    ///    L-1                   L
+    /// o_(L-1)_0
+    ///                      z_0 -> o_L_0
+    /// o_(L-1)_1    w_ij                    C
+    ///                      z_1 -> o_L_1
+    /// o_(L-1)_2
+    ///         j              i        i
+    /// n_(L-1) = 3           n_L = 2
+    ///
+    /// L: current Layer with n_L Neurons called L_1, L_2, ..., L_n
+    /// L-1: previous Layer with n_(L-1) Neurons
+    /// o_L_i: output of Neuron L_i
+    /// e_i: expected output of Neuron L_i
+    /// Cost: C = 0.5 * ∑ (o_L_i - e_i)^2 from i = 1 to n_L
+    /// -> dC/do_L_i = o_L_i - e_i
+    ///
+    /// f: activation function
+    /// activation: o_L_i = f(z_i)
+    /// -> do_L_i/dz_i = f'(z_i)
+    ///
+    /// -> dC/dz_i = dC/do_L_i * do_L_i/dz_i = (o_L_i - e_i) * f'(z_i)
+    ///
+    /// w_ij: weight of connection from (L-1)_j to L_i
+    /// b_L: bias of Layer L
+    /// weighted sum: z_i = b_L + ∑ w_ij * o_(L-1)_j from j = 1 to n_(L-1)
+    /// -> dz_i/dw_ij      = o_(L-1)_j
+    /// -> dz_i/do_(L-1)_j = w_ij
+    /// -> dz_i/dw_ij      = 1
+    ///
+    ///
+    /// dC/dw_ij      = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
+    ///               = (o_L_i - e_i) *     f'(z_i) *  o_(L-1)_j
+    /// dC/do_(L-1)_j = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
+    ///               = (o_L_i - e_i) *     f'(z_i) *       w_ij
+    /// dC/db_L       = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
+    ///               = (o_L_i - e_i) *     f'(z_i)
+    pub fn backpropagation(
+        &mut self,
+        verbose_prop: VerbosePropagation,
+        expected_output: &[f64; OUT],
+    ) {
+        let mut outputs = verbose_prop.outputs;
+        let last_output = outputs.pop().expect("There is an output layer");
+        let expected_output = expected_output.to_vec();
+
+        // derivatives of the cost function with respect to the output of the neurons in the last layer.
+        let last_output_gradient = self
+            .network
+            .error_function
+            .gradient(last_output, expected_output); // dC/do_L_i; i = last
+        let inputs_rev = outputs.into_iter().rev();
+
+        self.network
+            .layers
+            .iter()
+            .zip(self.gradient.iter_mut_layers())
+            .zip(verbose_prop.derivatives)
+            .rev()
+            .zip(inputs_rev)
+            .fold(
+                last_output_gradient,
+                |current_output_gradient, (((layer, gradient), derivative_output), input)| {
+                    layer.backpropagation2(
+                        derivative_output,
+                        input,
+                        current_output_gradient,
+                        gradient,
+                    )
+                },
+            );
+    }
+
     fn optimize(&mut self) {
         self.optimizer
             .optimize_weights(&mut self.network, &self.gradient);
@@ -86,11 +160,7 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
         }
 
         for (input, expected_output) in data_pairs.into_iter().map(Into::into) {
-            self.network.backpropagation(
-                self.verbose_propagate(input),
-                expected_output,
-                &mut self.gradient,
-            );
+            self.backpropagation(self.verbose_propagate(input), expected_output);
         }
 
         if let Some(clip_gradient_norm) = &self.clip_gradient_norm {
@@ -98,7 +168,9 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
             let norm = clip_gradient_norm.norm_type.calculate(iter);
             if norm > clip_gradient_norm.max_norm {
                 let clip_factor = clip_gradient_norm.max_norm / (norm + 1e-6); // 1e-6 copied from: https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_
-                self.gradient.mul_scalar_mut(clip_factor);
+                self.gradient
+                    .iter_mut_parameters()
+                    .for_each(|x| *x *= clip_factor);
             }
         } else {
             #[cfg(debug_assertions)]
