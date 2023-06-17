@@ -100,33 +100,26 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     ) {
         let mut outputs = verbose_prop.outputs;
         let last_output = outputs.pop().expect("There is an output layer");
-        let expected_output = expected_output.to_vec();
 
         // derivatives of the cost function with respect to the output of the neurons in the last layer.
-        let last_output_gradient = self
+        let mut output_gradient = self
             .network
             .error_function
             .gradient(last_output, expected_output); // dC/do_L_i; i = last
         let inputs_rev = outputs.into_iter().rev();
 
-        self.network
+        for (((layer, gradient), derivative_output), input) in self
+            .network
             .layers
             .iter()
             .zip(self.gradient.iter_mut_layers())
             .zip(verbose_prop.derivatives)
             .rev()
             .zip(inputs_rev)
-            .fold(
-                last_output_gradient,
-                |current_output_gradient, (((layer, gradient), derivative_output), input)| {
-                    layer.backpropagation2(
-                        derivative_output,
-                        input,
-                        current_output_gradient,
-                        gradient,
-                    )
-                },
-            );
+        {
+            output_gradient =
+                layer.backpropagation2(derivative_output, input, output_gradient, gradient);
+        }
     }
 
     fn optimize(&mut self) {

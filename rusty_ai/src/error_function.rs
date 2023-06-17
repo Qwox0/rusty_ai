@@ -25,13 +25,13 @@ impl ErrorFunction {
         }
     }
 
-    pub fn gradient(&self, output: Vec<f64>, expected_output: Vec<f64>) -> OutputGradient {
-        use ErrorFunction::*;
-        assert_eq!(output.len(), expected_output.len());
+    pub fn gradient<'a>(&self, output: Vec<f64>, expected_output: impl AsRef<[f64]>) -> OutputGradient {
+        assert_eq!(output.len(), expected_output.as_ref().len());
         let errors = output
             .iter()
-            .zip(expected_output)
+            .zip(expected_output.as_ref().iter())
             .map(|(out, expected)| out - expected);
+        use ErrorFunction::*;
         match self {
             SquaredError => errors.map(|x| x * 2.0).collect(),
             HalfSquaredError => errors.collect(),
