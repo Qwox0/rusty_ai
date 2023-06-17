@@ -6,17 +6,19 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct LayerBias(Vec<f64>);
 
-impl LayerBias {
-    pub fn new(bias: Vec<f64>) -> LayerBias {
-        LayerBias(bias)
+impl<V: Into<Vec<f64>>> From<V> for LayerBias {
+    fn from(value: V) -> Self {
+        LayerBias(value.into())
     }
+}
 
+impl LayerBias {
     /// # Panics
     /// Panics if the iterator is too small.
     pub fn from_iter(count: usize, iter: impl Iterator<Item = f64>) -> LayerBias {
         let vec: Vec<_> = iter.take(count).collect();
         assert_eq!(vec.len(), count);
-        LayerBias::new(vec)
+        LayerBias(vec)
     }
 
     pub fn fill_mut(&mut self, value: f64) {
