@@ -54,36 +54,6 @@ impl IsOptimizer for Adam {
                 let denominator = v_bias_cor * v_bias_cor + self.epsilon;
                 *x -= m_bias_cor * self.learning_rate / denominator;
             });
-
-        /*
-        let mut m: Vec<GradientLayer> = vec![];
-        let mut v: Vec<GradientLayer> = vec![];
-
-        for (((layer, lgradient), m), v) in nn
-            .iter_mut_layers()
-            .zip(gradient.iter_layers())
-            .zip(m.iter_mut())
-            .zip(v.iter_mut())
-        {
-            m.lerp_mut(lgradient, self.beta1);
-            v.lerp_mut(lgradient.sqare_entries(), self.beta2);
-
-            let get_correction_factor = |beta: f64| (1.0 - beta.powi(time_step as i32)).recip();
-
-            let m_bias_cor = m.clone().mul_scalar(get_correction_factor(self.beta1));
-            let v_bias_cor = v.clone().mul_scalar(get_correction_factor(self.beta2));
-
-            let denominator = v_bias_cor.sqrt_entries().add_scalar(self.epsilon);
-            let change = m_bias_cor
-                .mul_scalar(self.learning_rate)
-                .mul_scalar(0.00001)
-                .div_entries(denominator);
-
-            //println!("{:?}", change);
-
-            layer.sub_entries_mut(&change);
-        }
-        */
     }
 
     fn init_with_layers(&mut self, layers: &Vec<Layer>) {

@@ -1,11 +1,11 @@
 use std::iter::once;
 
-use super::aliases::{BiasGradient, WeightGradient, WeightedSumGradient};
+use super::aliases::{BiasGradient, WeightGradient};
 use crate::{
     layer::LayerBias,
     matrix::Matrix,
     traits::{impl_IterParams, IterParams},
-    util::{constructor, ScalarMul},
+    util::constructor,
 };
 
 /// Contains the estimated Gradient of the Costfunction with respect to the weights and the bias of
@@ -18,22 +18,6 @@ pub struct GradientLayer {
 
 impl GradientLayer {
     constructor! { pub new -> weight_gradient: Matrix<f64>, bias_gradient: LayerBias }
-
-    pub fn from_backpropagation(
-        weighted_sum_gradient: WeightedSumGradient,
-        input: Vec<f64>,
-    ) -> GradientLayer {
-        let layer_input_count = input.len();
-        let layer_neuron_count = weighted_sum_gradient.len();
-        let bias_gradient: BiasGradient = LayerBias::from(weighted_sum_gradient.clone());
-
-        let mut weight_gradient: WeightGradient =
-            Matrix::new_empty(layer_input_count, layer_neuron_count);
-        for &neuron in weighted_sum_gradient.iter() {
-            weight_gradient.push_row(input.clone().mul_scalar(neuron));
-        }
-        GradientLayer::new(weight_gradient, bias_gradient)
-    }
 
     pub fn iter_mut_neurons<'a>(
         &'a mut self,

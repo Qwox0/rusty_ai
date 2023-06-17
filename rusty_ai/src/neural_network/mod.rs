@@ -7,7 +7,7 @@ use crate::{
     data::Pair,
     error_function::ErrorFunction,
     gradient::Gradient,
-    layer::{IsLayer, Layer},
+    layer::Layer,
     results::{PropagationResult, TestsResult},
     traits::{IterLayerParams, Propagator},
     util::impl_getter,

@@ -1,12 +1,11 @@
+use super::trainable::ClipGradientNorm;
+use crate::optimizer::IsOptimizer;
 use crate::prelude::*;
 use crate::util::RngWrapper;
-use crate::{layer::IsLayer, optimizer::IsOptimizer};
 use itertools::Itertools;
 use rand::distributions::Uniform;
 use rand::prelude::Distribution;
 use std::{iter::once, marker::PhantomData};
-
-use super::trainable::ClipGradientNorm;
 
 // Dimension Markers
 pub struct NoDim;

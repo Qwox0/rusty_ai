@@ -106,7 +106,7 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
             .network
             .error_function
             .gradient(last_output, expected_output); // dC/do_L_i; i = last
-        let inputs_rev = outputs.into_iter().rev();
+        let inputs_rev = outputs.iter().rev();
 
         for (((layer, gradient), derivative_output), input) in self
             .network
@@ -118,7 +118,7 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
             .zip(inputs_rev)
         {
             output_gradient =
-                layer.backpropagation2(derivative_output, input, output_gradient, gradient);
+                layer.backpropagation(input, derivative_output, output_gradient, gradient);
         }
     }
 
