@@ -4,6 +4,7 @@ use super::aliases::{BiasGradient, WeightGradient};
 use crate::{
     layer::{AddBias, LayerBias},
     matrix::Matrix,
+    traits::{IterParams, impl_IterParams},
     util::{
         constructor, EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, ScalarAdd, ScalarDiv, ScalarMul,
         ScalarSub,
@@ -41,12 +42,9 @@ impl GradientLayer {
         self.weight_gradient.iter_mut().for_each(|x| *x = x.sqrt());
         self
     }
-
-    pub fn iter_numbers(&self) -> impl Iterator<Item = &f64> {
-        let iter = self.weight_gradient.iter();
-        iter.chain(self.bias_gradient.iter_numbers())
-    }
 }
+
+impl_IterParams! { GradientLayer: weight_gradient, bias_gradient }
 
 macro_rules! impl_entrywise_arithmetic {
     ( $trait:ident : $fn:ident ) => {
@@ -86,5 +84,28 @@ impl Lerp<&GradientLayer> for GradientLayer {
         self.bias_gradient.lerp_mut(&other.bias_gradient, blend);
         self.weight_gradient.lerp_mut(&other.weight_gradient, blend);
         self
+    }
+}
+
+impl std::fmt::Display for GradientLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bias_plural = self.bias_gradient.get_neuron_count().is_some();
+        let bias_header = format!("Bias{}:", if bias_plural { "es" } else { "" });
+        let bias_str_iter =
+            once(bias_header).chain(self.bias_gradient.iter().map(ToString::to_string));
+        let bias_column_width = bias_str_iter.clone().map(|s| s.len()).max().unwrap_or(0);
+        let mut bias_lines = bias_str_iter.map(|s| format!("{s:^bias_column_width$}"));
+        for (idx, l) in self
+            .weight_gradient
+            .to_string_with_title("Weights:")?
+            .lines()
+            .enumerate()
+        {
+            if idx != 0 {
+                write!(f, "\n")?;
+            }
+            write!(f, "{} {}", l, bias_lines.next().unwrap_or_default())?;
+        }
+        Ok(())
     }
 }

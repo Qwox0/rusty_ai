@@ -2,8 +2,12 @@ pub mod aliases;
 pub mod layer;
 
 use self::layer::GradientLayer;
-use crate::util::{EntryAdd, ScalarDiv, ScalarMul};
+use crate::{
+    traits::{IterParams, IterLayerParams},
+    util::{EntryAdd, ScalarDiv, ScalarMul},
+};
 
+#[derive(Debug, Clone)]
 pub struct Gradient {
     layers: Vec<GradientLayer>,
 }
@@ -19,16 +23,27 @@ impl Gradient {
         self.layers.len()
     }
 
-    pub fn iter_layers(&self) -> core::slice::Iter<'_, GradientLayer> {
-        self.layers.iter()
-    }
-
     pub fn iter_mut_layers(&mut self) -> core::slice::IterMut<'_, GradientLayer> {
         self.layers.iter_mut()
     }
 
-    pub fn iter_numbers(&self) -> impl Iterator<Item = &f64> {
-        self.layers.iter().map(|l| l.iter_numbers()).flatten()
+    pub fn set_zero(&mut self) {
+        for l in self.layers.iter_mut() {
+            l.bias_gradient.fill_mut(0.0);
+            l.weight_gradient.iter_mut().for_each(|x| *x = 0.0);
+        }
+    }
+}
+
+impl IterLayerParams for Gradient {
+    type Layer = GradientLayer;
+
+    fn iter_layers<'a>(&'a self) -> impl Iterator<Item = &'a Self::Layer> {
+        self.layers.iter()
+    }
+
+    fn iter_mut_layers<'a>(&'a mut self) -> impl Iterator<Item = &'a mut Self::Layer> {
+        self.layers.iter_mut()
     }
 }
 
@@ -53,10 +68,14 @@ impl ScalarDiv for Gradient {
     }
 }
 
-impl IntoIterator for Gradient {
-    type Item = GradientLayer;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.layers.into_iter()
+impl std::fmt::Display for Gradient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = self
+            .layers
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<String>>()
+            .join("\n");
+        write!(f, "{}", text)
     }
 }

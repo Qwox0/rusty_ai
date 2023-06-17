@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use super::AddBias;
 use crate::{
     gradient::aliases::{BiasGradient, WeightedSumGradient},
@@ -34,11 +36,15 @@ impl LayerBias {
         LayerBias::new_multiple(vec)
     }
 
-    pub fn fill(mut self, value: f64) -> LayerBias {
-        match &mut self {
+    pub fn fill_mut(&mut self, value: f64) {
+        match self {
             LayerBias::OnePerLayer(x) => *x = value,
             LayerBias::OnePerNeuron(vec) => vec.fill(value),
         }
+    }
+
+    pub fn fill(mut self, value: f64) -> LayerBias {
+        self.fill_mut(value);
         self
     }
 
@@ -84,8 +90,12 @@ impl LayerBias {
         self
     }
 
-    pub fn iter_numbers<'a>(&'a self) -> IterLayerBias<'a> {
+    pub fn iter<'a>(&'a self) -> IterLayerBias<'a> {
         IterLayerBias::new(self)
+    }
+
+    pub fn iter_mut<'a>(&'a mut self) -> IterMutLayerBias<'a> {
+        IterMutLayerBias::new(self)
     }
 }
 
@@ -174,21 +184,22 @@ impl std::fmt::Display for LayerBias {
     }
 }
 
-pub struct IterLayerBias<'b> {
-    bias: &'b LayerBias,
+#[derive(Clone)]
+pub struct IterLayerBias<'a> {
+    bias: &'a LayerBias,
     idx: usize,
     len: usize,
 }
 
-impl<'b> IterLayerBias<'b> {
-    pub fn new(bias: &'b LayerBias) -> Self {
+impl<'a> IterLayerBias<'a> {
+    pub fn new(bias: &'a LayerBias) -> Self {
         let len = bias.get_neuron_count().unwrap_or(1);
         IterLayerBias { bias, idx: 0, len }
     }
 }
 
-impl<'b> Iterator for IterLayerBias<'b> {
-    type Item = &'b f64;
+impl<'a> Iterator for IterLayerBias<'a> {
+    type Item = &'a f64;
     fn next(&mut self) -> Option<Self::Item> {
         if self.idx == self.len {
             return None;
@@ -207,4 +218,41 @@ impl<'b> Iterator for IterLayerBias<'b> {
     }
 }
 
-impl<'b> ExactSizeIterator for IterLayerBias<'b> {}
+impl<'a> ExactSizeIterator for IterLayerBias<'a> {}
+
+pub struct IterMutLayerBias<'a> {
+    ptr: *mut f64,
+    end: *mut f64,
+    _marker: PhantomData<&'a mut LayerBias>,
+}
+
+impl<'a> IterMutLayerBias<'a> {
+    pub fn new(bias: &'a mut LayerBias) -> Self {
+        let (ptr, len) = match bias {
+            LayerBias::OnePerLayer(f) => (f as *mut f64, 1),
+            LayerBias::OnePerNeuron(v) => (v.as_mut_ptr(), v.len()),
+        };
+        let end = unsafe { ptr.add(len) };
+        let _marker = PhantomData;
+        IterMutLayerBias { ptr, end, _marker }
+    }
+}
+
+impl<'a> Iterator for IterMutLayerBias<'a> {
+    type Item = &'a mut f64;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.ptr == self.end {
+            return None;
+        }
+        let val = unsafe { &mut *self.ptr };
+        unsafe { self.ptr = self.ptr.add(1) };
+        Some(val)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = unsafe { self.end.sub_ptr(self.ptr) };
+        (exact, Some(exact))
+    }
+}
+
+impl<'a> ExactSizeIterator for IterMutLayerBias<'a> {}

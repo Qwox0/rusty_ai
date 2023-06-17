@@ -1,7 +1,10 @@
 mod add_bias;
 mod bias;
+use std::iter::once;
+
 pub use add_bias::*;
 pub use bias::*;
+use itertools::Itertools;
 
 use crate::{
     activation_function::ActivationFn,
@@ -10,6 +13,7 @@ use crate::{
     },
     gradient::layer::GradientLayer,
     matrix::Matrix,
+    traits::{impl_IterParams, IterParams},
     util::{impl_getter, EntryAdd, EntryMul, EntrySub, ScalarMul},
 };
 
@@ -221,6 +225,8 @@ impl Layer {
     }
 }
 
+impl_IterParams! {Layer: weights, bias }
+
 impl EntrySub<&GradientLayer> for Layer {
     fn sub_entries_mut(&mut self, rhs: &GradientLayer) -> &mut Self {
         self.weights.sub_entries_mut(&rhs.weight_gradient);
@@ -231,10 +237,21 @@ impl EntrySub<&GradientLayer> for Layer {
 
 impl std::fmt::Display for Layer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inputs = self.get_input_count();
+        let outputs = self.get_neuron_count();
         write!(
             f,
-            "{} Bias: {}; {}",
-            self.weights, self.bias, self.activation_function
-        )
+            "Layer ({inputs} -> {outputs}; {}):",
+            self.activation_function
+        )?;
+        let bias_plural = self.bias.get_neuron_count().is_some();
+        let bias_header = format!("Bias{}:", if bias_plural { "es" } else { "" });
+        let bias_str_iter = once(bias_header).chain(self.bias.iter().map(ToString::to_string));
+        let bias_column_width = bias_str_iter.clone().map(|s| s.len()).max().unwrap_or(0);
+        let mut bias_lines = bias_str_iter.map(|s| format!("{s:^bias_column_width$}"));
+        for l in self.weights.to_string_with_title("Weights:")?.lines() {
+            write!(f, "\n{} {}", l, bias_lines.next().unwrap_or_default())?;
+        }
+        Ok(())
     }
 }

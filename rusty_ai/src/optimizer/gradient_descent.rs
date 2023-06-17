@@ -2,6 +2,7 @@ use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
 use crate::{
     gradient::Gradient,
     neural_network::NeuralNetwork,
+    traits::IterLayerParams,
     util::{EntrySub, ScalarMul},
 };
 
@@ -15,11 +16,10 @@ impl IsOptimizer for GradientDescent {
     fn optimize_weights<'a, const IN: usize, const OUT: usize>(
         &mut self,
         nn: &mut NeuralNetwork<IN, OUT>,
-        gradient: Gradient,
+        gradient: &Gradient,
     ) {
-        for (layer, mut gradient) in nn.iter_mut_layers().zip(gradient) {
-            gradient.mul_scalar_mut(self.learning_rate);
-            layer.sub_entries_mut(&gradient);
+        for (x, dx) in nn.iter_mut_parameters().zip(gradient.iter_parameters()) {
+            *x -= self.learning_rate * *dx;
         }
     }
 }

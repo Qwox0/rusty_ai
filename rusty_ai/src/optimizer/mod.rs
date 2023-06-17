@@ -14,7 +14,7 @@ pub(crate) trait IsOptimizer {
     fn optimize_weights<const IN: usize, const OUT: usize>(
         &mut self,
         nn: &mut NeuralNetwork<IN, OUT>,
-        gradient: Gradient,
+        gradient: &Gradient,
     );
     #[allow(unused)]
     fn init_with_layers(&mut self, layers: &Vec<Layer>) {}
@@ -37,5 +37,14 @@ impl Optimizer {
 
     pub fn default_adam() -> Optimizer {
         Optimizer::Adam(Adam::default())
+    }
+}
+
+impl std::fmt::Display for Optimizer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Optimizer::GradientDescent(opt) => write!(f, "{:?}", opt),
+            Optimizer::Adam(opt) => write!(f, "{:?}", opt),
+        }
     }
 }

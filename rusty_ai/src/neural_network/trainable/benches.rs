@@ -40,14 +40,14 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
             );
         }
         gradient.div_scalar_mut(data_count as f64);
-        self.optimize(gradient);
+        self.optimize();
     }
 
     fn single_thread2(&mut self, data: &[Pair<1, 1>]) {
         let data_count = data.len();
         let mut gradient = calc_grad(self, data);
         gradient.div_scalar_mut(data_count as f64);
-        self.optimize(gradient);
+        self.optimize();
     }
 
     fn arc_mutex(&mut self, data: &[Pair<1, 1>]) {
@@ -152,7 +152,7 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
         });
 
         gradient.div_scalar_mut(data_count as f64);
-        self.optimize(gradient);
+        self.optimize();
     }
 
     fn rayon_iter(&mut self, data: &[Pair<1, 1>]) {
@@ -174,7 +174,7 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
                 |acc, a| acc.add_entries(a),
             );
         gradient.div_scalar_mut(data_count as f64);
-        self.optimize(gradient);
+        self.optimize();
     }
 }
 
