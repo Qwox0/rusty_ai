@@ -1,7 +1,4 @@
-use crate::{
-    gradient::aliases::{BiasGradient, WeightedSumGradient},
-    util::{EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, ScalarAdd, ScalarDiv, ScalarMul},
-};
+use crate::util::{EntryAdd, EntryDiv, EntryMul, EntrySub, Lerp, ScalarAdd, ScalarDiv, ScalarMul};
 
 #[derive(Debug, Clone)]
 pub struct LayerBias(Vec<f64>);
@@ -21,19 +18,12 @@ impl LayerBias {
         LayerBias(vec)
     }
 
-    pub fn fill_mut(&mut self, value: f64) {
+    pub fn fill(&mut self, value: f64) {
         self.0.fill(value);
     }
 
     pub fn clone_with_zeros(&self) -> LayerBias {
         LayerBias(vec![0.0; self.0.len()])
-    }
-
-    pub fn new_matching_gradient(
-        &self,
-        weighted_sum_gradient: &WeightedSumGradient,
-    ) -> BiasGradient {
-        LayerBias(weighted_sum_gradient.clone())
     }
 
     pub fn get_vec(&self) -> &Vec<f64> {

@@ -11,7 +11,7 @@ use crate::{
     prelude::VerbosePropagation,
     results::{PropagationResult, TestsResult},
     traits::{IterLayerParams, Propagator},
-    util::impl_getter,
+    util::{impl_getter, EntryAdd},
 };
 
 #[derive(Debug)]
@@ -113,10 +113,10 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
                 last_output_gradient,
                 |current_output_gradient, (((layer, derivative_output), gradient), input)| {
                     // dc_dx = partial derivative of the cost function with respect to x.
-                    let (bias_gradient, weight_gradient, input_gradient) =
-                        layer.backpropagation2(derivative_output, &input, current_output_gradient);
+                    let (layer_gradient, input_gradient) =
+                        layer.backpropagation2(derivative_output, input, current_output_gradient);
 
-                    gradient.add_next_backpropagation(weight_gradient, bias_gradient);
+                    gradient.add_entries_mut(layer_gradient);
                     input_gradient
                 },
             );

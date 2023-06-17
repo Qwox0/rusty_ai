@@ -1,9 +1,7 @@
 mod bias;
 use crate::{
     activation_function::ActivationFn,
-    gradient::aliases::{
-        BiasGradient, InputGradient, OutputGradient, WeightGradient, WeightedSumGradient,
-    },
+    gradient::aliases::{InputGradient, OutputGradient, WeightedSumGradient},
     gradient::layer::GradientLayer,
     matrix::Matrix,
     traits::{impl_IterParams, IterParams},
@@ -183,32 +181,27 @@ impl Layer {
     pub(crate) fn backpropagation2(
         &self,
         derivative_output: Vec<f64>,
-        input: &Vec<f64>,
+        input: Vec<f64>,
         output_gradient: OutputGradient,
-    ) -> (BiasGradient, WeightGradient, InputGradient) {
+    ) -> (GradientLayer, InputGradient) {
         let layer_input_count = self.get_input_count();
         let layer_neuron_count = self.get_neuron_count();
-        assert_eq!(derivative_output.len(), layer_neuron_count,);
-        assert_eq!(input.len(), layer_input_count,);
-        assert_eq!(output_gradient.len(), layer_neuron_count,);
+        assert_eq!(derivative_output.len(), layer_neuron_count);
+        assert_eq!(input.len(), layer_input_count);
+        assert_eq!(output_gradient.len(), layer_neuron_count);
 
         let weighted_sum_gradient: WeightedSumGradient =
             output_gradient.mul_entries(derivative_output);
 
-        let bias_gradient: BiasGradient = self.bias.new_matching_gradient(&weighted_sum_gradient);
-
-        let mut weight_gradient: WeightGradient =
-            Matrix::new_empty(layer_input_count, layer_neuron_count);
-        for &neuron in weighted_sum_gradient.iter() {
-            weight_gradient.push_row(input.clone().mul_scalar(neuron));
-        }
+        let layer_gradient =
+            GradientLayer::from_backpropagation(weighted_sum_gradient.clone(), input);
 
         let mut input_gradient: InputGradient = vec![0.0; layer_input_count];
         for (weights, change) in self.iter_neurons().zip(weighted_sum_gradient) {
             input_gradient.add_entries_mut(weights.clone().mul_scalar(change));
         }
 
-        (bias_gradient, weight_gradient, input_gradient)
+        (layer_gradient, input_gradient)
     }
 
     pub fn init_zero_gradient(&self) -> GradientLayer {
