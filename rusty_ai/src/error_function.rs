@@ -31,6 +31,7 @@ impl ErrorFunction {
             .iter()
             .zip(expected_output.as_ref().iter())
             .map(|(out, expected)| out - expected);
+            //.map(|(out, expected)| expected - out);
         use ErrorFunction::*;
         match self {
             SquaredError => errors.map(|x| x * 2.0).collect(),

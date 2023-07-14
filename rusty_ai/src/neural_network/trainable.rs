@@ -1,16 +1,9 @@
-use crate::prelude::*;
-use crate::traits::IterLayerParams;
-use crate::util::Norm;
 use crate::{
+    clip_gradient_norm::ClipGradientNorm,
     optimizer::IsOptimizer,
-    traits::{Propagator, Trainable},
+    prelude::*,
+    traits::{IterLayerParams, Propagator, Trainable},
 };
-
-#[derive(Debug)]
-pub struct ClipGradientNorm {
-    pub norm_type: Norm,
-    pub max_norm: f64,
-}
 
 #[derive(Debug)]
 pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
@@ -22,6 +15,8 @@ pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
 }
 
 impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
+    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> { &self.network }
+
     pub(crate) fn new(
         network: NeuralNetwork<IN, OUT>,
         optimizer: Optimizer,
@@ -29,13 +24,7 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         clip_gradient_norm: Option<ClipGradientNorm>,
     ) -> Self {
         let gradient = network.init_zero_gradient();
-        Self {
-            network,
-            gradient,
-            retain_gradient,
-            optimizer,
-            clip_gradient_norm,
-        }
+        Self { network, gradient, retain_gradient, optimizer, clip_gradient_norm }
     }
 
     /// calculates the outputs and derivatives of all layers
@@ -54,8 +43,8 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         VerbosePropagation::new(outputs, derivatives)
     }
 
-    /// Propagate a [`VerbosePropagation`] Result backwards through the Neural Network. This
-    /// modifies the internal [`Gradient`].
+    /// Propagate a [`VerbosePropagation`] Result backwards through the Neural
+    /// Network. This modifies the internal [`Gradient`].
     /// # Math
     ///    L-1                   L
     /// o_(L-1)_0
@@ -101,11 +90,10 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         let mut outputs = verbose_prop.outputs;
         let last_output = outputs.pop().expect("There is an output layer");
 
-        // derivatives of the cost function with respect to the output of the neurons in the last layer.
-        let mut output_gradient = self
-            .network
-            .error_function
-            .gradient(last_output, expected_output); // dC/do_L_i; i = last
+        // derivatives of the cost function with respect to the output of the neurons in
+        // the last layer.
+        let mut output_gradient =
+            self.network.error_function.gradient(last_output, expected_output); // dC/do_L_i; i = last
         let inputs_rev = outputs.iter().rev();
 
         for (((layer, gradient), derivative_output), input) in self
@@ -122,11 +110,7 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         }
     }
 
-    fn optimize(&mut self) {
-        self.optimizer
-            .optimize_weights(&mut self.network, &self.gradient);
-        self.network.increment_generation();
-    }
+    fn optimize(&mut self) { self.optimizer.optimize_weights(&mut self.network, &self.gradient); }
 }
 
 impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
@@ -152,19 +136,32 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
             self.gradient = self.network.init_zero_gradient();
         }
 
+        let mut v: Vec<Vec<Vec<f64>>> = vec![];
+
         for (input, expected_output) in data_pairs.into_iter().map(Into::into) {
-            self.backpropagation(self.verbose_propagate(input), expected_output);
+            let out = self.verbose_propagate(input);
+            out.outputs.clone().into_iter().enumerate().for_each(|(idx, o)| match v.get_mut(idx) {
+                Some(x) => x.push(o),
+                None => v.push(vec![o]),
+            });
+            self.backpropagation(out, expected_output);
         }
 
+        //println!("{}\n\n", v.into_iter().map(|x|
+        // format!("{x:?}")).collect::<Vec<_>>().join("\n"));
+        println!("{}", self);
+        println!("0       x: {:?}", v[0]);
+        println!("1       w: {:?}", self.network.get_layers()[0].get_weights().get_elements());
+        println!("1       b: {:?}", self.network.get_layers()[0].get_bias().get_vec());
+        println!("1       x: {:?}", v[1]);
+        println!("2       w: {:?}", self.network.get_layers()[1].get_weights().get_elements());
+        println!("2       b: {:?}", self.network.get_layers()[1].get_bias().get_vec());
+        println!("2       x: {:?}", v[2]);
+
         if let Some(clip_gradient_norm) = &self.clip_gradient_norm {
-            let iter = self.gradient.iter_parameters().cloned();
-            let norm = clip_gradient_norm.norm_type.calculate(iter);
-            if norm > clip_gradient_norm.max_norm {
-                let clip_factor = clip_gradient_norm.max_norm / (norm + 1e-6); // 1e-6 copied from: https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_
-                self.gradient
-                    .iter_mut_parameters()
-                    .for_each(|x| *x *= clip_factor);
-            }
+            clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);
+            //clip_gradient_norm.clip_gradient_pytorch_device(&mut
+            // self.gradient);
         } else {
             #[cfg(debug_assertions)]
             eprintln!("WARN: It is recommended to clip the gradient")
@@ -175,21 +172,14 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
 }
 
 impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
-    fn propagate(&self, input: &[f64; IN]) -> crate::results::PropagationResult<OUT> {
+    fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
         self.network.propagate(input)
-    }
-
-    fn propagate_many(
-        &self,
-        input_list: &Vec<[f64; IN]>,
-    ) -> Vec<crate::results::PropagationResult<OUT>> {
-        self.network.propagate_many(input_list)
     }
 
     fn test_propagate<'a>(
         &'a self,
         data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>,
-    ) -> crate::results::TestsResult<OUT> {
+    ) -> TestsResult<OUT> {
         self.network.test_propagate(data_pairs)
     }
 }

@@ -84,8 +84,7 @@ impl ExportToJs for Vec<[f64; 1]> {
 impl ExportToJs for TestsResult<1> {
     fn get_js_value(&self) -> String {
         format!(
-            "{{ gen: {}, error: '{}', outputs: {:?} }}",
-            self.generation,
+            "{{ error: '{}', outputs: {:?} }}",
             self.error,
             self.outputs
                 .iter()

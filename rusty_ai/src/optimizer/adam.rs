@@ -1,10 +1,12 @@
-use itertools::Itertools;
-
 use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
-use crate::gradient::Gradient;
-use crate::traits::IterLayerParams;
-use crate::util::Lerp;
-use crate::{layer::Layer, neural_network::NeuralNetwork, util::constructor};
+use crate::{
+    gradient::Gradient,
+    layer::Layer,
+    neural_network::NeuralNetwork,
+    traits::IterLayerParams,
+    util::{constructor, Lerp},
+};
+use itertools::Itertools;
 
 // Markers
 #[derive(Debug)]
@@ -20,11 +22,13 @@ pub struct Adam {
     pub beta1: f64,
     pub beta2: f64,
     pub epsilon: f64,
+    generation: usize,
     data: Option<AdamData>,
 }
 
 impl Adam {
     constructor! { pub new -> learning_rate: f64, beta1: f64, beta2: f64, epsilon:f64; Default }
+
     constructor! { pub with_learning_rate -> learning_rate: f64; Default }
 }
 
@@ -34,11 +38,10 @@ impl IsOptimizer for Adam {
         nn: &mut NeuralNetwork<IN, OUT>,
         gradient: &Gradient,
     ) {
-        let time_step = (nn.get_generation() + 1) as i32; // generation starts at 0. should start at 1
-        let AdamData { m, v } = self
-            .data
-            .as_mut()
-            .expect("Adam Optimizer needs to be initialized with layers first!");
+        self.generation += 1;
+        let time_step = self.generation as i32;
+        let AdamData { m, v } =
+            self.data.as_mut().expect("Adam Optimizer needs to be initialized with layers first!");
 
         nn.iter_mut_parameters()
             .zip(gradient.iter_parameters())
@@ -57,11 +60,7 @@ impl IsOptimizer for Adam {
     }
 
     fn init_with_layers(&mut self, layers: &Vec<Layer>) {
-        let m: Gradient = layers
-            .iter()
-            .map(Layer::init_zero_gradient)
-            .collect_vec()
-            .into();
+        let m: Gradient = layers.iter().map(Layer::init_zero_gradient).collect_vec().into();
         let v = m.clone();
         let _ = self.data.insert(AdamData { m, v });
     }
@@ -71,6 +70,7 @@ impl Default for Adam {
     fn default() -> Self {
         Self {
             learning_rate: DEFAULT_LEARNING_RATE,
+            generation: 0,
             beta1: 0.9,
             beta2: 0.999,
             epsilon: 1e-8,

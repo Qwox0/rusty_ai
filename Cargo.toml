@@ -4,7 +4,7 @@ members = [
     "rusty_ai",
 
     #"benches",
-    #"examples",
+    "examples",
     "tests",
 ]
 exclude = []
@@ -19,3 +19,4 @@ rusty_ai = { path="./rusty_ai" }
 enum_dispatch = "0.3.11"
 rand = "0.8.5"
 itertools = "0.10.5"
+

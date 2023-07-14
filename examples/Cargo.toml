@@ -1,26 +1,9 @@
-[workspace]
-members = [
-    "basic_ai",
-    "sine",
-    "xor"
-]
+[package]
+name = "examples"
+edition.workspace = true
+version.workspace = true
 
-[workspace.package]
-version = "0.1.0"
-edition = "2021"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[workspace.dependencies]
-rusty_ai = { path = "../rusty_ai" }
-
-[[example]]
-name = "basic_ai"
-path = "basic_ai"
-
-[[example]]
-name = "sine"
-path = "sine"
-
-[[example]]
-name = "xor"
-path = "xor"
-
+[dependencies]
+rusty_ai.workspace = true

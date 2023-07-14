@@ -9,9 +9,17 @@ version.workspace = true
 rusty_ai = { path = "../rusty_ai" }
 
 [[test]]
-name = "pytorch_sine"
-path = "./tests/pytorch/sine.rs"
+name = "pytorch"
+path = "./tests/pytorch/mod.rs"
 
-[[test]]
-name = "pytorch_xor"
-path = "./tests/pytorch/xor.rs"
+# [[test]]
+# name = "pytorch_sine"
+# path = "./tests/pytorch/sine.rs"
+#
+# [[test]]
+# name = "pytorch_sine2"
+# path = "./tests/pytorch_sine2.rs"
+#
+# [[test]]
+# name = "pytorch_xor"
+# path = "./tests/pytorch/xor.rs"

@@ -62,11 +62,11 @@ fn xor() {
 
     let mut ai = NeuralNetworkBuilder::default()
         .input::<2>()
-        .layer_with_weights_and_bias(w1, b1)
-        .layer_with_weights_and_bias(w2, b2)
-        .layer_with_weights_and_bias(w3, b3)
+        .custom_layer(w1, b1)
+        .custom_layer(w2, b2)
+        .custom_layer(w3, b3)
         .default_activation_function(ActivationFn::Identity)
-        .layer_with_weights_and_bias(w4, b4)
+        .custom_layer(w4, b4)
         .output()
         .error_function(ErrorFunction::SquaredError)
         .sgd_optimizer(GradientDescent {
