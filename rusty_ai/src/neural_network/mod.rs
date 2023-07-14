@@ -1,7 +1,6 @@
 mod builder;
+mod network;
 mod trainable;
-pub use builder::*;
-pub use trainable::TrainableNeuralNetwork;
 
 use crate::{
     data::Pair,
@@ -12,49 +11,46 @@ use crate::{
     traits::{IterLayerParams, Propagator},
     util::impl_getter,
 };
+pub use builder::*;
+pub use network::*;
+pub use trainable::TrainableNeuralNetwork;
 
+/// layers contains all Hidden Layers and the Output Layers
 #[derive(Debug)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
     layers: Vec<Layer>,
     error_function: ErrorFunction,
-    generation: usize,
+    propagation_buf_len: usize,
 }
 
 impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
-    impl_getter! { pub get_generation -> generation: usize }
-    impl_getter! { pub get_layers -> layers: &Vec<Layer> }
+    #[inline]
+    pub fn get_layers(&self) -> &Vec<Layer> { &self.layers }
 
     /// use [`NeuralNetworkBuilder`] instead!
     pub(crate) fn new(layers: Vec<Layer>, error_function: ErrorFunction) -> NeuralNetwork<IN, OUT> {
-        NeuralNetwork {
-            layers,
-            error_function,
-            generation: 0,
-        }
+        let propagation_buf_len =
+            layers.iter().map(Layer::get_input_count).max().unwrap_or(0).max(OUT);
+        NeuralNetwork { layers, error_function, propagation_buf_len }
     }
 
-    pub fn iter_layers(&self) -> core::slice::Iter<Layer> {
-        self.layers.iter()
-    }
-
-    pub(crate) fn increment_generation(&mut self) {
-        self.generation += 1;
+    /// get [`Vec<f64>`] with maximum length and capacity needed for
+    /// propagation. initialized with all `0.0`
+    fn get_propagation_buffer(&self) -> Vec<f64> {
+        let mut buf = vec![0.0; self.propagation_buf_len];
+        buf.shrink_to_fit();
+        buf
     }
 
     pub fn init_zero_gradient(&self) -> Gradient {
-        self.iter_layers()
-            .map(Layer::init_zero_gradient)
-            .collect::<Vec<_>>()
-            .into()
+        self.iter_layers().map(Layer::init_zero_gradient).collect::<Vec<_>>().into()
     }
 }
 
 impl<const IN: usize, const OUT: usize> IterLayerParams for NeuralNetwork<IN, OUT> {
     type Layer = Layer;
 
-    fn iter_layers<'a>(&'a self) -> impl Iterator<Item = &'a Self::Layer> {
-        self.layers.iter()
-    }
+    fn iter_layers<'a>(&'a self) -> impl Iterator<Item = &'a Self::Layer> { self.layers.iter() }
 
     fn iter_mut_layers<'a>(&'a mut self) -> impl Iterator<Item = &'a mut Self::Layer> {
         self.layers.iter_mut()
@@ -63,27 +59,21 @@ impl<const IN: usize, const OUT: usize> IterLayerParams for NeuralNetwork<IN, OU
 
 impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN, OUT> {
     fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
-        self.iter_layers()
-            .fold(input.to_vec(), |acc, layer| layer.calculate(acc))
-            .into()
-    }
-
-    fn propagate_many(&self, input_list: &Vec<[f64; IN]>) -> Vec<PropagationResult<OUT>> {
-        input_list.iter().map(|x| self.propagate(x)).collect()
+        self.iter_layers().fold(input.to_vec(), |acc, layer| layer.calculate(&acc)).into()
     }
 
     fn test_propagate<'a>(
         &'a self,
         data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>,
     ) -> TestsResult<OUT> {
-        TestsResult::collect(
-            data_pairs.into_iter().map(|pair| {
+        data_pairs
+            .into_iter()
+            .map(|pair| {
                 let output = self.propagate(&pair.input);
                 let error = self.error_function.calculate(&output.0, &pair.output);
                 (output, error)
-            }),
-            self.generation,
-        )
+            })
+            .collect()
     }
 }
 
@@ -96,12 +86,8 @@ impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, 
             get_plural_s(IN),
             get_plural_s(OUT),
         )?;
-        let layers_text = self
-            .layers
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>()
-            .join("\n");
+        let layers_text =
+            self.layers.iter().map(ToString::to_string).collect::<Vec<String>>().join("\n");
         write!(f, "{}", layers_text)
     }
 }

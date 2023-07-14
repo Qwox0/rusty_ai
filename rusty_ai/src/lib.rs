@@ -8,13 +8,13 @@
 #![feature(int_roundings)]
 #![feature(portable_simd)]
 
-#![feature(ptr_sub_ptr)]
-
 pub mod activation_function;
+pub mod clip_gradient_norm;
 pub mod data;
 pub mod error_function;
 pub mod export;
 pub mod gradient;
+pub mod initializer;
 pub mod layer;
 pub mod matrix;
 pub mod neural_network;

@@ -1,9 +1,10 @@
 pub use crate::{
     activation_function::ActivationFn,
-    data::{Pair, PairList, ValueList},
+    data::{DataBuilder, Pair, PairList, ValueList},
     error_function::ErrorFunction,
     gradient::layer::GradientLayer,
     gradient::Gradient,
+    initializer::*,
     layer::{Layer, LayerBias},
     matrix::Matrix,
     neural_network::{NeuralNetwork, NeuralNetworkBuilder, TrainableNeuralNetwork},

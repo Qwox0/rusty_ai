@@ -30,28 +30,56 @@ macro_rules! impl_getter {
 }
 pub(crate) use impl_getter;
 
+/*
 /// impl_fn_traits!(Fn<(f64,)> -> f64: ActivationFunction => call);
 macro_rules! impl_fn_traits {
-        ( FnOnce < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
-            $crate::util::impl_fn_traits! { inner FnOnce<$in> -> $out; $type; $method; call_once; }
-        };
-        ( FnMut < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
-            $crate::util::impl_fn_traits! { FnOnce<$in> -> $out: $type => $method }
-            $crate::util::impl_fn_traits! { inner FnMut<$in>; $type; $method; call_mut; &mut}
-        };
-        ( Fn < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
-            $crate::util::impl_fn_traits! { FnMut<$in> -> $out: $type => $method }
-            $crate::util::impl_fn_traits! { inner Fn<$in>; $type; $method; call; & }
-        };
-        ( inner $fn_trait:ident < $in:ty > $( -> $out:ty )? ; $type:ty ; $method:ident ; $call:ident ; $( $self:tt )* ) => {
-            impl $fn_trait<$in> for $type {
-                $( type Output = $out; )?
-                extern "rust-call" fn $call( $($self)* self, args: $in) -> Self::Output {
-                    <$type>::$method(&self, args)
-                }
+    ( FnOnce < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+        $crate::util::impl_fn_traits! { inner FnOnce<$in> -> $out; $type; $method; call_once; }
+    };
+    ( FnMut < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+        $crate::util::impl_fn_traits! { FnOnce<$in> -> $out: $type => $method }
+        $crate::util::impl_fn_traits! { inner FnMut<$in>; $type; $method; call_mut; &mut}
+    };
+    ( Fn < $in:ty > -> $out:ty : $type:ty => $method:ident ) => {
+        $crate::util::impl_fn_traits! { FnMut<$in> -> $out: $type => $method }
+        $crate::util::impl_fn_traits! { inner Fn<$in>; $type; $method; call; & }
+    };
+    ( inner $fn_trait:ident < $in:ty > $( -> $out:ty )? ; $type:ty ; $method:ident ; $call:ident ; $( $self:tt )* ) => {
+        impl $fn_trait<$in> for $type {
+            $( type Output = $out; )?
+            extern "rust-call" fn $call( $($self)* self, args: $in) -> Self::Output {
+                <$type>::$method(&self, args)
             }
-        };
-    }
+        }
+    };
+}
+*/
+macro_rules! impl_fn_traits {
+    ( $type:ty : FnOnce < $in:ty > -> $out:ty ; $method:expr ) => {
+        impl FnOnce<$in> for $type {
+            type Output = $out;
+            extern "rust-call" fn call_once(self, args: $in) -> Self::Output {
+                $method(&self, args)
+            }
+        }
+    };
+    ( $type:ty : FnMut < $in:ty > -> $out:ty ; $method:expr ) => {
+        $crate::util::impl_fn_traits! { $type : FnOnce<$in> -> $out: $type => $method }
+        impl FnMut<$in> for $type {
+            extern "rust-call" fn call_mut(&mut self, args: $in) -> Self::Output {
+                $method(&self, args)
+            }
+        }
+    };
+    ( $type:ty : Fn < $in:ty > -> $out:ty ; $method:expr ) => {
+        $crate::util::impl_fn_traits! { $type : FnMut<$in> -> $out => $method }
+        impl Fn<$in> for $type {
+            extern "rust-call" fn call(&mself, args: $in) -> Self::Output {
+                $method(&self, args)
+            }
+        }
+    };
+}
 pub(crate) use impl_fn_traits;
 
 /// ```rust, ignore
