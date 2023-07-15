@@ -1,9 +1,7 @@
-use crate::{
-    clip_gradient_norm::ClipGradientNorm,
-    optimizer::IsOptimizer,
-    prelude::*,
-    traits::{IterLayerParams, Propagator, Trainable},
-};
+mod builder;
+
+use crate::{gradient::aliases::OutputGradient, optimizer::IsOptimizer, prelude::*};
+pub use builder::TrainableNeuralNetworkBuilder;
 
 #[derive(Debug)]
 pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
@@ -17,7 +15,7 @@ pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
 impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> { &self.network }
 
-    pub(crate) fn new(
+    fn new(
         network: NeuralNetwork<IN, OUT>,
         optimizer: Optimizer,
         retain_gradient: bool,
@@ -92,14 +90,12 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
 
         // derivatives of the cost function with respect to the output of the neurons in
         // the last layer.
-        let mut output_gradient =
-            self.network.error_function.gradient(last_output, expected_output); // dC/do_L_i; i = last
+        let mut output_gradient = self.output_gradient(last_output, expected_output);
         let inputs_rev = outputs.iter().rev();
 
         for (((layer, gradient), derivative_output), input) in self
             .network
-            .layers
-            .iter()
+            .iter_layers()
             .zip(self.gradient.iter_mut_layers())
             .zip(verbose_prop.derivatives)
             .rev()
@@ -108,6 +104,16 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
             output_gradient =
                 layer.backpropagation(input, derivative_output, output_gradient, gradient);
         }
+    }
+
+    /// gradient of the loss with respect to the last neuron activations
+    #[inline]
+    fn output_gradient(
+        &self,
+        last_output: Vec<f64>,
+        expected_output: &[f64; OUT],
+    ) -> OutputGradient {
+        self.network.error_function.gradient(last_output, expected_output)
     }
 
     fn optimize(&mut self) { self.optimizer.optimize_weights(&mut self.network, &self.gradient); }

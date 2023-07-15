@@ -1,5 +1,4 @@
 use crate::{
-    neural_network::In,
     prelude::{ActivationFn, Layer, LayerBias, Matrix},
     util::RngWrapper,
 };
@@ -23,7 +22,7 @@ pub trait Initializer {
 }
 
 macro_rules! distr_initializer {
-    ( $type:ty : $get_distr:ident ) => {
+    ($type:ty : $get_distr:ident) => {
         impl Initializer for $type {
             fn init_weights(
                 &self,
@@ -70,12 +69,8 @@ impl Initializer for SingleNum {
 
 type Zeros = SingleNum;
 type Ones = SingleNum;
-pub fn zeros() -> Zeros {
-    SingleNum(0.0)
-}
-pub fn ones() -> Ones {
-    SingleNum(1.0)
-}
+pub fn zeros() -> Zeros { SingleNum(0.0) }
+pub fn ones() -> Ones { SingleNum(1.0) }
 
 pub struct Custom<W: Initializer, B: Initializer> {
     weights_init: W,
@@ -106,10 +101,7 @@ distr_initializer! { GlorotUniform: get_distr }
 /// [https://www.tensorflow.org/api_docs/python/tf/keras/layers/Dense]
 #[allow(non_snake_case)]
 pub fn TensorFlowDefault() -> Custom<GlorotUniform, Zeros> {
-    Custom {
-        weights_init: GlorotUniform,
-        bias_init: zeros(),
-    }
+    Custom { weights_init: GlorotUniform, bias_init: zeros() }
 }
 
 /// [https://pytorch.org/docs/stable/generated/torch.nn.Linear.html]

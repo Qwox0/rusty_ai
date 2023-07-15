@@ -1,10 +1,15 @@
-use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
-use crate::{gradient::Gradient, neural_network::NeuralNetwork, traits::IterLayerParams};
+use crate::prelude::*;
 
 // stochastic gradient descent
 #[derive(Debug)]
 pub struct GradientDescent {
     pub learning_rate: f64,
+}
+
+impl GradientDescent {
+    pub const fn default() -> Self {
+        Self { learning_rate: DEFAULT_LEARNING_RATE }
+    }
 }
 
 impl IsOptimizer for GradientDescent {
@@ -21,8 +26,6 @@ impl IsOptimizer for GradientDescent {
 
 impl Default for GradientDescent {
     fn default() -> Self {
-        Self {
-            learning_rate: DEFAULT_LEARNING_RATE,
-        }
+        Self::default()
     }
 }

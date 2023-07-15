@@ -1,13 +1,9 @@
-use crate::{
-    prelude::Gradient,
-    traits::IterLayerParams,
-    util::{constructor, Norm},
-};
+use crate::prelude::*;
 
 #[derive(Debug)]
 pub struct ClipGradientNorm {
-    norm_type: Norm,
-    max_norm: f64,
+    pub max_norm: f64,
+    pub norm_type: Norm,
 }
 
 impl ClipGradientNorm {
@@ -20,9 +16,7 @@ impl ClipGradientNorm {
         if norm > self.max_norm {
             let clip_factor = self.max_norm / (norm + 1e-6); // 1e-6 copied from: https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_
             println!("clip_factor: {}", clip_factor);
-            gradient
-                .iter_mut_parameters()
-                .for_each(|x| *x *= clip_factor);
+            gradient.iter_mut_parameters().for_each(|x| *x *= clip_factor);
         }
     }
 
@@ -32,12 +26,11 @@ impl ClipGradientNorm {
         let norm = self.norm_type.calculate(iter);
         let clip_factor = self.max_norm / (norm + 1e-6);
         // println!("norm: {}; clip_factor: {}", norm, clip_factor);
-        if clip_factor >= 1.0 { // == self.max_norm >= norm + 1e-6
-            return;
+        if clip_factor >= 1.0 {
+            // == self.max_norm >= norm + 1e-6
+            return
         }
-        gradient
-            .iter_mut_parameters()
-            .for_each(|x| *x *= clip_factor);
+        gradient.iter_mut_parameters().for_each(|x| *x *= clip_factor);
     }
 
     /// [https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_]
@@ -46,8 +39,6 @@ impl ClipGradientNorm {
         let norm = self.norm_type.calculate(iter);
         let clip_factor = (self.max_norm / (norm + 1e-6)).min(1.0);
         // println!("norm: {}; clip_factor: {}", norm, clip_factor);
-        gradient
-            .iter_mut_parameters()
-            .for_each(|x| *x *= clip_factor);
+        gradient.iter_mut_parameters().for_each(|x| *x *= clip_factor);
     }
 }

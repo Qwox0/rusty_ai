@@ -156,11 +156,17 @@ where INIT: Initializer
 
     /// # Panics
     /// Panics if `OUT` doesn't match the the neuron count of the last layer.
-    pub fn output<const OUT: usize>(
-        self,
-    ) -> NeuralNetworkBuilder<InOut<IN, OUT>, RngWrapper, INIT, NoOptimizer> {
+    pub fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT> {
         assert_eq!(self.last_neuron_count(), OUT);
-        update_phantom!(self)
+        NeuralNetwork::new(self.layers, self.error_function.unwrap_or_default())
+    }
+
+    /// Alias for `.build().to_trainable_builder()`
+    /// # Panics
+    /// See `NeuralNetworkBuilder::build`:
+    /// Panics if `OUT` doesn't match the the neuron count of the last layer.
+    pub fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
+        self.build().to_trainable_builder()
     }
 }
 
@@ -225,45 +231,20 @@ where INIT: Initializer
     pub fn build(self) -> NeuralNetwork<IN, OUT> {
         NeuralNetwork::new(self.layers, self.error_function.unwrap_or_default())
     }
-
-    pub fn optimizer(
-        self,
-        optimizer: Optimizer,
-    ) -> NeuralNetworkBuilder<InOut<IN, OUT>, RngWrapper, INIT, HasOptimizer> {
-        let optimizer = HasOptimizer(optimizer);
-        NeuralNetworkBuilder { optimizer, ..self }
-    }
-
-    pub fn adam_optimizer(
-        self,
-        optimizer: Adam,
-    ) -> NeuralNetworkBuilder<InOut<IN, OUT>, RngWrapper, INIT, HasOptimizer> {
-        self.optimizer(Optimizer::Adam(optimizer))
-    }
-
-    pub fn sgd_optimizer(
-        self,
-        optimizer: GradientDescent,
-    ) -> NeuralNetworkBuilder<InOut<IN, OUT>, RngWrapper, INIT, HasOptimizer> {
-        self.optimizer(Optimizer::GradientDescent(optimizer))
-    }
 }
 
-impl<INIT, const IN: usize, const OUT: usize>
-    NeuralNetworkBuilder<InOut<IN, OUT>, RngWrapper, INIT, HasOptimizer>
-where INIT: Initializer
-{
-    pub fn clip_gradient_norm(mut self, max_norm: f64, norm_type: Norm) -> Self {
-        let clip_grad_norm = ClipGradientNorm::new(norm_type, max_norm);
-        let _ = self.clip_grad_norm.insert(clip_grad_norm);
-        self
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    /// builds a trainable neural network
-    pub fn build(self) -> TrainableNeuralNetwork<IN, OUT> {
-        let mut optimizer = self.optimizer.0;
-        optimizer.init_with_layers(&self.layers);
-        let network = NeuralNetwork::new(self.layers, self.error_function.unwrap_or_default());
-        TrainableNeuralNetwork::new(network, optimizer, self.retain_gradient, self.clip_grad_norm)
+    #[test]
+    fn empty() {
+        let ai = NeuralNetworkBuilder::default().input().build::<2>();
+        let input = [1.0, 2.0];
+        let prop = ai.propagate(&input).0;
+
+        println!("{:?}", prop);
+
+        panic!()
     }
 }

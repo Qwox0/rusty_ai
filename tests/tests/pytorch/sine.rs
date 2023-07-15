@@ -269,10 +269,10 @@ fn sine_simple1() {
         .custom_layer(w4, b4)
         .default_activation_function(ActivationFn::Identity)
         .custom_layer(w5, b5)
-        .output()
         .error_function(ErrorFunction::SquaredError)
-        .sgd_optimizer(GradientDescent { learning_rate: 0.01 })
-        .clip_gradient_norm(5.0, Norm::Two)
+        .to_trainable_builder()
+        .sgd(GradientDescent { learning_rate: 0.01 })
+        .new_clip_gradient_norm(5.0, Norm::Two)
         .build();
 
     let data = PairList::from_vecs(x, y).unwrap();
@@ -477,10 +477,10 @@ fn sine_simple2() {
         .custom_layer(w4, b4)
         .default_activation_function(ActivationFn::Identity)
         .custom_layer(w5, b5)
-        .output()
         .error_function(ErrorFunction::SquaredError)
-        .sgd_optimizer(GradientDescent { learning_rate: 0.01 })
-        .clip_gradient_norm(5.0, Norm::Two)
+        .to_trainable_builder()
+        .sgd(GradientDescent { learning_rate: 0.01 })
+        .new_clip_gradient_norm(5.0, Norm::Two)
         .build();
 
     let data = PairList::from_vecs(x, y).unwrap();
@@ -692,10 +692,10 @@ fn pytorch_sine2() {
         .custom_layer(w4, b4)
         .default_activation_function(ActivationFn::Identity)
         .custom_layer(w5, b5)
-        .output()
         .error_function(ErrorFunction::SquaredError)
-        .sgd_optimizer(GradientDescent { learning_rate: 0.01 })
-        .clip_gradient_norm(5.0, Norm::Two)
+        .to_trainable_builder()
+        .sgd(GradientDescent { learning_rate: 0.01 })
+        .new_clip_gradient_norm(5.0, Norm::Two)
         .build();
 
     let data = PairList::with_fn(x.to_vec(), |x| [x[0].sin()]).unwrap();

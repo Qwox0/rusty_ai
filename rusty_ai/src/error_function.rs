@@ -1,4 +1,4 @@
-use crate::gradient::aliases::OutputGradient;
+use crate::prelude::*;
 
 #[derive(Debug, Clone, Default)]
 pub enum ErrorFunction {

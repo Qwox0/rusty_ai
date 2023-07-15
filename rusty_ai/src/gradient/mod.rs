@@ -1,8 +1,7 @@
 pub mod aliases;
 pub mod layer;
 
-use self::layer::GradientLayer;
-use crate::traits::IterLayerParams;
+use crate::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct Gradient {
@@ -10,15 +9,11 @@ pub struct Gradient {
 }
 
 impl From<Vec<GradientLayer>> for Gradient {
-    fn from(layers: Vec<GradientLayer>) -> Self {
-        Gradient { layers }
-    }
+    fn from(layers: Vec<GradientLayer>) -> Self { Gradient { layers } }
 }
 
 impl Gradient {
-    pub fn layer_count(&self) -> usize {
-        self.layers.len()
-    }
+    pub fn layer_count(&self) -> usize { self.layers.len() }
 
     pub fn iter_mut_layers(&mut self) -> core::slice::IterMut<'_, GradientLayer> {
         self.layers.iter_mut()
@@ -35,9 +30,7 @@ impl Gradient {
 impl IterLayerParams for Gradient {
     type Layer = GradientLayer;
 
-    fn iter_layers<'a>(&'a self) -> impl Iterator<Item = &'a Self::Layer> {
-        self.layers.iter()
-    }
+    fn iter_layers<'a>(&'a self) -> impl Iterator<Item = &'a Self::Layer> { self.layers.iter() }
 
     fn iter_mut_layers<'a>(&'a mut self) -> impl Iterator<Item = &'a mut Self::Layer> {
         self.layers.iter_mut()
@@ -46,12 +39,7 @@ impl IterLayerParams for Gradient {
 
 impl std::fmt::Display for Gradient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = self
-            .layers
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>()
-            .join("\n");
+        let text = self.layers.iter().map(ToString::to_string).collect::<Vec<String>>().join("\n");
         write!(f, "{}", text)
     }
 }

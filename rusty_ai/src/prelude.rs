@@ -1,15 +1,21 @@
 pub use crate::{
     activation_function::ActivationFn,
+    clip_gradient_norm::ClipGradientNorm,
     data::{DataBuilder, Pair, PairList, ValueList},
     error_function::ErrorFunction,
-    gradient::layer::GradientLayer,
-    gradient::Gradient,
+    gradient::{layer::GradientLayer, Gradient},
     initializer::*,
     layer::{Layer, LayerBias},
     matrix::Matrix,
-    neural_network::{NeuralNetwork, NeuralNetworkBuilder, TrainableNeuralNetwork},
+    nn::{builder::*, NeuralNetwork},
+    nn_trainable::{TrainableNeuralNetwork, TrainableNeuralNetworkBuilder},
     optimizer::{Adam, GradientDescent, Optimizer},
     results::{PropagationResult, TestsResult, VerbosePropagation},
-    traits::{Propagator, Trainable},
+    traits::*,
     util::Norm,
+};
+pub(crate) use crate::{
+    gradient::aliases::*,
+    optimizer::{IsOptimizer, DEFAULT_LEARNING_RATE},
+    util::*,
 };

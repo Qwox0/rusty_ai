@@ -1,14 +1,6 @@
 mod bias;
-use crate::{
-    activation_function::ActivationFn,
-    gradient::{
-        aliases::{InputGradient, OutputGradient},
-        layer::GradientLayer,
-    },
-    matrix::Matrix,
-    traits::{impl_IterParams, IterParams},
-    util::{impl_getter, EntryAdd},
-};
+
+use crate::prelude::*;
 pub use bias::*;
 use std::iter::once;
 
@@ -22,15 +14,25 @@ pub struct Layer {
 }
 
 impl Layer {
-    pub fn get_weights(&self) -> &Matrix<f64> { &self.weights }
+    pub fn get_weights(&self) -> &Matrix<f64> {
+        &self.weights
+    }
 
-    pub fn get_weights_mut(&mut self) -> &mut Matrix<f64> { &mut self.weights }
+    pub fn get_weights_mut(&mut self) -> &mut Matrix<f64> {
+        &mut self.weights
+    }
 
-    pub fn get_bias(&self) -> &LayerBias { &self.bias }
+    pub fn get_bias(&self) -> &LayerBias {
+        &self.bias
+    }
 
-    pub fn get_bias_mut(&mut self) -> &mut LayerBias { &mut self.bias }
+    pub fn get_bias_mut(&mut self) -> &mut LayerBias {
+        &mut self.bias
+    }
 
-    pub fn get_activation_function(&self) -> &ActivationFn { &self.activation_function }
+    pub fn get_activation_function(&self) -> &ActivationFn {
+        &self.activation_function
+    }
 
     pub fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
         assert_eq!(
@@ -54,19 +56,27 @@ impl Layer {
         Layer::new(weights, bias, acti_fn)
     }
 
-    pub fn get_neuron_count(&self) -> usize { self.weights.get_height() }
+    pub fn get_neuron_count(&self) -> usize {
+        self.weights.get_height()
+    }
 
-    pub fn get_input_count(&self) -> usize { self.weights.get_width() }
+    pub fn get_input_count(&self) -> usize {
+        self.weights.get_width()
+    }
+
+    fn weights_sums(&self, inputs: &Vec<f64>) -> Vec<f64> {
+        (&self.weights * inputs).add_entries(self.bias.get_vec())
+    }
 
     /// An Input layer doesn't change the input, but still multiplies by the
     /// identity matrix and uses the identity activation function. It might
     /// be a good idea to skip the Input layer to reduce calculations.
     pub fn calculate(&self, inputs: &Vec<f64>) -> Vec<f64> {
-        let tmp = (&self.weights * inputs).add_entries(self.bias.get_vec());
+        let tmp = self.weights_sums(inputs);
         self.activation_function.calculate(tmp)
     }
 
-    /// like [`Layer::calculate`] but also calculate the derivatives of the
+    /// like [`calculate`] but also calculate the derivatives of the
     /// activation function
     pub fn training_calculate(&self, inputs: &Vec<f64>) -> (Vec<f64>, Vec<f64>) {
         let outputs = self.calculate(inputs);

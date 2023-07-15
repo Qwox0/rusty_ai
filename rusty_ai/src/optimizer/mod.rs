@@ -1,11 +1,10 @@
 mod adam;
 mod gradient_descent;
 
+use crate::{gradient::Gradient, layer::Layer, nn::NeuralNetwork};
 pub use adam::Adam;
-pub use gradient_descent::GradientDescent;
-
-use crate::{gradient::Gradient, layer::Layer, neural_network::NeuralNetwork};
 use enum_dispatch::enum_dispatch;
+pub use gradient_descent::GradientDescent;
 
 pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 
@@ -16,8 +15,6 @@ pub(crate) trait IsOptimizer {
         nn: &mut NeuralNetwork<IN, OUT>,
         gradient: &Gradient,
     );
-    #[allow(unused)]
-    fn init_with_layers(&mut self, layers: &Vec<Layer>) {}
 }
 
 #[derive(Debug)]
@@ -28,15 +25,16 @@ pub enum Optimizer {
 }
 
 impl Optimizer {
-    pub fn gradient_descent(learning_rate: f64) -> Optimizer {
+    pub const fn gradient_descent(learning_rate: f64) -> Optimizer {
         Optimizer::GradientDescent(GradientDescent { learning_rate })
     }
-    pub fn default_gradient_descent() -> Optimizer {
+
+    pub const fn default_gradient_descent() -> Optimizer {
         Optimizer::GradientDescent(GradientDescent::default())
     }
 
-    pub fn default_adam() -> Optimizer {
-        Optimizer::Adam(Adam::default())
+    pub fn default_adam(layers: &Vec<Layer>) -> Optimizer {
+        Optimizer::Adam(Adam::default(layers))
     }
 }
 

@@ -1,6 +1,6 @@
 extern crate test;
 
-use crate::{data::DataBuilder, prelude::*};
+use crate::prelude::*;
 use rayon::prelude::*;
 use std::{sync::Mutex, thread::ScopedJoinHandle};
 use test::black_box;
@@ -176,6 +176,7 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
 impl<'a> IntoParallelIterator for &'a PairList<1, 1> {
     type Item = &'a Pair<1, 1>;
     type Iter = rayon::slice::Iter<'a, Pair<1, 1>>;
+
     fn into_par_iter(self) -> Self::Iter {
         self.0.par_iter()
     }
@@ -199,20 +200,18 @@ fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
         .random_layer(NEURON_COUNT)
         .default_activation_function(ActivationFn::Identity)
         .random_layer(1)
-        .output()
-        .sgd_optimizer(GradientDescent::default())
+        .to_trainable_builder()
+        .sgd(GradientDescent::default())
         .build();
 
-    let data = DataBuilder::uniform(-5.0..5.0)
-        .seed(SEED)
-        .build(data_count)
-        .gen_pairs(|x| [x[0].sin()]);
+    let data =
+        DataBuilder::uniform(-5.0..5.0).seed(SEED).build(data_count).gen_pairs(|x| [x[0].sin()]);
 
     (ai, data)
 }
 
 macro_rules! make_bench {
-    ( $fn:ident ) => {
+    ($fn:ident) => {
         mod $fn {
             use super::*;
             #[bench]
