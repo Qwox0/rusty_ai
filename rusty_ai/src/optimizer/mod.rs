@@ -1,7 +1,7 @@
 mod adam;
 mod gradient_descent;
 
-use crate::{gradient::Gradient, layer::Layer, nn::NeuralNetwork};
+use crate::prelude::*;
 pub use adam::Adam;
 use enum_dispatch::enum_dispatch;
 pub use gradient_descent::GradientDescent;

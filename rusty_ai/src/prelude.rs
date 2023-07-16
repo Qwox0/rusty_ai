@@ -7,10 +7,10 @@ pub use crate::{
     initializer::*,
     layer::{Layer, LayerBias},
     matrix::Matrix,
-    nn::{builder::*, NeuralNetwork},
-    nn_trainable::{TrainableNeuralNetwork, TrainableNeuralNetworkBuilder},
+    neural_network::{builder::*, NeuralNetwork},
     optimizer::{Adam, GradientDescent, Optimizer},
     results::{PropagationResult, TestsResult, VerbosePropagation},
+    trainable::{TrainableNeuralNetwork, TrainableNeuralNetworkBuilder},
     traits::*,
     util::Norm,
 };
