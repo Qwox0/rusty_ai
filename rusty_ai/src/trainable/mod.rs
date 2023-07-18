@@ -87,13 +87,12 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     ) {
         let network_output = verbose_prop.outputs.last().expect("There is an output layer");
 
-        // derivatives of the cost function with respect to the output of the neurons in
-        // the last layer.
+        // gradient of the cost function with respect to the neuron output of the last layer.
         let mut output_gradient = self.output_gradient(network_output, expected_output);
-        let inputs_rev = verbose_prop.outputs.array_windows::<2>();
+        let in_out_pairs = verbose_prop.outputs.array_windows::<2>();
 
         for ((layer, gradient), [input, output]) in
-            self.network.iter_layers().zip(self.gradient.iter_mut_layers()).zip(inputs_rev).rev()
+            self.network.iter_layers().zip(self.gradient.iter_mut_layers()).zip(in_out_pairs).rev()
         {
             output_gradient = layer.backpropagation(input, output, output_gradient, gradient);
         }
@@ -147,17 +146,6 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
             });
             self.backpropagation(out, expected_output);
         }
-
-        //println!("{}\n\n", v.into_iter().map(|x|
-        // format!("{x:?}")).collect::<Vec<_>>().join("\n"));
-        println!("{}", self);
-        println!("0       x: {:?}", v[0]);
-        println!("1       w: {:?}", self.network.get_layers()[0].get_weights().get_elements());
-        println!("1       b: {:?}", self.network.get_layers()[0].get_bias().get_vec());
-        println!("1       x: {:?}", v[1]);
-        println!("2       w: {:?}", self.network.get_layers()[1].get_weights().get_elements());
-        println!("2       b: {:?}", self.network.get_layers()[1].get_bias().get_vec());
-        println!("2       x: {:?}", v[2]);
 
         if let Some(clip_gradient_norm) = &self.clip_gradient_norm {
             clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);

@@ -132,29 +132,6 @@ impl ActivationFn {
         }
     }
 
-    /// Calculates the Vector of neuron activation from `input` which should contain weighted sums.
-    ///
-    /// # Propagation
-    ///
-    /// X: Vector of weighted sums
-    /// `x_i`: weighted sum of neuron `i`
-    /// Y: Vector of neuron acrivations.
-    /// `y_i`: activation of neuron `i`.
-    /// self: activation function
-    ///
-    /// General case: `self(X) = Y`
-    /// Usual   case: `self(x_i) = y_i` (example: ReLU)
-    /// Special case (Softmax): `y_i = e^x_i/(sum of e^x for x in X)`
-    pub fn propagate(&self, input: Vec<f64>) -> Vec<f64> {
-        use ActivationFn::*;
-        match self {
-            Identity => input,
-            ReLU(_) | LeakyReLU(..) | Sigmoid => input.into_iter().map(self).collect(),
-            Softmax => softmax(input),
-            LogSoftmax => logsoftmax(input),
-        }
-    }
-
     /// Calculates the activation function for a single value [`f64`].
     ///
     /// # Panics
@@ -185,6 +162,57 @@ impl ActivationFn {
         }
     }
 
+    /// Calculates the derivative of the activation function for a single value [`f64`] from the
+    /// non-derivative output of the activation function.
+    /// # Panics
+    /// Panics if the activation function variant only supports entire Vector calculations.
+    pub fn derivative_from_output(&self, output: f64) -> f64 {
+        use ActivationFn::*;
+        #[allow(illegal_floating_point_literal_pattern)] // for pattern: 0.0 => ...
+        match self {
+            Identity => 1.0,
+            ReLU(_) => {
+                if output > 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            },
+            LeakyReLU(leak_rate, d0) => match output {
+                0.0 => *d0,
+                x if x.is_sign_positive() => 1.0,
+                _ => *leak_rate,
+            },
+            Sigmoid => output * (1.0 - output),
+
+            Softmax => panic!("Softmax needs entire Vector"),
+            LogSoftmax => panic!("LogSoftmax needs entire Vector"),
+        }
+    }
+
+    /// Calculates the Vector of neuron activation from `input` which should contain weighted sums.
+    ///
+    /// # Propagation
+    ///
+    /// X: Vector of weighted sums
+    /// `x_i`: weighted sum of neuron `i`
+    /// Y: Vector of neuron acrivations.
+    /// `y_i`: activation of neuron `i`.
+    /// self: activation function
+    ///
+    /// General case: `self(X) = Y`
+    /// Usual   case: `self(x_i) = y_i` (example: ReLU)
+    /// Special case (Softmax): `y_i = e^x_i/(sum of e^x for x in X)`
+    pub fn propagate(&self, input: Vec<f64>) -> Vec<f64> {
+        use ActivationFn::*;
+        match self {
+            Identity => input,
+            ReLU(_) | LeakyReLU(..) | Sigmoid => input.into_iter().map(self).collect(),
+            Softmax => softmax(input),
+            LogSoftmax => logsoftmax(input),
+        }
+    }
+
     ///
     /// # Propagation
     ///
@@ -208,7 +236,7 @@ impl ActivationFn {
             ReLU(_) | LeakyReLU(..) | Sigmoid => output_gradient
                 .into_iter()
                 .zip(self_output)
-                .map(|(dl_dy, y)| dl_dy * self.derivative(*y))
+                .map(|(dl_dy, y)| dl_dy * self.derivative_from_output(*y))
                 .collect(),
             Softmax => {
                 // dL/dx_i = y_i * (dL/dy_i - sum dL/dy_k * y_k for k in 1..=n)
@@ -234,28 +262,6 @@ impl ActivationFn {
                 // dL/dx_i = dL/dy_i - s
                 output_gradient.into_iter().map(|dl_dy| dl_dy - s).collect()
             },
-        }
-    }
-
-    /// Calculates the derivative of the activation function for a single value [`f64`] from the
-    /// non-derivative output of the activation function.
-    /// # Panics
-    /// Panics if the activation function variant only supports entire Vector calculations.
-    pub fn derivative_from_output(&self, output: f64) -> f64 {
-        use ActivationFn::*;
-        #[allow(illegal_floating_point_literal_pattern)] // for pattern: 0.0 => ...
-        match self {
-            Identity => 1.0,
-            ReLU(_) => output.is_sign_positive() as u64 as f64,
-            LeakyReLU(leak_rate, d0) => match output {
-                0.0 => *d0,
-                x if x.is_sign_positive() => 1.0,
-                _ => *leak_rate,
-            },
-            Sigmoid => output * (1.0 - output),
-
-            Softmax => panic!("Softmax needs entire Vector"),
-            LogSoftmax => panic!("LogSoftmax needs entire Vector"),
         }
     }
 
@@ -416,3 +422,4 @@ mod benches {
         });
     }
 }
+
