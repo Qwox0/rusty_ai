@@ -1,11 +1,4 @@
-use super::{IsOptimizer, DEFAULT_LEARNING_RATE};
-use crate::{
-    gradient::Gradient,
-    layer::Layer,
-    neural_network::NeuralNetwork,
-    traits::IterLayerParams,
-    util::{constructor, Lerp},
-};
+use crate::prelude::*;
 use itertools::Itertools;
 
 // Markers
@@ -23,13 +16,33 @@ pub struct Adam {
     pub beta2: f64,
     pub epsilon: f64,
     generation: usize,
-    data: Option<AdamData>,
+    m: Gradient,
+    v: Gradient,
 }
 
 impl Adam {
-    constructor! { pub new -> learning_rate: f64, beta1: f64, beta2: f64, epsilon:f64; Default }
+    pub fn new(
+        learning_rate: f64,
+        beta1: f64,
+        beta2: f64,
+        epsilon: f64,
+        layers: &Vec<Layer>,
+    ) -> Self {
+        let m: Gradient = layers.iter().map(Layer::init_zero_gradient).collect_vec().into();
+        let v = m.clone();
 
-    constructor! { pub with_learning_rate -> learning_rate: f64; Default }
+        Self { learning_rate, generation: 0, beta1, beta2, epsilon, m, v }
+    }
+
+    #[inline]
+    pub fn with_learning_rate(learning_rate: f64, layers: &Vec<Layer>) -> Self {
+        Self::new(learning_rate, 0.9, 0.999, 1e-8, layers)
+    }
+
+    #[inline]
+    pub fn default(layers: &Vec<Layer>) -> Self {
+        Self::with_learning_rate(DEFAULT_LEARNING_RATE, layers)
+    }
 }
 
 impl IsOptimizer for Adam {
@@ -40,13 +53,11 @@ impl IsOptimizer for Adam {
     ) {
         self.generation += 1;
         let time_step = self.generation as i32;
-        let AdamData { m, v } =
-            self.data.as_mut().expect("Adam Optimizer needs to be initialized with layers first!");
 
         nn.iter_mut_parameters()
             .zip(gradient.iter_parameters())
-            .zip(m.iter_mut_parameters())
-            .zip(v.iter_mut_parameters())
+            .zip(self.m.iter_mut_parameters())
+            .zip(self.v.iter_mut_parameters())
             .for_each(|(((x, dx), m), v)| {
                 m.lerp_mut(*dx, self.beta1);
                 v.lerp_mut(dx * dx, self.beta2);
@@ -57,24 +68,5 @@ impl IsOptimizer for Adam {
                 let denominator = v_bias_cor * v_bias_cor + self.epsilon;
                 *x -= m_bias_cor * self.learning_rate / denominator;
             });
-    }
-
-    fn init_with_layers(&mut self, layers: &Vec<Layer>) {
-        let m: Gradient = layers.iter().map(Layer::init_zero_gradient).collect_vec().into();
-        let v = m.clone();
-        let _ = self.data.insert(AdamData { m, v });
-    }
-}
-
-impl Default for Adam {
-    fn default() -> Self {
-        Self {
-            learning_rate: DEFAULT_LEARNING_RATE,
-            generation: 0,
-            beta1: 0.9,
-            beta2: 0.999,
-            epsilon: 1e-8,
-            data: None,
-        }
     }
 }

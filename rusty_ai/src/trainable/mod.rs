@@ -1,9 +1,7 @@
-use crate::{
-    clip_gradient_norm::ClipGradientNorm,
-    optimizer::IsOptimizer,
-    prelude::*,
-    traits::{IterLayerParams, Propagator, Trainable},
-};
+mod builder;
+
+use crate::{gradient::aliases::OutputGradient, optimizer::IsOptimizer, prelude::*};
+pub use builder::TrainableNeuralNetworkBuilder;
 
 #[derive(Debug)]
 pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
@@ -15,9 +13,11 @@ pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
 }
 
 impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
-    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> { &self.network }
+    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> {
+        &self.network
+    }
 
-    pub(crate) fn new(
+    fn new(
         network: NeuralNetwork<IN, OUT>,
         optimizer: Optimizer,
         retain_gradient: bool,
@@ -28,19 +28,17 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     }
 
     /// calculates the outputs and derivatives of all layers
-    fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation {
+    pub fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation {
         let layer_count = self.network.get_layers().len();
         let mut outputs = Vec::with_capacity(layer_count + 1);
         outputs.push(input.to_vec());
-        let mut derivatives = Vec::with_capacity(layer_count);
 
         for layer in self.network.iter_layers() {
             let input = outputs.last().expect("last element must exists");
-            let (output, derivative) = layer.training_calculate(input);
+            let output = layer.propagate(input);
             outputs.push(output);
-            derivatives.push(derivative);
         }
-        VerbosePropagation::new(outputs, derivatives)
+        VerbosePropagation::new(outputs)
     }
 
     /// Propagate a [`VerbosePropagation`] Result backwards through the Neural
@@ -87,30 +85,32 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         verbose_prop: VerbosePropagation,
         expected_output: &[f64; OUT],
     ) {
-        let mut outputs = verbose_prop.outputs;
-        let last_output = outputs.pop().expect("There is an output layer");
+        let network_output = verbose_prop.outputs.last().expect("There is an output layer");
 
-        // derivatives of the cost function with respect to the output of the neurons in
-        // the last layer.
-        let mut output_gradient =
-            self.network.error_function.gradient(last_output, expected_output); // dC/do_L_i; i = last
-        let inputs_rev = outputs.iter().rev();
+        // gradient of the cost function with respect to the neuron output of the last layer.
+        let mut output_gradient = self.output_gradient(network_output, expected_output);
+        let in_out_pairs = verbose_prop.outputs.array_windows::<2>();
 
-        for (((layer, gradient), derivative_output), input) in self
-            .network
-            .layers
-            .iter()
-            .zip(self.gradient.iter_mut_layers())
-            .zip(verbose_prop.derivatives)
-            .rev()
-            .zip(inputs_rev)
+        for ((layer, gradient), [input, output]) in
+            self.network.iter_layers().zip(self.gradient.iter_mut_layers()).zip(in_out_pairs).rev()
         {
-            output_gradient =
-                layer.backpropagation(input, derivative_output, output_gradient, gradient);
+            output_gradient = layer.backpropagation(input, output, output_gradient, gradient);
         }
     }
 
-    fn optimize(&mut self) { self.optimizer.optimize_weights(&mut self.network, &self.gradient); }
+    /// gradient of the loss with respect to the last neuron activations
+    #[inline]
+    fn output_gradient(
+        &self,
+        last_output: &Vec<f64>,
+        expected_output: &[f64; OUT],
+    ) -> OutputGradient {
+        self.network.error_function.gradient(last_output, expected_output)
+    }
+
+    fn optimize(&mut self) {
+        self.optimizer.optimize_weights(&mut self.network, &self.gradient);
+    }
 }
 
 impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
@@ -146,17 +146,6 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
             });
             self.backpropagation(out, expected_output);
         }
-
-        //println!("{}\n\n", v.into_iter().map(|x|
-        // format!("{x:?}")).collect::<Vec<_>>().join("\n"));
-        println!("{}", self);
-        println!("0       x: {:?}", v[0]);
-        println!("1       w: {:?}", self.network.get_layers()[0].get_weights().get_elements());
-        println!("1       b: {:?}", self.network.get_layers()[0].get_bias().get_vec());
-        println!("1       x: {:?}", v[1]);
-        println!("2       w: {:?}", self.network.get_layers()[1].get_weights().get_elements());
-        println!("2       b: {:?}", self.network.get_layers()[1].get_bias().get_vec());
-        println!("2       x: {:?}", v[2]);
 
         if let Some(clip_gradient_norm) = &self.clip_gradient_norm {
             clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);

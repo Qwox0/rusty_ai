@@ -1,32 +1,3 @@
-use crate::prelude::*;
-
-pub trait Propagator<const IN: usize, const OUT: usize> {
-    fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT>;
-
-    fn test_propagate<'a>(
-        &'a self,
-        data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>,
-    ) -> TestsResult<OUT>;
-}
-
-pub trait Trainable<const IN: usize, const OUT: usize> {
-    type Trainee;
-
-    fn train(
-        &mut self,
-        training_data: &PairList<IN, OUT>,
-        training_amount: usize,
-        epoch_count: usize,
-        callback: impl FnMut(usize, &Self::Trainee),
-    );
-
-    /// Trains the neural network for one generation/epoch. Uses a small data
-    /// set `data_pairs` to find an aproximation for the weights gradient.
-    /// The neural network's Optimizer changes the weights by using the
-    /// calculated gradient.
-    fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>);
-}
-
 pub trait IterParams {
     fn iter_weights<'a>(&'a self) -> impl Iterator<Item = &'a f64>;
     fn iter_bias<'a>(&'a self) -> impl Iterator<Item = &'a f64>;
@@ -56,7 +27,7 @@ mod macros {
     /// impl_IterParams! { $ty:ty : $weights:ident , $bias:ident }
     macro_rules! impl_IterParams {
         ($ty:ty : $weights:ident, $bias:ident) => {
-            impl IterParams for $ty {
+            impl $crate::prelude::IterParams for $ty {
                 fn iter_weights<'a>(&'a self) -> impl Iterator<Item = &'a f64> {
                     self.$weights.iter()
                 }

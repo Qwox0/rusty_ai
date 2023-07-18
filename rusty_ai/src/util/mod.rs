@@ -1,9 +1,11 @@
+mod assign_each;
 mod entrywise_arithmetic;
 mod lerp;
 mod macros;
 mod norm;
 mod rng;
 
+pub use assign_each::*;
 pub use entrywise_arithmetic::*;
 pub use lerp::*;
 pub(crate) use macros::*;
@@ -11,13 +13,9 @@ pub use norm::*;
 pub use rng::*;
 
 pub fn dot_product<T>(vec1: &Vec<T>, vec2: &Vec<T>) -> T
-where
-    T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
-{
+where T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T> {
     assert_eq!(vec1.len(), vec2.len());
-    vec1.iter()
-        .zip(vec2.iter())
-        .fold(T::default(), |acc, (x1, x2)| acc + x1.clone() * x2.clone())
+    vec1.iter().zip(vec2.iter()).fold(T::default(), |acc, (x1, x2)| acc + x1.clone() * x2.clone())
 }
 
 pub trait SetLength {
@@ -28,6 +26,7 @@ pub trait SetLength {
 
 impl<T: Clone> SetLength for Vec<T> {
     type Item = T;
+
     fn set_length(mut self, new_length: usize, default: Self::Item) -> Self {
         self.resize(new_length, default);
         self
@@ -43,7 +42,5 @@ impl<T: Clone> SetLength for Vec<T> {
 }
 
 pub fn cpu_count() -> usize {
-    std::thread::available_parallelism()
-        .map(|x| x.get())
-        .unwrap_or(8)
+    std::thread::available_parallelism().map(|x| x.get()).unwrap_or(8)
 }

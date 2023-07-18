@@ -54,33 +54,57 @@ macro_rules! impl_fn_traits {
     };
 }
 */
+/// impl_fn_traits! { ActivationFunction : Fn<(f64,)> -> f64 ; call }
 macro_rules! impl_fn_traits {
-    ( $type:ty : FnOnce < $in:ty > -> $out:ty ; $method:expr ) => {
+    ($type:ty : $method:ident => FnOnce < $in:ty > -> $out:ty) => {
         impl FnOnce<$in> for $type {
             type Output = $out;
+
             extern "rust-call" fn call_once(self, args: $in) -> Self::Output {
-                $method(&self, args)
+                Self::$method(&self, args)
             }
         }
     };
-    ( $type:ty : FnMut < $in:ty > -> $out:ty ; $method:expr ) => {
-        $crate::util::impl_fn_traits! { $type : FnOnce<$in> -> $out: $type => $method }
+    ($type:ty : $method:ident => FnMut < $in:ty > -> $out:ty) => {
+        $crate::util::impl_fn_traits! { $type : $method => FnOnce<$in> -> $out }
         impl FnMut<$in> for $type {
             extern "rust-call" fn call_mut(&mut self, args: $in) -> Self::Output {
-                $method(&self, args)
+                Self::$method(&self, args)
             }
         }
     };
-    ( $type:ty : Fn < $in:ty > -> $out:ty ; $method:expr ) => {
-        $crate::util::impl_fn_traits! { $type : FnMut<$in> -> $out => $method }
+    ($type:ty : $method:ident => Fn < $in:ty > -> $out:ty) => {
+        $crate::util::impl_fn_traits! { $type : $method => FnMut<$in> -> $out }
         impl Fn<$in> for $type {
-            extern "rust-call" fn call(&mself, args: $in) -> Self::Output {
-                $method(&self, args)
+            extern "rust-call" fn call(&self, args: $in) -> Self::Output {
+                Self::$method(&self, args)
             }
         }
     };
 }
 pub(crate) use impl_fn_traits;
+
+macro_rules! impl_fn {
+    ( $type:ty : Fn ( $( $in:ty ),* ) -> $out:ty ; $method:expr ) => {
+        impl FnOnce<( $( $in , )* )> for $type {
+            type Output = $out;
+            extern "rust-call" fn call_once(self, args: $in) -> Self::Output {
+                $method(&self, args)
+            }
+        }
+        impl FnMut<$in> for $type {
+            extern "rust-call" fn call_mut(&mut self, args: $in) -> Self::Output {
+                $method(&self, args)
+            }
+        }
+        impl Fn<$in> for $type {
+            extern "rust-call" fn call(&self, args: $in) -> Self::Output {
+                $method(&self, args)
+            }
+        }
+    };
+}
+pub(crate) use impl_fn;
 
 /// ```rust, ignore
 /// struct Point { x: usize, y: usize, other: i32 }

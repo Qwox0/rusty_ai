@@ -15,10 +15,11 @@ fn main() {
         .random_layer(5)
         .default_activation_function(ActivationFn::Identity)
         .random_layer(1)
-        .output()
         .error_function(ErrorFunction::SquaredError)
-        .sgd_optimizer(GradientDescent { learning_rate: 0.01 })
-        .clip_gradient_norm(5.0, Norm::Two)
+        .build()
+        .to_trainable_builder()
+        .sgd(GradientDescent { learning_rate: 0.01 })
+        .new_clip_gradient_norm(5.0, Norm::Two)
         .build();
 
     let data = DataBuilder::default().build::<1>(100).gen_pairs(|input| [input[0].sin()]);

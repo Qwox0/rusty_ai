@@ -1,5 +1,4 @@
-use super::ValueList;
-use crate::util::RngWrapper;
+use crate::prelude::*;
 use rand::{distributions::Uniform, prelude::Distribution, Rng};
 use std::ops::Range;
 
@@ -12,10 +11,7 @@ pub struct DataBuilder<D: Distribution<f64>> {
 
 impl Default for DataBuilder<Uniform<f64>> {
     fn default() -> Self {
-        DataBuilder {
-            distr: Uniform::from(0.0..1.0),
-            rng_seed: None,
-        }
+        DataBuilder { distr: Uniform::from(0.0..1.0), rng_seed: None }
     }
 }
 
@@ -27,10 +23,7 @@ impl DataBuilder<Uniform<f64>> {
 
 impl<D: Distribution<f64>> DataBuilder<D> {
     pub fn with_distr(distr: D) -> DataBuilder<D> {
-        DataBuilder {
-            distr,
-            ..Default::default()
-        }
+        DataBuilder { distr, ..Default::default() }
     }
 
     pub fn distr<ND: Distribution<f64>>(self, distr: ND) -> DataBuilder<ND> {

@@ -1,37 +1,30 @@
-mod builder;
-mod network;
-mod trainable;
+pub mod builder;
 
-use crate::{
-    data::Pair,
-    error_function::ErrorFunction,
-    gradient::Gradient,
-    layer::Layer,
-    results::{PropagationResult, TestsResult},
-    traits::{IterLayerParams, Propagator},
-    util::impl_getter,
-};
-pub use builder::*;
-pub use network::*;
-pub use trainable::TrainableNeuralNetwork;
+use crate::prelude::*;
 
 /// layers contains all Hidden Layers and the Output Layers
 #[derive(Debug)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
     layers: Vec<Layer>,
-    error_function: ErrorFunction,
+    pub(crate) error_function: ErrorFunction,
     propagation_buf_len: usize,
 }
 
 impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     #[inline]
-    pub fn get_layers(&self) -> &Vec<Layer> { &self.layers }
+    pub fn get_layers(&self) -> &Vec<Layer> {
+        &self.layers
+    }
 
     /// use [`NeuralNetworkBuilder`] instead!
-    pub(crate) fn new(layers: Vec<Layer>, error_function: ErrorFunction) -> NeuralNetwork<IN, OUT> {
+    fn new(layers: Vec<Layer>, error_function: ErrorFunction) -> NeuralNetwork<IN, OUT> {
         let propagation_buf_len =
             layers.iter().map(Layer::get_input_count).max().unwrap_or(0).max(OUT);
         NeuralNetwork { layers, error_function, propagation_buf_len }
+    }
+
+    pub fn to_trainable_builder(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
+        TrainableNeuralNetworkBuilder::defaults(self)
     }
 
     /// get [`Vec<f64>`] with maximum length and capacity needed for
@@ -50,16 +43,18 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
 impl<const IN: usize, const OUT: usize> IterLayerParams for NeuralNetwork<IN, OUT> {
     type Layer = Layer;
 
-    fn iter_layers<'a>(&'a self) -> impl Iterator<Item = &'a Self::Layer> { self.layers.iter() }
+    fn iter_layers<'a>(&'a self) -> ::core::slice::Iter<'a, Self::Layer> {
+        self.layers.iter()
+    }
 
-    fn iter_mut_layers<'a>(&'a mut self) -> impl Iterator<Item = &'a mut Self::Layer> {
+    fn iter_mut_layers<'a>(&'a mut self) -> ::core::slice::IterMut<'a, Self::Layer> {
         self.layers.iter_mut()
     }
 }
 
 impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN, OUT> {
     fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
-        self.iter_layers().fold(input.to_vec(), |acc, layer| layer.calculate(&acc)).into()
+        self.iter_layers().fold(input.to_vec(), |acc, layer| layer.propagate(&acc)).into()
     }
 
     fn test_propagate<'a>(

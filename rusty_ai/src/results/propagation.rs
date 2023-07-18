@@ -25,9 +25,8 @@ impl<const OUT: usize> Into<[f64; OUT]> for PropagationResult<OUT> {
 #[derive(Debug, Clone)]
 pub struct VerbosePropagation {
     pub outputs: Vec<Vec<f64>>,
-    pub derivatives: Vec<Vec<f64>>,
 }
 
 impl VerbosePropagation {
-    constructor! { pub new -> outputs: Vec<Vec<f64>>, derivatives: Vec<Vec<f64>> }
+    constructor! { pub new -> outputs: Vec<Vec<f64>> }
 }
