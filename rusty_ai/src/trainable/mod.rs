@@ -28,7 +28,7 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     }
 
     /// calculates the outputs and derivatives of all layers
-    fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation {
+    pub fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation {
         let layer_count = self.network.get_layers().len();
         let mut outputs = Vec::with_capacity(layer_count + 1);
         outputs.push(input.to_vec());

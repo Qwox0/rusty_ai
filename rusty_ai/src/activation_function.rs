@@ -123,7 +123,7 @@ impl ActivationFn {
         use ActivationFn::*;
         match self {
             Identity => input,
-            ReLU(_) => leaky_relu(input, 0.0),
+            ReLU(_) => leaky_relu(input, -0.0),
             LeakyReLU(leak_rate, _) => leaky_relu(input, *leak_rate),
             Sigmoid => input.neg().exp().add(1.0).recip(),
 
@@ -422,4 +422,3 @@ mod benches {
         });
     }
 }
-

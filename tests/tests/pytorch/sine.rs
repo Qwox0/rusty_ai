@@ -276,6 +276,7 @@ fn sine_simple1() {
         .error_function(ErrorFunction::SquaredError)
         .to_trainable_builder()
         .sgd(GradientDescent { learning_rate: 0.01 })
+        .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two)
         .build();
 
@@ -290,8 +291,6 @@ fn sine_simple1() {
         epochs,
         test_condition: |epoch| epoch % test_spread == 0,
     });
-
-    panic!()
 }
 
 #[test]
