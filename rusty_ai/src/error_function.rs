@@ -25,7 +25,7 @@ impl ErrorFunction {
         }
     }
 
-    pub fn gradient<'a>(&self, output: Vec<f64>, expected_output: impl AsRef<[f64]>) -> OutputGradient {
+    pub fn gradient<'a>(&self, output: &Vec<f64>, expected_output: impl AsRef<[f64]>) -> OutputGradient {
         assert_eq!(output.len(), expected_output.as_ref().len());
         let errors = output
             .iter()

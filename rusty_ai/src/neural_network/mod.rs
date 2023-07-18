@@ -54,7 +54,7 @@ impl<const IN: usize, const OUT: usize> IterLayerParams for NeuralNetwork<IN, OU
 
 impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN, OUT> {
     fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
-        self.iter_layers().fold(input.to_vec(), |acc, layer| layer.calculate(&acc)).into()
+        self.iter_layers().fold(input.to_vec(), |acc, layer| layer.propagate(&acc)).into()
     }
 
     fn test_propagate<'a>(

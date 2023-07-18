@@ -1,4 +1,5 @@
 #![feature(unboxed_closures)]
+#![feature(array_windows)]
 #![feature(return_position_impl_trait_in_trait)]
 #![feature(associated_type_defaults)]
 #![feature(test)]
@@ -18,10 +19,10 @@ pub mod initializer;
 pub mod layer;
 pub mod matrix;
 pub mod neural_network;
-pub mod trainable;
 pub mod optimizer;
 pub mod prelude;
 pub mod results;
+pub mod trainable;
 pub mod traits;
 pub mod util;
 

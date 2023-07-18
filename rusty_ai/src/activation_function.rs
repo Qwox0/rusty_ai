@@ -1,10 +1,13 @@
 use crate::prelude::*;
-use std::ops::{Add, Neg};
+use std::{
+    f64,
+    ops::{Add, Neg},
+};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub enum ActivationFn {
     /// Identity(x) = x
-    /// Identity(x) = 1
+    /// Identity'(x) = 1
     #[default]
     Identity,
 
@@ -22,15 +25,59 @@ pub enum ActivationFn {
     /// Sigmoid'(x) = e^(-x)/(1+e^(-x))^2 = e^x/(1+e^x)^2
     Sigmoid,
 
-    /// Softmax(X) : x_i -> e^x_i/sum e^x for x in X
+    /// f64^n -> f64^n
+    /// where `X` ↦ `Y`
+    /// where `x_i` ↦ `y_i` = `e^x_i`/(sum `e^x` for x in X)
+    ///
+    /// # Jacobian of Softmax(X):
+    ///
+    /// ┌` y_1(1-y_1)` `-y_1*y_2   ` `…` `-y_1*y_n   `┐
+    /// │`-y_1*y_2   ` ` y_2(1-y_2)` `…` `-y_2*y_n   `│
+    /// │`    …` `          …` `      …` `    …`      │
+    /// └`-y_1*y_n   ` `-y_2*y_n   ` `…` ` y_n(1-y_n)`┘
+    ///
+    /// # Backpropagation
+    ///
+    /// `∇_X(L)` = `(J_Y)^T` * `∇_Y(L)` => `dL/dx_i` = sum `dL/dy` * `dy/dx_i` for y in Y
+    ///
+    /// _dL/dx_i_
+    /// = _dL/dy_1_ * _dy_1/x_i_ `+` _dL/dy_2_ * _dy_2/x_i_ `+` … `+` _dL/dy_n_ * _dy_n/x_i_
+    /// = `sum` _dL/dy_k_ * _dy_k/x_i_ for k in `1..=n`
+    /// = _dL/dy_i_ * `dy_i/x_i` + sum _dL/dy_k_ * `dy_k/x_i` for k in 1..=n and k != i
+    /// = _dL/dy_i_ * `y_i`_(1-y_i)_ `+` sum _dL/dy_k_ * `-y_i`*_y_k_ for k in 1..=n and k != i
+    /// = _y_i_ * (_dL/dy_i_ * `(1-y_i)` - sum _dL/dy_k_ * _y_k_ for k in 1..=n and `k != i`)
+    /// = _y_i_ * (_dL/dy_i_ - sum _dL/dy_k_ * _y_k_ for k in 1..=n)
     Softmax,
-    ///// LogSoftmax(X) = ln(Softmax(X)) = ln( e^x/sum e^x )
-    //LogSoftmax,
-}
 
-#[inline]
-fn relu(x: f64) -> f64 {
-    leaky_relu(x, 0.0)
+    /// f64^n -> f64^n
+    /// where `X` ↦ `Y`
+    /// where `x_i` ↦ `y_i` = ln(`e^x_i`/(sum `e^x` for x in X))
+    ///
+    /// `LogSoftmax(X)` = `ln(Softmax(X))`
+    ///
+    /// # Jacobian of LogSoftmax(X):
+    ///
+    /// ┌`1-exp(y_1)`  ` -exp(y_2)`  `…`  ` -exp(y_n)`┐
+    /// │` -exp(y_1)`  `1-exp(y_2)`  `…`  ` -exp(y_n)`│
+    /// │`     …` `          …` `     …`  `     …`    │
+    /// └` -exp(y_1)`  ` -exp(y_2)`  `…`  `1-exp(y_n)`┘
+    ///
+    /// `w_i` := `e^x_i`/(sum `e^x` for x in X)
+    /// `w_i` = `e^y_i` = `Softmax(x_i)`
+    ///
+    /// ┌`1-w_1`  ` -w_2`  `…`  ` -w_n`┐
+    /// │` -w_1`  `1-w_2`  `…`  ` -w_n`│
+    /// │`  …` `     …` `   …`  `  …`  │
+    /// └` -w_1`  ` -w_2`  `…`  `1-w_n`┘
+    ///
+    /// # Backpropagation
+    ///
+    /// see [`ActivationFn::Softmax`].
+    ///
+    /// `dL/dx_i`
+    /// = _dL/dy_i_ * `1-exp(y_i)` `+` sum _dL/dy_k_ * `-exp(y_k)` for k in 1..=n and k != i
+    /// = _dL/dy_i_ - sum _dL/dy_k_ * `exp(y_k)` for k in 1..=n
+    LogSoftmax,
 }
 
 #[inline]
@@ -38,64 +85,81 @@ fn leaky_relu(x: f64, leak_rate: f64) -> f64 {
     if x.is_sign_positive() { x } else { leak_rate * x }
 }
 
-#[inline]
-fn sigmoid(x: f64) -> f64 {
-    x.neg().exp().add(1.0).recip()
+fn softmax(mut vec: Vec<f64>) -> Vec<f64> {
+    let mut sum = 0.0;
+    for x in vec.iter_mut() {
+        *x = x.exp();
+        sum += *x;
+    }
+    vec.into_iter().map(|x| x / sum).collect()
 }
 
-fn softmax(vec: &mut Vec<f64>) {
-    vec.iter_mut().assign_each(f64::exp);
-    let sum: f64 = vec.iter().sum();
-    vec.iter_mut().assign_each(|x| x / sum);
+fn logsoftmax(mut vec: Vec<f64>) -> Vec<f64> {
+    let mut sum = 0.0;
+    for x in vec.iter_mut() {
+        *x = x.exp();
+        sum += *x;
+    }
+    vec.into_iter().map(|x| (x / sum).ln()).collect()
 }
 
 impl ActivationFn {
+    #[inline]
     pub const fn default_relu() -> ActivationFn {
         ActivationFn::ReLU(1.0)
     }
 
+    #[inline]
     pub const fn default_leaky_relu() -> ActivationFn {
         ActivationFn::LeakyReLU(0.01, 1.0)
     }
 
-    pub fn calc_mut(&self, buf: &mut Vec<f64>) {
-        match self {
-            ActivationFn::Identity => (),
-            ActivationFn::ReLU(_) => buf.iter_mut().assign_each(relu),
-            ActivationFn::LeakyReLU(leak_rate, _) => {
-                buf.iter_mut().assign_each(|x| leaky_relu(x, *leak_rate))
-            },
-            ActivationFn::Sigmoid => buf.iter_mut().assign_each(sigmoid),
-            ActivationFn::Softmax => todo!(),
-        }
-    }
-
-    pub fn calculate(&self, mut input: Vec<f64>) -> Vec<f64> {
-        self.calc_mut(&mut input);
-        input
-    }
-
-    pub fn calculate2(&self, mut input: Vec<f64>) -> Vec<f64> {
-        match self {
-            ActivationFn::Softmax => softmax(&mut input),
-            act_fn => input.iter_mut().for_each(|i| {
-                *i = act_fn._calculate_single(*i);
-            }),
-        }
-        input
-    }
-
-    fn _calculate_single(&self, input: f64) -> f64 {
+    /// Calculates the activation function for a single value [`f64`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the activation function variant requires the entire input Vector.
+    pub fn calculate_single(&self, input: f64) -> f64 {
         use ActivationFn::*;
         match self {
             Identity => input,
-            ReLU(_) => relu(input),
+            ReLU(_) => leaky_relu(input, 0.0),
             LeakyReLU(leak_rate, _) => leaky_relu(input, *leak_rate),
-            Sigmoid => sigmoid(input),
-            Softmax => panic!("Softmax needs entire Vector"),
+            Sigmoid => input.neg().exp().add(1.0).recip(),
+
+            Softmax => panic!("Softmax needs the entire input Vector"),
+            LogSoftmax => panic!("LogSoftmax needs the entire input Vector"),
         }
     }
 
+    /// Calculates the Vector of neuron activation from `input` which should contain weighted sums.
+    ///
+    /// # Propagation
+    ///
+    /// X: Vector of weighted sums
+    /// `x_i`: weighted sum of neuron `i`
+    /// Y: Vector of neuron acrivations.
+    /// `y_i`: activation of neuron `i`.
+    /// self: activation function
+    ///
+    /// General case: `self(X) = Y`
+    /// Usual   case: `self(x_i) = y_i` (example: ReLU)
+    /// Special case (Softmax): `y_i = e^x_i/(sum of e^x for x in X)`
+    pub fn propagate(&self, input: Vec<f64>) -> Vec<f64> {
+        use ActivationFn::*;
+        match self {
+            Identity => input,
+            ReLU(_) | LeakyReLU(..) | Sigmoid => input.into_iter().map(self).collect(),
+            Softmax => softmax(input),
+            LogSoftmax => logsoftmax(input),
+        }
+    }
+
+    /// Calculates the activation function for a single value [`f64`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the activation function variant requires the entire input Vector.
     pub fn derivative(&self, input: f64) -> f64 {
         use ActivationFn::*;
         #[allow(illegal_floating_point_literal_pattern)] // for pattern: 0.0 => ...
@@ -115,20 +179,94 @@ impl ActivationFn {
                 let exp_plus_1 = exp + 1.0;
                 exp / (exp_plus_1 * exp_plus_1) // Sigmoid'(x) = e^x/(1+e^x)^2
             },
-            Softmax => panic!("Softmax needs entire Vector"),
+
+            Softmax => panic!("Softmax needs the entire input Vector"),
+            LogSoftmax => panic!("LogSoftmax needs the entire input Vector"),
         }
     }
 
-    pub fn derivative_from_output(&self, output: &Vec<f64>) -> Vec<f64> {
-        todo!()
+    ///
+    /// # Propagation
+    ///
+    /// see `propagate`.
+    ///
+    /// # Backpropagation
+    ///
+    /// `L`: total loss of the propagation step.
+    ///
+    /// General case: `∇_X(L)` = `(J_Y)^T` * `∇_Y(L)`
+    /// => `dL/dx_i` = sum `dL/dy` * `dy/dx_i` for y in Y
+    /// Usual   case: `dL/dx_i` = `dL/dy_i` * `dy_i/dx_i`
+    pub fn backpropagate(
+        &self,
+        output_gradient: OutputGradient,
+        self_output: &[f64],
+    ) -> WeightedSumGradient {
+        use ActivationFn::*;
+        match self {
+            Identity => output_gradient, // `dy_i/dx_i` == 1.0
+            ReLU(_) | LeakyReLU(..) | Sigmoid => output_gradient
+                .into_iter()
+                .zip(self_output)
+                .map(|(dl_dy, y)| dl_dy * self.derivative(*y))
+                .collect(),
+            Softmax => {
+                // dL/dx_i = y_i * (dL/dy_i - sum dL/dy_k * y_k for k in 1..=n)
+                let s: f64 =
+                    output_gradient.iter().zip(self_output).map(|(&dl_dy, &y)| dl_dy * y).sum();
+                // dL/dx_i = y_i * (dL/dy_i - s)
+                output_gradient
+                    .into_iter()
+                    .map(|out_grad| out_grad - s)
+                    .zip(self_output)
+                    .map(|(out_grad, out)| out * out_grad)
+                    .collect()
+            },
+            LogSoftmax => {
+                // dL/dx_i = dL/dy_i - sum dL/dy_k * exp(y_k) for k in 1..=n
+                let s: f64 = self_output
+                    .iter()
+                    .copied()
+                    .map(f64::exp)
+                    .zip(&output_gradient)
+                    .map(|(exp_y, dl_dy)| dl_dy * exp_y)
+                    .sum();
+                // dL/dx_i = dL/dy_i - s
+                output_gradient.into_iter().map(|dl_dy| dl_dy - s).collect()
+            },
+        }
     }
 
+    /// Calculates the derivative of the activation function for a single value [`f64`] from the
+    /// non-derivative output of the activation function.
+    /// # Panics
+    /// Panics if the activation function variant only supports entire Vector calculations.
+    pub fn derivative_from_output(&self, output: f64) -> f64 {
+        use ActivationFn::*;
+        #[allow(illegal_floating_point_literal_pattern)] // for pattern: 0.0 => ...
+        match self {
+            Identity => 1.0,
+            ReLU(_) => output.is_sign_positive() as u64 as f64,
+            LeakyReLU(leak_rate, d0) => match output {
+                0.0 => *d0,
+                x if x.is_sign_positive() => 1.0,
+                _ => *leak_rate,
+            },
+            Sigmoid => output * (1.0 - output),
+
+            Softmax => panic!("Softmax needs entire Vector"),
+            LogSoftmax => panic!("LogSoftmax needs entire Vector"),
+        }
+    }
+
+    #[inline]
     fn call_single(&self, input: (f64,)) -> f64 {
-        todo!()
+        self.calculate_single(input.0)
     }
 
+    #[inline]
     fn call_vec(&self, input: (Vec<f64>,)) -> Vec<f64> {
-        todo!()
+        self.propagate(input.0)
     }
 }
 
@@ -144,6 +282,7 @@ impl std::fmt::Display for ActivationFn {
             LeakyReLU(a, d0) => write!(f, "Leaky ReLU (a={}; f'(0)={})", a, d0),
             Sigmoid => write!(f, "Sigmoid"),
             Softmax => write!(f, "Softmax"),
+            LogSoftmax => write!(f, "LogSoftmax"),
         }
     }
 }
@@ -154,8 +293,8 @@ mod tests {
 
     #[test]
     fn softmax_wiki() {
-        let mut data = vec![1, 2, 3, 4, 1, 2, 3].into_iter().map(f64::from).collect();
-        softmax(&mut data);
+        let data = vec![1, 2, 3, 4, 1, 2, 3].into_iter().map(f64::from).collect();
+        let data = softmax(data);
         println!("{:?}", data);
         let rounded: Vec<_> = data.iter().map(|x| (1000.0 * x).round() / 1000.0).collect();
         println!("{:?}", rounded);
@@ -168,11 +307,11 @@ mod tests {
         const pi: f64 = std::f64::consts::PI;
         let relu = ActivationFn::ReLU(d0);
 
-        assert_eq!(relu._calculate_single(-10.0), 0.0);
-        assert_eq!(relu._calculate_single(0.0), 0.0);
-        assert_eq!(relu._calculate_single(1.0), 1.0);
-        assert_eq!(relu._calculate_single(pi), pi);
-        assert_eq!(relu._calculate_single(10.0), 10.0);
+        assert_eq!(relu.calculate_single(-10.0), 0.0);
+        assert_eq!(relu.calculate_single(0.0), 0.0);
+        assert_eq!(relu.calculate_single(1.0), 1.0);
+        assert_eq!(relu.calculate_single(pi), pi);
+        assert_eq!(relu.calculate_single(10.0), 10.0);
 
         assert_eq!(relu.derivative(-10.0), 0.0);
         assert_eq!(relu.derivative(0.0), d0);
@@ -188,99 +327,92 @@ mod benches {
     use super::*;
     use test::{black_box, Bencher};
 
-    #[bench]
-    fn bench_relu(b: &mut Bencher) {
-        let relu = ActivationFn::ReLU(0.5);
-        let mut nums: Vec<_> = (-100..100).map(f64::from).collect();
+    macro_rules! make_bench {
+        ($( $bench:ident : $fn:ident )*) => {
+            /*
+            #[test]
+            fn test_backpropagate_softmax1() {
+                let mut output_gradient = [1.61807766, 3.0, 2.0, -5.0];
+                let mut self_output = [10.0, 3.141, -0.1, -3.0];
 
-        b.iter(|| black_box(relu.calc_mut(black_box(&mut nums.clone()))))
-    }
+                use rand::Rng;
 
-    #[bench]
-    fn bench_relu_match(b: &mut Bencher) {
-        let mut nums: Vec<_> = (-100..100).map(f64::from).collect();
-        fn relu(vec: &mut Vec<f64>) {
-            vec.iter_mut().for_each(|x| {
-                *x = match *x {
-                    x if x.is_sign_positive() => x,
-                    _ => 0.0,
-                }
-            })
-        }
+                rand::thread_rng().fill(&mut output_gradient);
+                rand::thread_rng().fill(&mut self_output);
 
-        b.iter(|| black_box(relu(black_box(&mut nums.clone()))))
-    }
+                let output_gradient = output_gradient.to_vec();
+                let self_output = self_output.to_vec();
+                println!("out_grad: {:?}", output_gradient);
+                println!("out     : {:?}", self_output);
 
-    #[bench]
-    fn bench_relu_match_copy(b: &mut Bencher) {
-        let mut nums: Vec<_> = (-100..100).map(f64::from).collect();
-        fn relu_single(input: f64) -> f64 {
-            match input {
-                x if x.is_sign_positive() => x,
-                _ => 0.0,
+                $(
+                    let $fn = $fn(output_gradient.clone(), &self_output);
+                    println!("{:<35}: {:?}", stringify!($fn), $fn);
+                 )*
+
+                panic!()
             }
-        }
-        fn relu(vec: &mut Vec<f64>) {
-            vec.iter_mut().for_each(|x| *x = relu_single(*x))
-        }
+            */
 
-        b.iter(|| black_box(relu(black_box(&mut nums.clone()))))
-    }
+            $(
+                #[bench]
+                fn $bench(b: &mut Bencher) {
+                    let mut vec = vec![0.0; 10000];
 
-    #[bench]
-    fn bench_relu_match_assign_each(b: &mut Bencher) {
-        let mut nums: Vec<_> = (-100..100).map(f64::from).collect();
-        fn relu_single(input: f64) -> f64 {
-            match input {
-                x if x.is_sign_positive() => x,
-                _ => 0.0,
-            }
-        }
-        fn relu(vec: &mut Vec<f64>) {
-            vec.iter_mut().assign_each(relu_single)
-        }
+                    use rand::Rng;
 
-        b.iter(|| black_box(relu(black_box(&mut nums.clone()))))
-    }
+                    rand::thread_rng().fill(vec.as_mut_slice());
 
-    #[bench]
-    fn bench_relu_match_mul(b: &mut Bencher) {
-        let mut nums: Vec<_> = (-100..100).map(f64::from).collect();
-        fn relu(vec: &mut Vec<f64>) {
-            vec.iter_mut().for_each(|x| {
-                *x *= match *x {
-                    x if x.is_sign_positive() => 1.0,
-                    _ => 0.0,
+                    b.iter(|| {
+                        black_box($fn(black_box(vec.clone())))
+                    });
                 }
-            })
+             )*
+
+        };
+    }
+
+    make_bench! {}
+
+    #[bench]
+    fn muladd(bench: &mut Bencher) {
+        let mut a = vec![0.0; 100000];
+        let mut b = vec![0.0; 100000];
+        let mut c = vec![0.0; 100000];
+
+        use rand::Rng;
+
+        rand::thread_rng().fill(a.as_mut_slice());
+        rand::thread_rng().fill(b.as_mut_slice());
+        rand::thread_rng().fill(c.as_mut_slice());
+
+        bench.iter(|| {
+            for i in 0..a.len() {
+                black_box(f64::mul_add(black_box(a[i]), black_box(b[i]), black_box(c[i])));
+            }
+        });
+    }
+
+    #[bench]
+    fn manual_muladd(bench: &mut Bencher) {
+        let mut a = vec![0.0; 100000];
+        let mut b = vec![0.0; 100000];
+        let mut c = vec![0.0; 100000];
+
+        use rand::Rng;
+
+        rand::thread_rng().fill(a.as_mut_slice());
+        rand::thread_rng().fill(b.as_mut_slice());
+        rand::thread_rng().fill(c.as_mut_slice());
+
+        fn mul_add(a: f64, b: f64, c: f64) -> f64 {
+            a * b + c
         }
 
-        b.iter(|| black_box(relu(black_box(&mut nums.clone()))))
-    }
-
-    #[bench]
-    fn bench_relu_branchless(b: &mut Bencher) {
-        let mut nums: Vec<_> = (-100..100).map(f64::from).collect();
-        fn relu(vec: &mut Vec<f64>) {
-            vec.iter_mut().for_each(|x| *x *= x.is_sign_positive() as u64 as f64)
-        }
-
-        b.iter(|| black_box(relu(black_box(&mut nums.clone()))))
-    }
-
-    #[bench]
-    fn calculate_relu(b: &mut Bencher) {
-        let relu = ActivationFn::ReLU(0.5);
-        let nums: Vec<_> = (-100..100).map(f64::from).collect();
-
-        b.iter(|| black_box(relu.calculate(black_box(nums.clone()))))
-    }
-
-    #[bench]
-    fn calculate2_relu(b: &mut Bencher) {
-        let relu = ActivationFn::ReLU(0.5);
-        let nums: Vec<_> = (-100..100).map(f64::from).collect();
-
-        b.iter(|| black_box(relu.calculate2(black_box(nums.clone()))))
+        bench.iter(|| {
+            for i in 0..a.len() {
+                black_box(mul_add(black_box(a[i]), black_box(b[i]), black_box(c[i])));
+            }
+        });
     }
 }

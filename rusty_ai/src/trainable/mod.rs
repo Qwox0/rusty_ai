@@ -13,7 +13,9 @@ pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
 }
 
 impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
-    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> { &self.network }
+    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> {
+        &self.network
+    }
 
     fn new(
         network: NeuralNetwork<IN, OUT>,
@@ -30,15 +32,13 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         let layer_count = self.network.get_layers().len();
         let mut outputs = Vec::with_capacity(layer_count + 1);
         outputs.push(input.to_vec());
-        let mut derivatives = Vec::with_capacity(layer_count);
 
         for layer in self.network.iter_layers() {
             let input = outputs.last().expect("last element must exists");
-            let (output, derivative) = layer.training_calculate(input);
+            let output = layer.propagate(input);
             outputs.push(output);
-            derivatives.push(derivative);
         }
-        VerbosePropagation::new(outputs, derivatives)
+        VerbosePropagation::new(outputs)
     }
 
     /// Propagate a [`VerbosePropagation`] Result backwards through the Neural
@@ -85,24 +85,17 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         verbose_prop: VerbosePropagation,
         expected_output: &[f64; OUT],
     ) {
-        let mut outputs = verbose_prop.outputs;
-        let last_output = outputs.pop().expect("There is an output layer");
+        let network_output = verbose_prop.outputs.last().expect("There is an output layer");
 
         // derivatives of the cost function with respect to the output of the neurons in
         // the last layer.
-        let mut output_gradient = self.output_gradient(last_output, expected_output);
-        let inputs_rev = outputs.iter().rev();
+        let mut output_gradient = self.output_gradient(network_output, expected_output);
+        let inputs_rev = verbose_prop.outputs.array_windows::<2>();
 
-        for (((layer, gradient), derivative_output), input) in self
-            .network
-            .iter_layers()
-            .zip(self.gradient.iter_mut_layers())
-            .zip(verbose_prop.derivatives)
-            .rev()
-            .zip(inputs_rev)
+        for ((layer, gradient), [input, output]) in
+            self.network.iter_layers().zip(self.gradient.iter_mut_layers()).zip(inputs_rev).rev()
         {
-            output_gradient =
-                layer.backpropagation(input, derivative_output, output_gradient, gradient);
+            output_gradient = layer.backpropagation(input, output, output_gradient, gradient);
         }
     }
 
@@ -110,13 +103,15 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     #[inline]
     fn output_gradient(
         &self,
-        last_output: Vec<f64>,
+        last_output: &Vec<f64>,
         expected_output: &[f64; OUT],
     ) -> OutputGradient {
         self.network.error_function.gradient(last_output, expected_output)
     }
 
-    fn optimize(&mut self) { self.optimizer.optimize_weights(&mut self.network, &self.gradient); }
+    fn optimize(&mut self) {
+        self.optimizer.optimize_weights(&mut self.network, &self.gradient);
+    }
 }
 
 impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {

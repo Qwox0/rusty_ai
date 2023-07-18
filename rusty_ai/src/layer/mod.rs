@@ -64,24 +64,16 @@ impl Layer {
         self.weights.get_width()
     }
 
-    fn weights_sums(&self, inputs: &Vec<f64>) -> Vec<f64> {
+    fn weighted_sums(&self, inputs: &Vec<f64>) -> Vec<f64> {
         (&self.weights * inputs).add_entries(self.bias.get_vec())
     }
 
     /// An Input layer doesn't change the input, but still multiplies by the
     /// identity matrix and uses the identity activation function. It might
     /// be a good idea to skip the Input layer to reduce calculations.
-    pub fn calculate(&self, inputs: &Vec<f64>) -> Vec<f64> {
-        let tmp = self.weights_sums(inputs);
-        self.activation_function.calculate(tmp)
-    }
-
-    /// like [`calculate`] but also calculate the derivatives of the
-    /// activation function
-    pub fn training_calculate(&self, inputs: &Vec<f64>) -> (Vec<f64>, Vec<f64>) {
-        let outputs = self.calculate(inputs);
-        let derivatives = self.activation_function.derivative_from_output(&outputs);
-        (outputs, derivatives)
+    pub fn propagate(&self, inputs: &Vec<f64>) -> Vec<f64> {
+        let tmp = self.weighted_sums(inputs);
+        self.activation_function.propagate(tmp)
     }
 
     pub fn iter_neurons(&self) -> impl Iterator<Item = (&Vec<f64>, &f64)> {
@@ -94,35 +86,34 @@ impl Layer {
 
     pub(crate) fn backpropagation(
         &self,
-        input: &Vec<f64>,
-        derivative_output: Vec<f64>,
-        output_grad: OutputGradient,
+        input: &[f64],
+        output: &[f64],
+        output_gradient: OutputGradient,
         gradient: &mut GradientLayer,
     ) -> InputGradient {
         let input_count = self.get_input_count();
         let neuron_count = self.get_neuron_count();
         assert_eq!(input.len(), input_count);
-        assert_eq!(derivative_output.len(), neuron_count);
-        assert_eq!(output_grad.len(), neuron_count);
+        assert_eq!(output.len(), neuron_count);
+        assert_eq!(output_gradient.len(), neuron_count);
 
         let mut inputs_grad = vec![0.0; input_count];
 
-        let mul = |(a, b): (f64, f64)| a * b;
-        let weights_sums = derivative_output.into_iter().zip(output_grad).map(mul);
+        let weighted_sums_grad = self.activation_function.backpropagate(output_gradient, output);
 
-        for (((weights, _), (weights_grad, bias_grad)), weighted_sum_grad) in
-            self.iter_neurons().zip(gradient.iter_mut_neurons()).zip(weights_sums)
-        {
-            *bias_grad += weighted_sum_grad;
+        self.iter_neurons().zip(gradient.iter_mut_neurons()).zip(weighted_sums_grad).for_each(
+            |(((weights, _), (weights_grad, bias_grad)), weighted_sum_grad)| {
+                *bias_grad += weighted_sum_grad;
 
-            for (weight_grad, input) in weights_grad.iter_mut().zip(input) {
-                *weight_grad += input * weighted_sum_grad;
-            }
+                for (weight_derivative, input) in weights_grad.iter_mut().zip(input) {
+                    *weight_derivative += input * weighted_sum_grad;
+                }
 
-            for (input_grad, weight) in inputs_grad.iter_mut().zip(weights) {
-                *input_grad += weight * weighted_sum_grad;
-            }
-        }
+                for (input_derivative, weight) in inputs_grad.iter_mut().zip(weights) {
+                    *input_derivative += weight * weighted_sum_grad;
+                }
+            },
+        );
 
         inputs_grad
     }

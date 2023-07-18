@@ -20,16 +20,13 @@ impl<const OUT: usize> Into<[f64; OUT]> for PropagationResult<OUT> {
     }
 }
 
-pub type LayerOutput = Vec<f64>;
-
 /// contains the output and output derivatives of every layer
 /// caching this data is useful for backpropagation
 #[derive(Debug, Clone)]
 pub struct VerbosePropagation {
-    pub outputs: Vec<LayerOutput>,
-    pub derivatives: Vec<LayerOutput>,
+    pub outputs: Vec<Vec<f64>>,
 }
 
 impl VerbosePropagation {
-    constructor! { pub new -> outputs: Vec<Vec<f64>>, derivatives: Vec<Vec<f64>> }
+    constructor! { pub new -> outputs: Vec<Vec<f64>> }
 }
