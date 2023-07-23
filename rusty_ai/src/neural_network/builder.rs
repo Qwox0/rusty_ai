@@ -70,9 +70,35 @@ impl<IN, LP, RNG> NeuralNetworkBuilder<IN, LP, RNG> {
     }
 }
 
-impl<const IN: usize> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
+impl<const IN: usize, LP, RNG> NeuralNetworkBuilder<In<IN>, LP, RNG> {
+    fn last_neuron_count(&self) -> usize {
+        self.layers.last().map(Layer::get_neuron_count).unwrap_or(IN)
+    }
+}
+
+pub type BuilderWithoutParts<const IN: usize> =
+    NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper>;
+pub type BuilderWithParts<const IN: usize> = NeuralNetworkBuilder<In<IN>, LayerParts, RngWrapper>;
+
+/// This ensures a consistent interface between [`BuilderWithoutParts`] and [`BuilderWithParts`].
+pub trait BuildLayer<const IN: usize> {
+    fn _layer(self, layer: Layer) -> BuilderWithoutParts<IN>;
+
+    fn layer(
+        self,
+        neurons: usize,
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+    ) -> BuilderWithParts<IN>;
+
+    fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT>;
+
+    fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT>;
+}
+
+impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
     /// Add a [`Layer`] to the NeuralNetwork.
-    pub fn _layer(mut self, layer: Layer) -> Self {
+    fn _layer(mut self, layer: Layer) -> Self {
         assert_eq!(
             layer.get_input_count(),
             self.last_neuron_count(),
@@ -83,12 +109,12 @@ impl<const IN: usize> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
     }
 
     /// Use [`Initializer`] to add a new [`Layer`] to the NeuralNetwork.
-    pub fn layer(
+    fn layer(
         mut self,
         neurons: usize,
         weights_init: Initializer<Matrix<f64>>,
         bias_init: Initializer<LayerBias>,
-    ) -> NeuralNetworkBuilder<In<IN>, LayerParts, RngWrapper> {
+    ) -> BuilderWithParts<IN> {
         let input_count = self.last_neuron_count();
         let weights = weights_init.init_weights(&mut self.rng, input_count, neurons);
         let bias = bias_init.init_bias(&mut self.rng, input_count, neurons);
@@ -96,16 +122,12 @@ impl<const IN: usize> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
         NeuralNetworkBuilder { layer_parts, ..self }
     }
 
-    fn last_neuron_count(&self) -> usize {
-        self.layers.last().map(Layer::get_neuron_count).unwrap_or(IN)
-    }
-
     /// Builds [`NeuralNetwork`].
     ///
     /// # Panics
     ///
     /// Panics if `OUT` doesn't match the the neuron count of the last layer.
-    pub fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT> {
+    fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT> {
         assert_eq!(self.last_neuron_count(), OUT);
         NeuralNetwork::new(self.layers, self.error_function.unwrap_or_default())
     }
@@ -115,39 +137,62 @@ impl<const IN: usize> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
     /// # Panics
     ///
     /// See `NeuralNetworkBuilder::build`
-    pub fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
+    fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
         self.build().to_trainable_builder()
     }
 }
 
-impl<const IN: usize> NeuralNetworkBuilder<In<IN>, LayerParts, RngWrapper> {
+impl<const IN: usize> BuilderWithParts<IN> {
     /// Sets the [`ActivationFn`] for the previously defined layer.
-    pub fn activation_function(
-        self,
-        activation_function: ActivationFn,
-    ) -> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
+    pub fn activation_function(self, activation_function: ActivationFn) -> BuilderWithoutParts<IN> {
         let LayerParts { weights, bias } = self.layer_parts;
         let layer = Layer::new(weights, bias, activation_function);
         NeuralNetworkBuilder { layer_parts: NoLayerParts, ..self }._layer(layer)
     }
 
+    /// Uses the `self.default_activation_function` for the previously defined layer.
+    pub fn use_default_activation_function(self) -> BuilderWithoutParts<IN> {
+        let default = self.default_activation_function;
+        self.activation_function(default)
+    }
+}
+
+impl<const IN: usize> BuildLayer<IN> for BuilderWithParts<IN> {
     /// Add a [`Layer`] to the NeuralNetwork.
     /// This uses the `self.default_activation_function` for the previously defined layer.
-    pub fn _layer(self, layer: Layer) -> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
-        let default = self.default_activation_function;
-        self.activation_function(default)._layer(layer)
+    fn _layer(self, layer: Layer) -> BuilderWithoutParts<IN> {
+        self.use_default_activation_function()._layer(layer)
     }
 
     /// Use [`Initializer`] to add a new [`Layer`] to the NeuralNetwork.
     /// This uses the `self.default_activation_function` for the previously defined layer.
-    pub fn layer(
+    fn layer(
         self,
         neurons: usize,
         weights_init: Initializer<Matrix<f64>>,
         bias_init: Initializer<LayerBias>,
     ) -> Self {
-        let default = self.default_activation_function;
-        self.activation_function(default).layer(neurons, weights_init, bias_init)
+        self.use_default_activation_function().layer(neurons, weights_init, bias_init)
+    }
+
+    /// Builds [`NeuralNetwork`].
+    /// This uses the `self.default_activation_function` for the previously defined layer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `OUT` doesn't match the the neuron count of the last layer.
+    fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT> {
+        self.use_default_activation_function().build()
+    }
+
+    /// Alias for `.build().to_trainable_builder()`
+    /// This uses the `self.default_activation_function` for the previously defined layer.
+    ///
+    /// # Panics
+    ///
+    /// See `NeuralNetworkBuilder::build`
+    fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
+        self.use_default_activation_function().to_trainable_builder()
     }
 }
 

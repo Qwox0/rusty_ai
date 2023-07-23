@@ -1,5 +1,5 @@
 [package]
-name = "examples"
+name = "sine"
 edition.workspace = true
 version.workspace = true
 

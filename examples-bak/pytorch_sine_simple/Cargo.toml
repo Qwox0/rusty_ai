@@ -1,7 +1,0 @@
-[package]
-name = "pytorch_sine_simple"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-rusty_ai.workspace = true
