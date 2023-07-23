@@ -39,6 +39,7 @@ pub enum Initializer<T> {
 
 pub type WeightsInitializer = Initializer<Matrix<f64>>;
 pub type BiasInitializer = Initializer<LayerBias>;
+// pub type DataInitializer<const DIM: usize> = Initializer<[f64; DIM]>;
 
 impl<T> Initializer<T> {
     #[allow(non_snake_case)]

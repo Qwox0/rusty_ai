@@ -1,7 +1,0 @@
-[package]
-name = "sine"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-rusty_ai.workspace = true

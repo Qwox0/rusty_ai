@@ -1,6 +1,6 @@
-use crate::results::{TrainingsResult, TestsResult};
+use crate::results::{TestsResult, TrainingsResult};
 use itertools::Itertools;
-use std::{fs::File, io::Write};
+use std::{fmt::Display, fs::File, io::Write};
 
 pub enum JsVariableType {
     Var,
@@ -26,7 +26,7 @@ pub trait ExportToJs {
     fn export_to_js_checked(
         &self,
         js_file: &mut std::fs::File,
-        variable_name: &str,
+        variable_name: impl Display,
     ) -> std::io::Result<()> {
         writeln!(
             js_file,
@@ -37,9 +37,8 @@ pub trait ExportToJs {
     }
 
     /// like `Self::export_to_js` but panics if file write fails
-    fn export_to_js(&self, js_file: &mut File, variable_name: &str) {
-        self.export_to_js_checked(js_file, variable_name)
-            .expect("could write to file");
+    fn export_to_js(&self, js_file: &mut File, variable_name: impl Display) {
+        self.export_to_js_checked(js_file, variable_name).expect("could write to file");
     }
 }
 
@@ -74,10 +73,7 @@ impl ExportToJs for Vec<f64> {
 
 impl ExportToJs for Vec<[f64; 1]> {
     fn get_js_value(&self) -> String {
-        self.iter()
-            .map(|x| x[0])
-            .collect::<Vec<f64>>()
-            .get_js_value()
+        self.iter().map(|x| x[0]).collect::<Vec<f64>>().get_js_value()
     }
 }
 
@@ -86,11 +82,7 @@ impl ExportToJs for TestsResult<1> {
         format!(
             "{{ error: '{}', outputs: {:?} }}",
             self.error,
-            self.outputs
-                .iter()
-                .map(|a| a.0)
-                .flatten()
-                .collect::<Vec<f64>>()
+            self.outputs.iter().map(|a| a.0).flatten().collect::<Vec<f64>>()
         )
     }
 }
@@ -98,6 +90,7 @@ impl ExportToJs for TestsResult<1> {
 impl ExportToJs for ExportedVariables {
     // allow duplicate variable definitions
     const JS_VARIABLE_TYPE: JsVariableType = JsVariableType::Var;
+
     fn get_js_value(&self) -> String {
         format!("[{}]", self.list.iter().map(ToString::to_string).join(","))
     }
@@ -105,9 +98,6 @@ impl ExportToJs for ExportedVariables {
 
 impl<const IN: usize, const OUT: usize> ExportToJs for TrainingsResult<'_, IN, OUT> {
     fn get_js_value(&self) -> String {
-        format!(
-            "[{{ gen: {}, output: {:?} }}]",
-            self.generation, self.output,
-        )
+        format!("[{{ gen: {}, output: {:?} }}]", self.generation, self.output,)
     }
 }

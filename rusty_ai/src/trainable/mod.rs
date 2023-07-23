@@ -113,23 +113,8 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     }
 }
 
-impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
+impl<const IN: usize, const OUT: usize> Trainer<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
     type Trainee = NeuralNetwork<IN, OUT>;
-
-    fn train(
-        &mut self,
-        training_data: &PairList<IN, OUT>,
-        training_amount: usize,
-        epoch_count: usize,
-        mut callback: impl FnMut(usize, &Self::Trainee),
-    ) {
-        let mut rng = rand::thread_rng();
-        for epoch in 1..=epoch_count {
-            let training_data = training_data.choose_multiple(&mut rng, training_amount);
-            self.training_step(training_data);
-            callback(epoch, &self.network);
-        }
-    }
 
     fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>) {
         if !self.retain_gradient {
@@ -149,14 +134,17 @@ impl<const IN: usize, const OUT: usize> Trainable<IN, OUT> for TrainableNeuralNe
 
         if let Some(clip_gradient_norm) = &self.clip_gradient_norm {
             clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);
-            //clip_gradient_norm.clip_gradient_pytorch_device(&mut
-            // self.gradient);
+            //clip_gradient_norm.clip_gradient_pytorch_device(&mut self.gradient);
         } else {
             #[cfg(debug_assertions)]
             eprintln!("WARN: It is recommended to clip the gradient")
         }
 
         self.optimize()
+    }
+
+    fn get_trainee(&self) -> &Self::Trainee {
+        &self.network
     }
 }
 
