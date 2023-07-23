@@ -84,7 +84,7 @@ impl Layer {
         self.weights.iter_rows_mut().zip(self.bias.iter_mut())
     }
 
-    pub(crate) fn backpropagation(
+    pub(crate) fn backpropagate(
         &self,
         input: &[f64],
         output: &[f64],

@@ -191,6 +191,7 @@ impl ParallelSlice<Pair<1, 1>> for PairList<1, 1> {
 fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
     const SEED: u64 = 69420;
     const NEURON_COUNT: usize = 5;
+    /*
     let ai = NeuralNetworkBuilder::default()
         .rng_seed(SEED)
         .default_activation_function(ActivationFn::default_relu())
@@ -203,6 +204,8 @@ fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
         .to_trainable_builder()
         .sgd(GradientDescent::default())
         .build();
+        */
+    let ai = todo!();
 
     let data =
         DataBuilder::uniform(-5.0..5.0).seed(SEED).build(data_count).gen_pairs(|x| [x[0].sin()]);

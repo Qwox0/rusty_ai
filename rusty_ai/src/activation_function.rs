@@ -51,7 +51,7 @@ pub enum ActivationFn {
 
     /// f64^n -> f64^n
     /// where `X` ↦ `Y`
-    /// where `x_i` ↦ `y_i` = ln(`e^x_i`/(sum `e^x` for x in X))
+    /// where `x_i` ↦ `y_i` = `ln(e^x_i/(sum e^x for x in X))` = `x_i - ln(sum e^x for x in X)`
     ///
     /// `LogSoftmax(X)` = `ln(Softmax(X))`
     ///
@@ -94,13 +94,9 @@ fn softmax(mut vec: Vec<f64>) -> Vec<f64> {
     vec.into_iter().map(|x| x / sum).collect()
 }
 
-fn logsoftmax(mut vec: Vec<f64>) -> Vec<f64> {
-    let mut sum = 0.0;
-    for x in vec.iter_mut() {
-        *x = x.exp();
-        sum += *x;
-    }
-    vec.into_iter().map(|x| (x / sum).ln()).collect()
+fn logsoftmax(vec: Vec<f64>) -> Vec<f64> {
+    let ln_sum = vec.iter().copied().map(f64::exp).sum::<f64>().ln();
+    vec.into_iter().map(|x| x - ln_sum).collect()
 }
 
 impl ActivationFn {
@@ -335,31 +331,6 @@ mod benches {
 
     macro_rules! make_bench {
         ($( $bench:ident : $fn:ident )*) => {
-            /*
-            #[test]
-            fn test_backpropagate_softmax1() {
-                let mut output_gradient = [1.61807766, 3.0, 2.0, -5.0];
-                let mut self_output = [10.0, 3.141, -0.1, -3.0];
-
-                use rand::Rng;
-
-                rand::thread_rng().fill(&mut output_gradient);
-                rand::thread_rng().fill(&mut self_output);
-
-                let output_gradient = output_gradient.to_vec();
-                let self_output = self_output.to_vec();
-                println!("out_grad: {:?}", output_gradient);
-                println!("out     : {:?}", self_output);
-
-                $(
-                    let $fn = $fn(output_gradient.clone(), &self_output);
-                    println!("{:<35}: {:?}", stringify!($fn), $fn);
-                 )*
-
-                panic!()
-            }
-            */
-
             $(
                 #[bench]
                 fn $bench(b: &mut Bencher) {
@@ -378,7 +349,10 @@ mod benches {
         };
     }
 
-    make_bench! {}
+    make_bench! {
+        bench_softmax: softmax
+        bench_logsoftmax: logsoftmax
+    }
 
     #[bench]
     fn muladd(bench: &mut Bencher) {

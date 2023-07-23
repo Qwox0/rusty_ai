@@ -94,7 +94,7 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
         for ((layer, gradient), [input, output]) in
             self.network.iter_layers().zip(self.gradient.iter_mut_layers()).zip(in_out_pairs).rev()
         {
-            output_gradient = layer.backpropagation(input, output, output_gradient, gradient);
+            output_gradient = layer.backpropagate(input, output, output_gradient, gradient);
         }
     }
 
