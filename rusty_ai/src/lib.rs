@@ -13,7 +13,6 @@ pub mod activation_function;
 pub mod clip_gradient_norm;
 pub mod data;
 pub mod error_function;
-pub mod export;
 pub mod gradient;
 pub mod initializer;
 pub mod layer;

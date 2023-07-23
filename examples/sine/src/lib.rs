@@ -1,10 +1,7 @@
 #![feature(test)]
 
-use rusty_ai::{
-    export::{ExportToJs, ExportedVariables},
-    prelude::*,
-};
-use std::{fs::File, io::Write, path::Path};
+use rusty_ai::prelude::*;
+use std::{fmt::Display, fs::File, io::Write, path::Path};
 
 fn get_out_js_path() -> &'static str {
     if Path::new("./index.js").exists() {
@@ -25,7 +22,6 @@ pub fn main() {
         .append(true)
         .open(out_js_path)
         .expect("could open file");
-    let mut result_names = ExportedVariables::new("generations");
 
     let mut ai = NeuralNetworkBuilder::default()
         .default_activation_function(ActivationFn::ReLU(0.0))
@@ -47,7 +43,16 @@ pub fn main() {
 
     let training_data = DataBuilder::uniform(-2.0..2.0).build::<1>(1000).gen_pairs(|[x]| [x.sin()]);
     let test_data = DataBuilder::uniform(-2.0..2.0).build::<1>(30).gen_pairs(|[x]| [x.sin()]);
-    test_data.export_to_js(&mut js_file, "data");
+    let (x, y): (Vec<_>, Vec<_>) =
+        test_data.iter().map(|pair| (pair.input[0], pair.output[0])).unzip();
+
+    writeln!(
+        js_file,
+        "let data = {{ x: '{}', y: '{}' }};",
+        stringify_arr(x.iter()),
+        stringify_arr(y.iter())
+    )
+    .unwrap();
 
     let mut js_res_vars = vec![];
 
@@ -75,20 +80,14 @@ fn export_res(
     let js_var_name = format!("gen{epoch}_result");
     writeln!(
         js_file,
-        "let {js_var_name} = {{ gen: {epoch}, error: '{}', outputs: [{}] }};",
+        "let {js_var_name} = {{ gen: {epoch}, error: '{}', outputs: {} }};",
         res.error,
-        res.outputs.into_iter().map(|out| format!("{}", out.0[0])).collect::<Vec<_>>().join(",")
+        stringify_arr(res.outputs.into_iter().map(|out| out.0[0]))
     )
     .unwrap();
     js_res_vars.push(js_var_name);
+}
 
-    //let gen400_result = { error: '10.053866127675557', outputs: [0.14807035647034178,
-    // -0.7917905689621438, -0.49526150319343965, -0.8513780207835094, -0.17993831721165388,
-    // 0.14807035647034178, -0.8548794817372863, -0.4830072998613164, 1.37948929184945,
-    // 1.4769100643706403, -0.15053645814796968, 0.14807035647034178, 0.14807035647034178,
-    // 0.8783821697585126, -0.5378436537509715, 0.017570767374352772, 0.11982417131207236,
-    // -0.861017252909277, 0.8054305691075897, 0.14807035647034178, 0.14807035647034178,
-    // 0.26032399314725874, 0.14807035647034178, 0.14807035647034178, 0.14807035647034178,
-    // 0.14807035647034178, 0.14807035647034178, 0.14807035647034178, 0.6078028467185074,
-    // 0.14807035647034178] };
+fn stringify_arr(iter: impl Iterator<Item = impl Display>) -> String {
+    format!("[{}]", iter.map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
 }
