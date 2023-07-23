@@ -1,25 +1,16 @@
-use crate::{
-    clip_gradient_norm::ClipGradientNorm, initializer::Initializer, optimizer::IsOptimizer,
-    prelude::*, util::RngWrapper,
-};
-use itertools::Itertools;
-use rand::{distributions::Uniform, prelude::Distribution};
-use std::{iter::once, marker::PhantomData};
+use crate::prelude::*;
+use std::marker::PhantomData;
 
 // Dimension Markers
 pub struct NoDim;
 pub struct In<const IN: usize>;
-pub struct InOut<const IN: usize, const OUT: usize>;
 
 // Layer parts Markers
-/*
-pub struct NoParts;
+pub struct NoLayerParts;
 pub struct LayerParts {
     weights: Matrix<f64>,
-    bias: Option<LayerBias>,
-    activation_function: Option<ActivationFn>,
+    bias: LayerBias,
 }
-*/
 
 // Optimizer Markers
 pub struct NoOptimizer;
@@ -30,131 +21,89 @@ pub struct Seed(Option<u64>);
 
 // Builder
 #[derive(Debug)]
-pub struct NeuralNetworkBuilder<DIM, RNG, INIT, OPT>
-where INIT: Initializer
-{
+pub struct NeuralNetworkBuilder<IN, LP, RNG> {
     layers: Vec<Layer>,
-    dim: PhantomData<DIM>,
+    layer_parts: LP,
     error_function: Option<ErrorFunction>,
+
+    input_dim: PhantomData<IN>,
 
     // for generation
     rng: RNG,
-    default_initializer: INIT,
     default_activation_function: ActivationFn,
-
-    // for trainable neural network
-    optimizer: OPT,
-    retain_gradient: bool,
-    clip_grad_norm: Option<ClipGradientNorm>,
 }
 
-impl Default for NeuralNetworkBuilder<NoDim, Seed, Rand<Uniform<f64>>, NoOptimizer> {
+impl Default for NeuralNetworkBuilder<NoDim, NoLayerParts, Seed> {
     fn default() -> Self {
         NeuralNetworkBuilder {
             layers: vec![],
-            dim: PhantomData,
+            layer_parts: NoLayerParts,
             error_function: None,
+            input_dim: PhantomData,
             rng: Seed(None),
-            default_initializer: Rand(Uniform::from(0.0..1.0)),
             default_activation_function: ActivationFn::default(),
-            optimizer: NoOptimizer,
-            retain_gradient: true,
-            clip_grad_norm: None,
         }
     }
 }
 
-macro_rules! update_phantom {
-    ($builder:expr) => {
-        NeuralNetworkBuilder { dim: PhantomData, ..$builder }
-    };
-}
-
-impl<DIM, RNG, INIT, OPT> NeuralNetworkBuilder<DIM, RNG, INIT, OPT>
-where INIT: Initializer
-{
-    pub fn error_function(mut self, error_function: ErrorFunction) -> Self {
-        let _ = self.error_function.insert(error_function);
+impl NeuralNetworkBuilder<NoDim, NoLayerParts, Seed> {
+    pub fn rng_seed(mut self, seed: u64) -> Self {
+        let _ = self.rng.0.insert(seed);
         self
     }
 
-    pub fn default_initializer<NINIT: Initializer>(
-        self,
-        initializer: NINIT,
-    ) -> NeuralNetworkBuilder<DIM, RNG, NINIT, OPT> {
-        NeuralNetworkBuilder { default_initializer: initializer, ..self }
+    pub fn input<const N: usize>(self) -> NeuralNetworkBuilder<In<N>, NoLayerParts, RngWrapper> {
+        let rng = RngWrapper::new(self.rng.0);
+        NeuralNetworkBuilder { input_dim: PhantomData, rng, ..self }
+    }
+}
+
+impl<IN, LP, RNG> NeuralNetworkBuilder<IN, LP, RNG> {
+    pub fn error_function(mut self, error_function: ErrorFunction) -> Self {
+        let _ = self.error_function.insert(error_function);
+        self
     }
 
     pub fn default_activation_function(mut self, act_func: ActivationFn) -> Self {
         self.default_activation_function = act_func;
         self
     }
-
-    pub fn retain_gradient(mut self, retain_gradient: bool) -> Self {
-        self.retain_gradient = retain_gradient;
-        self
-    }
 }
 
-impl<INIT> NeuralNetworkBuilder<NoDim, Seed, INIT, NoOptimizer>
-where INIT: Initializer
-{
-    pub fn rng_seed(mut self, seed: u64) -> Self {
-        let _ = self.rng.0.insert(seed);
-        self
-    }
-
-    pub fn input<const N: usize>(
-        self,
-    ) -> NeuralNetworkBuilder<In<N>, RngWrapper, INIT, NoOptimizer> {
-        let rng = RngWrapper::new(self.rng.0);
-        NeuralNetworkBuilder { dim: PhantomData, rng, ..self }
-    }
-}
-
-impl<INIT, const IN: usize> NeuralNetworkBuilder<In<IN>, RngWrapper, INIT, NoOptimizer>
-where INIT: Initializer
-{
-    pub fn layer(mut self, layer: Layer) -> Self {
+impl<const IN: usize> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
+    /// Add a [`Layer`] to the NeuralNetwork.
+    pub fn _layer(mut self, layer: Layer) -> Self {
         assert_eq!(
             layer.get_input_count(),
             self.last_neuron_count(),
-            "input count doesn't match previously set value"
+            "input count doesn't match output count of previous layer"
         );
         self.layers.push(layer);
         self
     }
 
-    pub fn random_layer(mut self, neurons: usize) -> Self {
-        let inputs = self.last_neuron_count();
-        let act_fn = self.default_activation_function;
-        let layer = self.default_initializer.init_layer(&mut self.rng, inputs, neurons, act_fn);
-        self.layer(layer)
-    }
-
-    /// # Panics
-    /// Panics if `neurons_per_layer.len() == 0`
-    pub fn random_layers(mut self, neurons_per_layer: &[usize]) -> Self {
-        assert!(neurons_per_layer.len() > 0);
-        let last_count = self.last_neuron_count();
-        let act_fn = self.default_activation_function;
-        for (&last, &count) in once(&last_count).chain(neurons_per_layer).tuple_windows() {
-            let layer = self.default_initializer.init_layer(&mut self.rng, last, count, act_fn);
-            self.layers.push(layer);
-        }
-        update_phantom!(self)
-    }
-
-    pub fn custom_layer(self, weights: Matrix<f64>, bias: LayerBias) -> Self {
-        let layer = Layer::new(weights, bias, self.default_activation_function);
-        self.layer(layer)
+    /// Use [`Initializer`] to add a new [`Layer`] to the NeuralNetwork.
+    pub fn layer(
+        mut self,
+        neurons: usize,
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+    ) -> NeuralNetworkBuilder<In<IN>, LayerParts, RngWrapper> {
+        let input_count = self.last_neuron_count();
+        let weights = weights_init.init_weights(&mut self.rng, input_count, neurons);
+        let bias = bias_init.init_bias(&mut self.rng, input_count, neurons);
+        let layer_parts = LayerParts { weights, bias };
+        NeuralNetworkBuilder { layer_parts, ..self }
     }
 
     fn last_neuron_count(&self) -> usize {
         self.layers.last().map(Layer::get_neuron_count).unwrap_or(IN)
     }
 
+    /// Builds [`NeuralNetwork`].
+    ///
     /// # Panics
+    ///
     /// Panics if `OUT` doesn't match the the neuron count of the last layer.
     pub fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT> {
         assert_eq!(self.last_neuron_count(), OUT);
@@ -162,74 +111,43 @@ where INIT: Initializer
     }
 
     /// Alias for `.build().to_trainable_builder()`
+    ///
     /// # Panics
-    /// See `NeuralNetworkBuilder::build`:
-    /// Panics if `OUT` doesn't match the the neuron count of the last layer.
+    ///
+    /// See `NeuralNetworkBuilder::build`
     pub fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
         self.build().to_trainable_builder()
     }
 }
 
-/*
-impl<LP, D, const IN: usize> NeuralNetworkBuilder<In<IN>, RngWrapper, D, NoOptimizer>
-where
-    D: Distribution<f64>,
-{
-    pub fn layer_weights(
+impl<const IN: usize> NeuralNetworkBuilder<In<IN>, LayerParts, RngWrapper> {
+    /// Sets the [`ActivationFn`] for the previously defined layer.
+    pub fn activation_function(
         self,
-        weights: Matrix<f64>,
-    ) -> NeuralNetworkBuilder<In<IN>, RngWrapper, D, NoOptimizer> {
-        let layer_parts = LayerParts {
-            weights,
-            bias: None,
-            activation_function: None,
-        };
-        NeuralNetworkBuilder {
-            layer_parts,
-            ..self
-        }
-    }
-}
-
-impl<D, const IN: usize> NeuralNetworkBuilder<In<IN>, RngWrapper, D, NoOptimizer>
-where
-    D: Distribution<f64>,
-{
-    pub fn layer_bias(mut self, bias: LayerBias) -> Self {
-        let _ = self.layer_parts.bias.insert(bias);
-        self
-    }
-
-    pub fn build_layer(
-        mut self,
-    ) -> NeuralNetworkBuilder<In<IN>, RngWrapper, D, NoOptimizer> {
-        let bias = self.layer_parts.bias.take().unwrap_or_else(|| {
-            let neurons = self.layer_parts.weights.get_width();
-            LayerBias::from_iter(neurons, self.rng.get_rng_iter())
-        });
-        let weights = self.layer_parts.weights;
-        let activation_function = self
-            .layer_parts
-            .activation_function
-            .take()
-            .unwrap_or(self.default_activation_function);
+        activation_function: ActivationFn,
+    ) -> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
+        let LayerParts { weights, bias } = self.layer_parts;
         let layer = Layer::new(weights, bias, activation_function);
-        NeuralNetworkBuilder {
-            layer_parts: NoParts,
-            ..self
-        }
-        .layer(layer)
+        NeuralNetworkBuilder { layer_parts: NoLayerParts, ..self }._layer(layer)
     }
-}
-*/
 
-impl<INIT, const IN: usize, const OUT: usize>
-    NeuralNetworkBuilder<InOut<IN, OUT>, RngWrapper, INIT, NoOptimizer>
-where INIT: Initializer
-{
-    /// builds a non-trainable neural network
-    pub fn build(self) -> NeuralNetwork<IN, OUT> {
-        NeuralNetwork::new(self.layers, self.error_function.unwrap_or_default())
+    /// Add a [`Layer`] to the NeuralNetwork.
+    /// This uses the `self.default_activation_function` for the previously defined layer.
+    pub fn _layer(self, layer: Layer) -> NeuralNetworkBuilder<In<IN>, NoLayerParts, RngWrapper> {
+        let default = self.default_activation_function;
+        self.activation_function(default)._layer(layer)
+    }
+
+    /// Use [`Initializer`] to add a new [`Layer`] to the NeuralNetwork.
+    /// This uses the `self.default_activation_function` for the previously defined layer.
+    pub fn layer(
+        self,
+        neurons: usize,
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+    ) -> Self {
+        let default = self.default_activation_function;
+        self.activation_function(default).layer(neurons, weights_init, bias_init)
     }
 }
 
@@ -243,8 +161,6 @@ mod tests {
         let input = [1.0, 2.0];
         let prop = ai.propagate(&input).0;
 
-        println!("{:?}", prop);
-
-        panic!()
+        assert_eq!(prop, input);
     }
 }

@@ -16,7 +16,8 @@ version = "0.1.0"
 
 [workspace.dependencies]
 rusty_ai = { path="./rusty_ai" }
+anyhow = "1.0.9"
 enum_dispatch = "0.3.11"
 rand = "0.8.5"
-itertools = "0.10.5"
-
+rand_distr = "0.4.3"
+itertools = "0.11.0"

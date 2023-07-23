@@ -1,115 +1,140 @@
-use crate::{
-    prelude::{ActivationFn, Layer, LayerBias, Matrix},
-    util::RngWrapper,
-};
-use rand::{distributions::Uniform, prelude::Distribution, Rng};
+use crate::prelude::*;
+use rand::Rng;
 
-pub trait Initializer {
-    fn init_weights(&self, rng: &mut RngWrapper, inputs: usize, neurons: usize) -> Matrix<f64>;
-    fn init_bias(&self, rng: &mut RngWrapper, inputs: usize, neurons: usize) -> LayerBias;
+/// see [tensorflow docs](https://www.tensorflow.org/api_docs/python/tf/keras/initializers)
+/// or [pytorch docs](https://pytorch.org/docs/stable/nn.init.html)
+#[derive(Debug, Clone)]
+pub enum Initializer<T> {
+    Initialized(T),
 
-    fn init_layer(
-        &self,
-        rng: &mut RngWrapper,
-        inputs: usize,
-        neurons: usize,
-        activation_function: ActivationFn,
-    ) -> Layer {
-        let weights = self.init_weights(rng, inputs, neurons);
-        let bias = self.init_bias(rng, inputs, neurons);
-        Layer::new(weights, bias, activation_function)
+    /// Initializes all values to the fixed value `self.0`
+    Constant(f64),
+
+    /// Uniform from start (`self.0`; inclusive) to end (`self.1`; exclusive)
+    Uniform(f64, f64),
+
+    /// `𝓝 (self.mean, self.std_dev^2)`
+    Normal {
+        mean: f64,
+        std_dev: f64,
+    },
+
+    /// `𝓝 (0, 1)`
+    ///
+    /// Same as `Self::Normal { mean: 0.0, std_dev: 1.0 }` but faster.
+    StandardNormal,
+
+    /// also known as `Xavier Normal`.
+    GlorotNormal,
+
+    /// also known as `Xavier Uniform`.
+    GlorotUniform,
+
+    /// [TensorFlow Dense Layer docs](https://www.tensorflow.org/api_docs/python/tf/keras/layers/Dense)
+    TensorFlowDefault,
+
+    /// [Pytorch Linear Layer docs](https://pytorch.org/docs/stable/generated/torch.nn.Linear.html)
+    PytorchDefault,
+}
+
+pub type WeightsInitializer = Initializer<Matrix<f64>>;
+pub type BiasInitializer = Initializer<LayerBias>;
+
+impl<T> Initializer<T> {
+    #[allow(non_snake_case)]
+    pub const fn Ones() -> Self {
+        Initializer::Constant(1.0)
+    }
+
+    #[allow(non_snake_case)]
+    pub const fn Zeros() -> Self {
+        Initializer::Constant(0.0)
     }
 }
 
-macro_rules! distr_initializer {
-    ($type:ty : $get_distr:ident) => {
-        impl Initializer for $type {
-            fn init_weights(
-                &self,
-                rng: &mut RngWrapper,
-                inputs: usize,
-                neurons: usize,
-            ) -> Matrix<f64> {
-                let distr = self.$get_distr(inputs, neurons);
-                Matrix::from_iter(inputs, neurons, rng.sample_iter(distr))
-            }
-
-            fn init_bias(&self, rng: &mut RngWrapper, inputs: usize, neurons: usize) -> LayerBias {
-                let distr = self.$get_distr(inputs, neurons);
-                LayerBias::from_iter(neurons, rng.sample_iter(distr))
-            }
+impl WeightsInitializer {
+    pub fn init_weights(self, rng: &mut RngWrapper, inputs: usize, outputs: usize) -> Matrix<f64> {
+        macro_rules! mat {
+            ($iter:expr) => {
+                Matrix::from_iter(inputs, outputs, $iter)
+            };
         }
-    };
-}
-
-pub struct Rand<D: Distribution<f64>>(pub D);
-
-impl<D: Distribution<f64>> Initializer for Rand<D> {
-    fn init_weights(&self, rng: &mut RngWrapper, inputs: usize, neurons: usize) -> Matrix<f64> {
-        Matrix::from_iter(inputs, neurons, rng.sample_iter(&self.0))
-    }
-
-    fn init_bias(&self, rng: &mut RngWrapper, inputs: usize, neurons: usize) -> LayerBias {
-        LayerBias::from_iter(neurons, rng.sample_iter(&self.0))
-    }
-}
-
-/// sets all parameters to the same value
-pub struct SingleNum(f64);
-
-impl Initializer for SingleNum {
-    fn init_weights(&self, _rng: &mut RngWrapper, inputs: usize, neurons: usize) -> Matrix<f64> {
-        Matrix::with_default(inputs, neurons, self.0)
-    }
-
-    fn init_bias(&self, _rng: &mut RngWrapper, _inputs: usize, neurons: usize) -> LayerBias {
-        LayerBias::from(vec![self.0; neurons])
+        use Initializer::*;
+        match self {
+            Initialized(x) => x,
+            Constant(x) => Matrix::with_default(inputs, outputs, x),
+            Uniform(low, high) => mat!(uniform(rng, low, high)),
+            Normal { mean, std_dev } => mat!(normal(rng, mean, std_dev)),
+            StandardNormal => mat!(std_normal(rng)),
+            GlorotNormal => mat!(glorot_normal(rng, inputs, outputs)),
+            GlorotUniform | TensorFlowDefault => mat!(glorot_uniform(rng, inputs, outputs)),
+            PytorchDefault => mat!(pytorch_default(rng, inputs)),
+        }
     }
 }
 
-type Zeros = SingleNum;
-type Ones = SingleNum;
-pub fn zeros() -> Zeros { SingleNum(0.0) }
-pub fn ones() -> Ones { SingleNum(1.0) }
-
-pub struct Custom<W: Initializer, B: Initializer> {
-    weights_init: W,
-    bias_init: B,
-}
-
-impl<W: Initializer, B: Initializer> Initializer for Custom<W, B> {
-    fn init_weights(&self, rng: &mut RngWrapper, inputs: usize, neurons: usize) -> Matrix<f64> {
-        self.weights_init.init_weights(rng, inputs, neurons)
-    }
-
-    fn init_bias(&self, rng: &mut RngWrapper, inputs: usize, neurons: usize) -> LayerBias {
-        self.bias_init.init_bias(rng, inputs, neurons)
-    }
-}
-
-/// also called Xavier uniform initializer.
-/// [https://www.tensorflow.org/api_docs/python/tf/keras/initializers/GlorotUniform]
-pub struct GlorotUniform;
-impl GlorotUniform {
-    fn get_distr(&self, inputs: usize, neurons: usize) -> impl Distribution<f64> {
-        let x = (6.0 / (inputs + neurons) as f64).sqrt();
-        Uniform::from(-x..x)
+impl BiasInitializer {
+    pub fn init_bias(self, rng: &mut RngWrapper, inputs: usize, outputs: usize) -> LayerBias {
+        macro_rules! bias {
+            ($iter:expr) => {
+                LayerBias::from_iter(outputs, $iter)
+            };
+        }
+        use Initializer::*;
+        match self {
+            Initialized(x) => x,
+            Constant(x) => LayerBias::from(vec![x; outputs]),
+            TensorFlowDefault => LayerBias::from(vec![0.0; outputs]),
+            Uniform(low, high) => bias!(uniform(rng, low, high)),
+            Normal { mean, std_dev } => bias!(normal(rng, mean, std_dev)),
+            StandardNormal => bias!(std_normal(rng)),
+            GlorotNormal => bias!(glorot_normal(rng, inputs, outputs)),
+            GlorotUniform => bias!(glorot_uniform(rng, inputs, outputs)),
+            PytorchDefault => bias!(pytorch_default(rng, inputs)),
+        }
     }
 }
-distr_initializer! { GlorotUniform: get_distr }
 
-/// [https://www.tensorflow.org/api_docs/python/tf/keras/layers/Dense]
-#[allow(non_snake_case)]
-pub fn TensorFlowDefault() -> Custom<GlorotUniform, Zeros> {
-    Custom { weights_init: GlorotUniform, bias_init: zeros() }
+pub fn uniform<'a>(rng: &'a mut RngWrapper, low: f64, high: f64) -> impl Iterator<Item = f64> + 'a {
+    rng.sample_iter(rand_distr::Uniform::new(low, high))
 }
 
-/// [https://pytorch.org/docs/stable/generated/torch.nn.Linear.html]
-pub struct PytorchDefault;
-impl PytorchDefault {
-    fn get_distr(&self, inputs: usize, _neurons: usize) -> impl Distribution<f64> {
-        let x = (inputs as f64).recip().sqrt();
-        Uniform::from(-x..x)
-    }
+/// # Panics
+/// Panics if `std_dev` is not finite.
+pub fn normal<'a>(
+    rng: &'a mut RngWrapper,
+    mean: f64,
+    std_dev: f64,
+) -> impl Iterator<Item = f64> + 'a {
+    rng.sample_iter(rand_distr::Normal::new(mean, std_dev).expect("standard deviation is finite"))
 }
-distr_initializer! { PytorchDefault: get_distr }
+
+pub fn std_normal<'a>(rng: &'a mut RngWrapper) -> impl Iterator<Item = f64> + 'a {
+    rng.sample_iter(rand_distr::StandardNormal)
+}
+
+pub fn glorot_uniform<'a>(
+    rng: &'a mut RngWrapper,
+    inputs: usize,
+    outputs: usize,
+) -> impl Iterator<Item = f64> + 'a {
+    let x = (6.0 / (inputs + outputs) as f64).sqrt(); // TODO: gain
+    uniform(rng, -x, x)
+}
+
+pub fn glorot_normal<'a>(
+    rng: &'a mut RngWrapper,
+    inputs: usize,
+    outputs: usize,
+) -> impl Iterator<Item = f64> + 'a {
+    let std_dev = (2.0 / (inputs + outputs) as f64).sqrt(); // TODO: gain
+    normal(rng, 0.0, std_dev)
+}
+
+pub fn pytorch_default<'a>(
+    rng: &'a mut RngWrapper,
+    inputs: usize,
+) -> impl Iterator<Item = f64> + 'a {
+    let x = (inputs as f64).recip().sqrt();
+    uniform(rng, -x, x)
+}

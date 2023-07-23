@@ -35,11 +35,15 @@ impl<T> Matrix<T> {
 
     impl_getter! { pub get_width -> width: usize }
 
-    impl_getter! { pub get_height -> height: usize }
-
     impl_getter! { pub get_elements -> elements: &Vec<Vec<T>> }
 
     impl_getter! { pub get_elements_mut -> elements: &mut Vec<Vec<T>> }
+
+    #[inline]
+    #[doc(alias = "get_neuron_count")]
+    pub fn get_height(&self) -> usize {
+        self.height
+    }
 
     /// # Panics
     /// Panics if the iterator is too small.
@@ -85,13 +89,17 @@ impl<T> Matrix<T> {
     }
 
     #[inline]
-    pub fn get_row(&self, y: usize) -> Option<&Vec<T>> { self.elements.get(y) }
+    pub fn get_row(&self, y: usize) -> Option<&Vec<T>> {
+        self.elements.get(y)
+    }
 
     pub fn get(&self, y: usize, x: usize) -> Option<&T> {
         self.get_row(y).map(|row| row.get(x)).flatten()
     }
 
-    pub fn iter_rows(&self) -> impl Iterator<Item = &Vec<T>> { self.elements.iter() }
+    pub fn iter_rows(&self) -> impl Iterator<Item = &Vec<T>> {
+        self.elements.iter()
+    }
 
     pub fn iter_rows_mut(&mut self) -> impl Iterator<Item = &mut Vec<T>> {
         self.elements.iter_mut()
@@ -106,7 +114,9 @@ impl<T> Matrix<T> {
     }
 
     /// (width, height)
-    pub fn get_dimensions(&self) -> (usize, usize) { (self.width, self.height) }
+    pub fn get_dimensions(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
 }
 
 impl<T: Ring + Clone> Matrix<T> {
@@ -190,7 +200,9 @@ impl_mul! { &Matrix<T>: Vec<T> }
 impl<T> Index<(usize, usize)> for Matrix<T> {
     type Output = T;
 
-    fn index(&self, index: (usize, usize)) -> &Self::Output { &self.elements[index.0][index.1] }
+    fn index(&self, index: (usize, usize)) -> &Self::Output {
+        &self.elements[index.0][index.1]
+    }
 }
 
 impl<T> IndexMut<(usize, usize)> for Matrix<T> {
