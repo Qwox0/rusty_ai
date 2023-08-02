@@ -7,3 +7,5 @@ version.workspace = true
 
 [dependencies]
 rusty_ai.workspace = true
+rand.workspace = true
+load_mnist = { version = "0.5.0", package = "mnist" }
