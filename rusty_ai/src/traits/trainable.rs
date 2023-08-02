@@ -5,7 +5,7 @@ pub trait Trainer<const IN: usize, const OUT: usize> {
 
     fn get_trainee(&self) -> &Self::Trainee;
 
-    /// Trains the neural network for one generation/epoch. Uses a small data set `data_pairs` to
+    /// Trains the neural network for one step/generation. Uses a small data set `data_pairs` to
     /// find an approximation for the weights gradient. The neural network's Optimizer changes the
     /// weights by using the calculated gradient.
     fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>);

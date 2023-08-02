@@ -33,14 +33,18 @@ pub struct Matrix<T: Sized> {
 impl<T> Matrix<T> {
     constructor! { new -> width: usize, height: usize, elements: Vec<Vec<T>> }
 
-    impl_getter! { pub get_width -> width: usize }
-
     impl_getter! { pub get_elements -> elements: &Vec<Vec<T>> }
 
     impl_getter! { pub get_elements_mut -> elements: &mut Vec<Vec<T>> }
 
+    #[doc(alias = "get_input_count")]
     #[inline]
+    pub fn get_width(&self) -> usize {
+        self.width
+    }
+
     #[doc(alias = "get_neuron_count")]
+    #[inline]
     pub fn get_height(&self) -> usize {
         self.height
     }

@@ -121,14 +121,8 @@ impl<const IN: usize, const OUT: usize> Trainer<IN, OUT> for TrainableNeuralNetw
             self.gradient = self.network.init_zero_gradient();
         }
 
-        let mut v: Vec<Vec<Vec<f64>>> = vec![];
-
         for (input, expected_output) in data_pairs.into_iter().map(Into::into) {
             let out = self.verbose_propagate(input);
-            out.outputs.clone().into_iter().enumerate().for_each(|(idx, o)| match v.get_mut(idx) {
-                Some(x) => x.push(o),
-                None => v.push(vec![o]),
-            });
             self.backpropagation(out, expected_output);
         }
 

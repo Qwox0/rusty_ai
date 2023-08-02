@@ -305,24 +305,25 @@ mod tests {
 
     #[test]
     fn test_relu() {
-        const d0: f64 = 0.5;
-        const pi: f64 = std::f64::consts::PI;
-        let relu = ActivationFn::ReLU(d0);
+        const D0: f64 = 0.5;
+        use std::f64::consts::PI;
+        let relu = ActivationFn::ReLU(D0);
 
         assert_eq!(relu.calculate_single(-10.0), 0.0);
         assert_eq!(relu.calculate_single(0.0), 0.0);
         assert_eq!(relu.calculate_single(1.0), 1.0);
-        assert_eq!(relu.calculate_single(pi), pi);
+        assert_eq!(relu.calculate_single(PI), PI);
         assert_eq!(relu.calculate_single(10.0), 10.0);
 
         assert_eq!(relu.derivative(-10.0), 0.0);
-        assert_eq!(relu.derivative(0.0), d0);
+        assert_eq!(relu.derivative(0.0), D0);
         assert_eq!(relu.derivative(1.0), 1.0);
-        assert_eq!(relu.derivative(pi), 1.0);
+        assert_eq!(relu.derivative(PI), 1.0);
         assert_eq!(relu.derivative(10.0), 1.0);
     }
 }
 
+#[allow(unused_imports)]
 mod benches {
     extern crate test;
 

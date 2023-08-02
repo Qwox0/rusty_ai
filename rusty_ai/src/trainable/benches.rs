@@ -1,3 +1,4 @@
+#![allow(unused)]
 extern crate test;
 
 use crate::prelude::*;

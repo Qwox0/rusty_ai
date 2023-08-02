@@ -1,7 +1,10 @@
 use crate::data::Pair;
 use itertools::Itertools;
-use rand::{distributions::uniform::SampleRange, seq::SliceRandom, Rng};
-use std::{fmt::Display, ops::Index};
+use rand::{distributions::uniform::SampleRange, rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
+use std::{
+    fmt::Display,
+    ops::{Deref, Index},
+};
 
 #[derive(Debug)]
 pub enum E {
@@ -16,6 +19,7 @@ impl Display for E {
 
 impl std::error::Error for E {}
 
+/// implements [`Index<usize, Output = Pair<IN, OUT>>`].
 #[derive(Debug, Clone)]
 pub struct PairList<const IN: usize, const OUT: usize>(pub Vec<Pair<IN, OUT>>);
 
@@ -24,12 +28,6 @@ pub struct PairList<const IN: usize, const OUT: usize>(pub Vec<Pair<IN, OUT>>);
 impl<const IN: usize, const OUT: usize> From<Vec<Pair<IN, OUT>>> for PairList<IN, OUT> {
     fn from(value: Vec<Pair<IN, OUT>>) -> Self {
         Self(value)
-    }
-}
-
-impl<const IN: usize, const OUT: usize> From<Pair<IN, OUT>> for PairList<IN, OUT> {
-    fn from(value: Pair<IN, OUT>) -> Self {
-        Self(vec![value])
     }
 }
 
@@ -70,6 +68,18 @@ impl<const IN: usize, const OUT: usize> PairList<IN, OUT> {
         self.into_iter().map(Into::into)
     }
 
+    pub fn shuffle_rng(&mut self, rng: &mut impl rand::Rng) {
+        self.0.shuffle(rng);
+    }
+
+    pub fn shuffle_seeded(&mut self, seed: u64) {
+        self.shuffle_rng(&mut StdRng::seed_from_u64(seed));
+    }
+
+    pub fn shuffle(&mut self) {
+        self.shuffle_rng(&mut rand::thread_rng());
+    }
+
     pub fn choose_multiple<R>(
         &self,
         rng: &mut R,
@@ -87,6 +97,14 @@ impl<const IN: usize, const OUT: usize> PairList<IN, OUT> {
 
     pub fn as_slice(&self) -> &[Pair<IN, OUT>] {
         self.0.as_slice()
+    }
+}
+
+impl<const IN: usize, const OUT: usize> Deref for PairList<IN, OUT> {
+    type Target = [Pair<IN, OUT>];
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
     }
 }
 
