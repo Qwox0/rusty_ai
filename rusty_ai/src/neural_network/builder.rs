@@ -81,7 +81,7 @@ pub type BuilderWithoutParts<const IN: usize> =
 pub type BuilderWithParts<const IN: usize> = NeuralNetworkBuilder<In<IN>, LayerParts, RngWrapper>;
 
 /// This ensures a consistent interface between [`BuilderWithoutParts`] and [`BuilderWithParts`].
-pub trait BuildLayer<const IN: usize> {
+pub trait BuildLayer<const IN: usize>: Sized {
     fn _layer(self, layer: Layer) -> BuilderWithoutParts<IN>;
 
     fn layer(
@@ -90,6 +90,28 @@ pub trait BuildLayer<const IN: usize> {
         weights_init: Initializer<Matrix<f64>>,
         bias_init: Initializer<LayerBias>,
     ) -> BuilderWithParts<IN>;
+
+    fn layers(
+        self,
+        neurons: &[usize],
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+        activation_function: ActivationFn,
+    ) -> BuilderWithoutParts<IN>;
+
+    fn layers_default(
+        self,
+        neurons: &[usize],
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+    ) -> BuilderWithoutParts<IN>;
+
+    /// Create a new [`Layer`] from the given `weights` and `bias` and add it to the NeuralNetwork.
+    /// See `layer` method.
+    fn layer_from_parameters(self, weights: Matrix<f64>, bias: LayerBias) -> BuilderWithParts<IN> {
+        use Initializer::Initialized;
+        self.layer(weights.get_height(), Initialized(weights), Initialized(bias))
+    }
 
     fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT>;
 
@@ -122,6 +144,35 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
         NeuralNetworkBuilder { layer_parts, ..self }
     }
 
+    /// Use the same [`Initializer`] to add multiple new [`Layer`]s to the NeuralNetwork.
+    /// Every new layer gets `activation_function`.
+    /// This method calls `clone` on `weights_init` and `bias_init`.
+    /// See `layer` method.
+    fn layers(
+        self,
+        neurons: &[usize],
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+        activation_function: ActivationFn,
+    ) -> BuilderWithoutParts<IN> {
+        neurons.into_iter().fold(self, |builder: Self, neurons: &usize| {
+            builder
+                .layer(*neurons, weights_init.clone(), bias_init.clone())
+                .activation_function(activation_function)
+        })
+    }
+
+    /// similar to `layers` but uses the default activation function for every layer.
+    fn layers_default(
+        self,
+        neurons: &[usize],
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+    ) -> BuilderWithoutParts<IN> {
+        let default = self.default_activation_function;
+        self.layers(neurons, weights_init, bias_init, default)
+    }
+
     /// Builds [`NeuralNetwork`].
     ///
     /// # Panics
@@ -142,7 +193,29 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
     }
 }
 
+macro_rules! activation_function {
+    ( $( $fn_name:ident $variant:ident $(($($arg:ident : $ty:ty),+))? : $variant_str:expr );+ ) => {
+        $(
+            #[doc = "Sets the `"]
+            #[doc = $variant_str]
+            #[doc = "` activation function for the previously defined layer."]
+            pub fn $fn_name(self $(, $($arg : $ty),+)? ) -> BuilderWithoutParts<IN> {
+                self.activation_function(ActivationFn::$variant $(( $($arg),+ ))?)
+            }
+         )+
+    };
+}
+
 impl<const IN: usize> BuilderWithParts<IN> {
+    activation_function! {
+        identity Identity : "Identity" ;
+        relu ReLU(d0: f64) : "ReLU" ;
+        leaky_relu LeakyReLU(leak_rate: f64, d0: f64) : "LeakyReLU" ;
+        sigmoid Sigmoid : "Sigmoid" ;
+        softmax Softmax : "Softmax" ;
+        log_softmax LogSoftmax : "LogSoftmax"
+    }
+
     /// Sets the [`ActivationFn`] for the previously defined layer.
     pub fn activation_function(self, activation_function: ActivationFn) -> BuilderWithoutParts<IN> {
         let LayerParts { weights, bias } = self.layer_parts;
@@ -151,6 +224,8 @@ impl<const IN: usize> BuilderWithParts<IN> {
     }
 
     /// Uses the `self.default_activation_function` for the previously defined layer.
+    ///
+    /// This function gets called automatically if no activation function is provided.
     pub fn use_default_activation_function(self) -> BuilderWithoutParts<IN> {
         let default = self.default_activation_function;
         self.activation_function(default)
@@ -173,6 +248,36 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithParts<IN> {
         bias_init: Initializer<LayerBias>,
     ) -> Self {
         self.use_default_activation_function().layer(neurons, weights_init, bias_init)
+    }
+
+    /// Use the same [`Initializer`] to add multiple new [`Layer`]s to the NeuralNetwork.
+    /// This uses the `self.default_activation_function` for the previously defined layer. Every
+    /// new layer gets `activation_function`. This method calls `clone`
+    /// on `weights_init` and `bias_init`. See `layer` method.
+    fn layers(
+        self,
+        neurons: &[usize],
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+        activation_function: ActivationFn,
+    ) -> BuilderWithoutParts<IN> {
+        self.use_default_activation_function().layers(
+            neurons,
+            weights_init,
+            bias_init,
+            activation_function,
+        )
+    }
+
+    /// similar to `layers` but uses the default activation function for the previous layer and
+    /// every new layer.
+    fn layers_default(
+        self,
+        neurons: &[usize],
+        weights_init: Initializer<Matrix<f64>>,
+        bias_init: Initializer<LayerBias>,
+    ) -> BuilderWithoutParts<IN> {
+        self.use_default_activation_function().layers_default(neurons, weights_init, bias_init)
     }
 
     /// Builds [`NeuralNetwork`].

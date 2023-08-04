@@ -1,11 +1,5 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, derive_more::From)]
 pub struct LayerBias(Vec<f64>);
-
-impl<V: Into<Vec<f64>>> From<V> for LayerBias {
-    fn from(value: V) -> Self {
-        LayerBias(value.into())
-    }
-}
 
 impl LayerBias {
     /// # Panics

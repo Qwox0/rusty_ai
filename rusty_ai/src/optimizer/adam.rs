@@ -1,13 +1,6 @@
 use crate::prelude::*;
 use itertools::Itertools;
 
-// Markers
-#[derive(Debug)]
-struct AdamData {
-    m: Gradient,
-    v: Gradient,
-}
-
 // stochastic gradient descent
 #[derive(Debug)]
 pub struct Adam {

@@ -29,6 +29,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
 
     /// get [`Vec<f64>`] with maximum length and capacity needed for
     /// propagation. initialized with all `0.0`
+    #[allow(unused)]
     fn get_propagation_buffer(&self) -> Vec<f64> {
         let mut buf = vec![0.0; self.propagation_buf_len];
         buf.shrink_to_fit();
@@ -69,6 +70,12 @@ impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN
                 (output, error)
             })
             .collect()
+    }
+}
+
+impl<const IN: usize, const OUT: usize> Trainee for NeuralNetwork<IN, OUT> {
+    fn init_zero_gradient(&self) -> Gradient {
+        self.iter_layers().map(Layer::init_zero_gradient).collect::<Vec<_>>().into()
     }
 }
 

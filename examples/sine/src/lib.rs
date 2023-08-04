@@ -30,7 +30,7 @@ pub fn main() {
         .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::Identity)
+        .identity()
         .error_function(ErrorFunction::SquaredError)
         .build::<1>()
         .to_trainable_builder()

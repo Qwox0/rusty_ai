@@ -1,41 +1,22 @@
 use crate::data::Pair;
-use itertools::Itertools;
-use rand::{distributions::uniform::SampleRange, seq::SliceRandom, Rng};
-use std::{fmt::Display, ops::Index};
+use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
+use std::ops::{Deref, Index};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum E {
+    #[error("Lengths are not equal.")]
     UnequalLen,
 }
 
-impl Display for E {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!();
-    }
-}
-
-impl std::error::Error for E {}
-
-#[derive(Debug, Clone)]
+/// implements [`Index<usize, Output = Pair<IN, OUT>>`].
+#[derive(Debug, Clone, derive_more::From)]
 pub struct PairList<const IN: usize, const OUT: usize>(pub Vec<Pair<IN, OUT>>);
 
-// From
-
-impl<const IN: usize, const OUT: usize> From<Vec<Pair<IN, OUT>>> for PairList<IN, OUT> {
-    fn from(value: Vec<Pair<IN, OUT>>) -> Self {
-        Self(value)
-    }
-}
-
-impl<const IN: usize, const OUT: usize> From<Pair<IN, OUT>> for PairList<IN, OUT> {
-    fn from(value: Pair<IN, OUT>) -> Self {
-        Self(vec![value])
-    }
-}
-
-impl<const IN: usize, const OUT: usize> From<Vec<([f64; IN], [f64; OUT])>> for PairList<IN, OUT> {
-    fn from(value: Vec<([f64; IN], [f64; OUT])>) -> Self {
-        value.into_iter().map(Pair::from).collect_vec().into()
+impl<const IN: usize, const OUT: usize, P> FromIterator<P> for PairList<IN, OUT>
+where P: Into<Pair<IN, OUT>>
+{
+    fn from_iter<T: IntoIterator<Item = P>>(iter: T) -> Self {
+        iter.into_iter().map(P::into).collect::<Vec<_>>().into()
     }
 }
 
@@ -58,7 +39,7 @@ impl<const IN: usize, const OUT: usize> PairList<IN, OUT> {
         if vec_in.len() != vec_out.len() {
             Err(E::UnequalLen)
         } else {
-            Ok(vec_in.into_iter().zip(vec_out).collect_vec().into())
+            Ok(vec_in.into_iter().zip(vec_out).collect())
         }
     }
 
@@ -68,6 +49,18 @@ impl<const IN: usize, const OUT: usize> PairList<IN, OUT> {
 
     pub fn into_iter_tuple(self) -> impl Iterator<Item = ([f64; IN], [f64; OUT])> {
         self.into_iter().map(Into::into)
+    }
+
+    pub fn shuffle_rng(&mut self, rng: &mut impl rand::Rng) {
+        self.0.shuffle(rng);
+    }
+
+    pub fn shuffle_seeded(&mut self, seed: u64) {
+        self.shuffle_rng(&mut StdRng::seed_from_u64(seed));
+    }
+
+    pub fn shuffle(&mut self) {
+        self.shuffle_rng(&mut rand::thread_rng());
     }
 
     pub fn choose_multiple<R>(
@@ -90,6 +83,14 @@ impl<const IN: usize, const OUT: usize> PairList<IN, OUT> {
     }
 }
 
+impl<const IN: usize, const OUT: usize> Deref for PairList<IN, OUT> {
+    type Target = [Pair<IN, OUT>];
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
 impl<const IN: usize, const OUT: usize> IntoIterator for PairList<IN, OUT> {
     type IntoIter = std::vec::IntoIter<Self::Item>;
     type Item = Pair<IN, OUT>;
@@ -109,25 +110,9 @@ impl<const IN: usize, const OUT: usize> Index<usize> for PairList<IN, OUT> {
 
 // Simple (IN == OUT == 1)
 
-impl From<Vec<(f64, f64)>> for PairList<1, 1> {
-    fn from(value: Vec<(f64, f64)>) -> Self {
-        value.into_iter().map(Pair::from).collect_vec().into()
-    }
-}
-
 impl PairList<1, 1> {
     pub fn from_simple_vecs(vec_in: Vec<f64>, vec_out: Vec<f64>) -> Self {
-        vec_in.into_iter().zip(vec_out).collect_vec().into()
-    }
-
-    pub fn random_simple(
-        amount: usize,
-        range: impl SampleRange<f64> + Clone,
-        get_out: impl Fn(f64) -> f64,
-    ) -> PairList<1, 1> {
-        let pairs: Vec<_> =
-            (0..amount).into_iter().map(|_| Pair::random_simple(range.clone(), &get_out)).collect();
-        PairList::from(pairs)
+        vec_in.into_iter().zip(vec_out).collect()
     }
 
     pub fn into_iter_tuple_simple(self) -> impl Iterator<Item = (f64, f64)> {
