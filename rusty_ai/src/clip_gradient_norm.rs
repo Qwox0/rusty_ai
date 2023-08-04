@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct ClipGradientNorm {
     pub max_norm: f64,
     pub norm_type: Norm,
