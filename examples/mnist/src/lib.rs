@@ -5,6 +5,7 @@
 use rand::prelude::*;
 use rusty_ai::prelude::*;
 use std::{
+    iter::once,
     ops::Range,
     path::PathBuf,
     time::{Duration, Instant},
@@ -17,18 +18,22 @@ const NL: &'static str = "\r\n";
 
 const IMAGE_SIDE: usize = 28;
 const IMAGE_SIZE: usize = IMAGE_SIDE * IMAGE_SIDE;
+const OUTPUTS: usize = 10;
 
 const NORMALIZE_MEAN: f64 = 0.5;
 const NORMALIZE_STD: f64 = 0.5;
-fn transform(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<IMAGE_SIZE, 1> {
-    PairList::from(
-        img_vec
-            .into_iter()
-            .map(|x| ((x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD)
-            .array_chunks()
-            .zip(lbl_vec.into_iter().map(|x| [x as f64]))
-            .collect::<Vec<_>>(),
-    )
+fn transform(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<IMAGE_SIZE, OUTPUTS> {
+    img_vec
+        .into_iter()
+        .map(|x| ((x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD)
+        .array_chunks()
+        //.zip(lbl_vec.into_iter().map(|x| [x as f64; OUTPUTS])) // TODO: remove OUTPUTS
+        .zip(lbl_vec.into_iter().map(|x| {
+            let mut out = [0.0; OUTPUTS]; // TODO: remove OUTPUTS
+            out[x as usize] = 1.0;
+            out
+        }))
+        .collect()
 }
 
 pub fn main() {
@@ -52,21 +57,24 @@ pub fn main() {
     assert_eq!(training_data.len(), 60_000);
     assert_eq!(test_data.len(), 10_000);
 
-    print_image(&training_data[0], -1.0..1.0);
+    // TODO: print_image(&training_data[0], -1.0..1.0);
+    //print_image_tmp(&training_data[0], -1.0..1.0);
 
     let mut ai = NeuralNetworkBuilder::default()
-        .default_activation_function(ActivationFn::ReLU(0.0))
         .input::<IMAGE_SIZE>()
         .layer(128, Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .relu(0.0)
         .layer(64, Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .relu(0.0)
         .layer(10, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::LogSoftmax)
+        //.activation_function(ActivationFn::LogSoftmax)
+        .activation_function(ActivationFn::Sigmoid)
         .error_function(ErrorFunction::SquaredError)
         .build::<10>()
         .to_trainable_builder()
         .sgd(GradientDescent { learning_rate: 0.003 })
         .retain_gradient(true)
-        //.new_clip_gradient_norm(5.0, Norm::Two) // ?
+        .new_clip_gradient_norm(5.0, Norm::Two) // ?
         .build();
 
     const EPOCHS: usize = 15;
@@ -78,9 +86,17 @@ pub fn main() {
         for batch in training_data.chunks(BATCH_SIZE) {
             ai.training_step(batch)
         }
+        // shuffle data after one full iteration
+        training_data.shuffle();
 
         println!("Epoch {} - Training loss: ", e); //, running_loss / len(trainloader));
         println!("Training Time (in minutes): {}", start.elapsed().as_millis() as f32 / 60_000.0);
+    }
+
+    for test in test_data.iter().take(3) {
+        print_image_tmp(test, -1.0..1.0);
+        let out = ai.test_propagate(once(test));
+        println!("{:?}", out.outputs[0].0);
     }
 
     /*
@@ -94,9 +110,10 @@ pub fn main() {
         }
     });
     */
+}
 
-    // shuffle data after one full iteration
-    training_data.shuffle();
+pub fn print_image_tmp(pair: &Pair<IMAGE_SIZE, 10>, val_range: Range<f64>) {
+    println!("{} label: \n{:?}", image_to_string(&pair.input, val_range), pair.output);
 }
 
 pub fn print_image(pair: &Pair<IMAGE_SIZE, 1>, val_range: Range<f64>) {
@@ -231,4 +248,33 @@ pub fn image_to_string(image: &[f64; IMAGE_SIZE], val_range: Range<f64>) -> Stri
     buf.push('┘');
     assert_eq!(buf.capacity(), buf.len()); // not necessary
     buf
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate test;
+
+    use super::*;
+    use test::*;
+
+    fn load_data() -> (PairList<IMAGE_SIZE, 10>, PairList<IMAGE_SIZE, 10>) {
+        let exe_path = std::env::current_exe().expect("could get path of executable");
+        let exe_dir = exe_path.parent().unwrap_or(&exe_path).display();
+        let data_path = PathBuf::from(format!("{}/../../../examples/mnist/mnist-raw/", exe_dir));
+        let data_path = data_path.as_os_str().to_str().expect("could convert path to &str");
+
+        let load_mnist::Mnist { trn_img, trn_lbl, tst_img, tst_lbl, .. } =
+            load_mnist::MnistBuilder::new()
+                .base_path(data_path)
+                .label_format_digit()
+                .training_set_length(60_000)
+                .validation_set_length(0)
+                .test_set_length(10_000)
+                .finalize();
+
+        let mut training_data = transform(trn_img, trn_lbl);
+        let test_data = transform(tst_img, tst_lbl);
+
+        (training_data, test_data)
+    }
 }

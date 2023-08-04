@@ -107,38 +107,45 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     ) -> OutputGradient {
         self.network.error_function.gradient(last_output, expected_output)
     }
-
-    fn optimize(&mut self) {
-        self.optimizer.optimize_weights(&mut self.network, &self.gradient);
-    }
 }
 
 impl<const IN: usize, const OUT: usize> Trainer<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
     type Trainee = NeuralNetwork<IN, OUT>;
 
-    fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>) {
-        if !self.retain_gradient {
-            self.gradient = self.network.init_zero_gradient();
-        }
+    fn get_trainee(&self) -> &Self::Trainee {
+        &self.network
+    }
 
-        for (input, expected_output) in data_pairs.into_iter().map(Into::into) {
+    fn get_gradient_mut(&mut self) -> &mut Gradient {
+        &mut self.gradient
+    }
+
+    fn calc_gradient<'a>(&mut self, batch: impl IntoIterator<Item = &'a Pair<IN, OUT>>) {
+        for (input, expected_output) in batch.into_iter().map(Into::into) {
             let out = self.verbose_propagate(input);
             self.backpropagation(out, expected_output);
         }
+    }
 
-        if let Some(clip_gradient_norm) = &self.clip_gradient_norm {
-            clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);
-            //clip_gradient_norm.clip_gradient_pytorch_device(&mut self.gradient);
+    fn optimize_trainee(&mut self) {
+        self.optimizer.optimize_weights(&mut self.network, &self.gradient);
+    }
+
+    fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>) {
+        if !self.retain_gradient {
+            self.set_zero_gradient();
+        }
+
+        self.calc_gradient(data_pairs);
+
+        if let Some(clip_gradient_norm) = self.clip_gradient_norm {
+            self.clip_gradient(clip_gradient_norm);
         } else {
             #[cfg(debug_assertions)]
             eprintln!("WARN: It is recommended to clip the gradient")
         }
 
-        self.optimize()
-    }
-
-    fn get_trainee(&self) -> &Self::Trainee {
-        &self.network
+        self.optimize_trainee()
     }
 }
 

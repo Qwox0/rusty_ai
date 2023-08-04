@@ -73,6 +73,12 @@ impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN
     }
 }
 
+impl<const IN: usize, const OUT: usize> Trainee for NeuralNetwork<IN, OUT> {
+    fn init_zero_gradient(&self) -> Gradient {
+        self.iter_layers().map(Layer::init_zero_gradient).collect::<Vec<_>>().into()
+    }
+}
+
 impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, OUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let get_plural_s = |x: usize| if x == 1 { "" } else { "s" };
