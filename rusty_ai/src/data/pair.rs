@@ -18,6 +18,10 @@ impl<'a, const IN: usize, const OUT: usize> Into<(&'a [f64; IN], &'a [f64; OUT])
 }
 
 impl<const IN: usize, const OUT: usize> Pair<IN, OUT> {
+    pub fn new(input: [f64; IN], output: [f64; OUT]) -> Pair<IN, OUT> {
+        Pair { input, output }
+    }
+
     #[inline]
     pub fn with(
         input: [f64; IN],
