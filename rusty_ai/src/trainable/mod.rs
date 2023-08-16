@@ -1,34 +1,40 @@
 mod builder;
 
-use crate::{gradient::aliases::OutputGradient, optimizer::IsOptimizer, prelude::*};
+use crate::{optimizer::IsOptimizer, prelude::*};
 pub use builder::TrainableNeuralNetworkBuilder;
 
 #[derive(Debug)]
-pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize> {
+pub struct TrainableNeuralNetwork<const IN: usize, const OUT: usize, L>
+where L: LossFunction<OUT>
+{
     network: NeuralNetwork<IN, OUT>,
     gradient: Gradient,
+    loss_function: L,
     retain_gradient: bool,
     optimizer: Optimizer,
     clip_gradient_norm: Option<ClipGradientNorm>,
 }
 
-impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
-    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> {
-        &self.network
-    }
-
+impl<const IN: usize, const OUT: usize, L, EO> TrainableNeuralNetwork<IN, OUT, L>
+where L: LossFunction<OUT, ExpectedOutput = EO>
+{
     fn new(
         network: NeuralNetwork<IN, OUT>,
+        loss_function: L,
         optimizer: Optimizer,
         retain_gradient: bool,
         clip_gradient_norm: Option<ClipGradientNorm>,
     ) -> Self {
         let gradient = network.init_zero_gradient();
-        Self { network, gradient, retain_gradient, optimizer, clip_gradient_norm }
+        Self { network, gradient, loss_function, retain_gradient, optimizer, clip_gradient_norm }
     }
 
-    /// calculates the outputs and derivatives of all layers
-    pub fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation {
+    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> {
+        &self.network
+    }
+
+    /// calculates the output of every layer
+    pub fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation<OUT> {
         let layer_count = self.network.get_layers().len();
         let mut outputs = Vec::with_capacity(layer_count + 1);
         outputs.push(input.to_vec());
@@ -80,36 +86,39 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetwork<IN, OUT> {
     ///               = (o_L_i - e_i) *     f'(z_i) *       w_ij
     /// dC/db_L       = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
     ///               = (o_L_i - e_i) *     f'(z_i)
-    pub fn backpropagation(
-        &mut self,
-        verbose_prop: VerbosePropagation,
-        expected_output: &[f64; OUT],
-    ) {
-        let network_output = verbose_prop.outputs.last().expect("There is an output layer");
+    pub fn backpropagation(&mut self, verbose_prop: VerbosePropagation<OUT>, expected_output: &EO) {
+        let network_output = verbose_prop.network_output_arr();
 
         // gradient of the cost function with respect to the neuron output of the last layer.
-        let mut output_gradient = self.output_gradient(network_output, expected_output);
-        let in_out_pairs = verbose_prop.outputs.array_windows::<2>();
+        let mut output_gradient =
+            self.loss_function.backpropagate(&network_output, expected_output);
 
-        for ((layer, gradient), [input, output]) in
-            self.network.iter_layers().zip(self.gradient.iter_mut_layers()).zip(in_out_pairs).rev()
-        {
+        let layer_iter = self.network.iter_layers();
+        let grad_iter = self.gradient.iter_mut_layers();
+        let in_out_pairs = verbose_prop.iter_layers();
+
+        for ((layer, gradient), prop) in layer_iter.zip(grad_iter).zip(in_out_pairs).rev() {
+            //for ((layer, gradient), prop) in layer_iter.zip(grad_iter).zip(in_out_pairs).rev() {
+            let LayerPropagation { input, output } = prop;
             output_gradient = layer.backpropagate(input, output, output_gradient, gradient);
         }
     }
 
-    /// gradient of the loss with respect to the last neuron activations
-    #[inline]
-    fn output_gradient(
+    pub fn test<'a>(
         &self,
-        last_output: &Vec<f64>,
-        expected_output: &[f64; OUT],
-    ) -> OutputGradient {
-        self.network.error_function.gradient(last_output, expected_output)
+        data_pairs: impl IntoIterator<Item = &'a Pair<IN, EO>>,
+    ) -> TestsResult<OUT>
+    where
+        EO: 'a,
+    {
+        self.network.test(&self.loss_function, data_pairs)
     }
 }
 
-impl<const IN: usize, const OUT: usize> Trainer<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
+impl<const IN: usize, const OUT: usize, L, EO> Trainer<IN, EO>
+    for TrainableNeuralNetwork<IN, OUT, L>
+where L: LossFunction<OUT, ExpectedOutput = EO>
+{
     type Trainee = NeuralNetwork<IN, OUT>;
 
     fn get_trainee(&self) -> &Self::Trainee {
@@ -120,7 +129,8 @@ impl<const IN: usize, const OUT: usize> Trainer<IN, OUT> for TrainableNeuralNetw
         &mut self.gradient
     }
 
-    fn calc_gradient<'a>(&mut self, batch: impl IntoIterator<Item = &'a Pair<IN, OUT>>) {
+    fn calc_gradient<'a>(&mut self, batch: impl IntoIterator<Item = &'a Pair<IN, EO>>)
+    where EO: 'a {
         for (input, expected_output) in batch.into_iter().map(Into::into) {
             let out = self.verbose_propagate(input);
             self.backpropagation(out, expected_output);
@@ -131,7 +141,8 @@ impl<const IN: usize, const OUT: usize> Trainer<IN, OUT> for TrainableNeuralNetw
         self.optimizer.optimize_weights(&mut self.network, &self.gradient);
     }
 
-    fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>) {
+    fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, EO>>)
+    where EO: 'a {
         if !self.retain_gradient {
             self.set_zero_gradient();
         }
@@ -149,23 +160,31 @@ impl<const IN: usize, const OUT: usize> Trainer<IN, OUT> for TrainableNeuralNetw
     }
 }
 
-impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for TrainableNeuralNetwork<IN, OUT> {
+impl<const IN: usize, const OUT: usize, EO, L> Propagator<IN, OUT>
+    for TrainableNeuralNetwork<IN, OUT, L>
+where L: LossFunction<OUT, ExpectedOutput = EO>
+{
     fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
         self.network.propagate(input)
     }
 
+    /*
     fn test_propagate<'a>(
         &'a self,
         data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>,
     ) -> TestsResult<OUT> {
         self.network.test_propagate(data_pairs)
     }
+    */
 }
 
-impl<const IN: usize, const OUT: usize> std::fmt::Display for TrainableNeuralNetwork<IN, OUT> {
+impl<const IN: usize, const OUT: usize, EO, L> std::fmt::Display
+    for TrainableNeuralNetwork<IN, OUT, L>
+where L: LossFunction<OUT, ExpectedOutput = EO>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.network)?;
-        write!(f, "Optimizer: {}", self.optimizer)
+        write!(f, "Loss Function: {}, Optimizer: {}", self.loss_function, self.optimizer)
     }
 }
 

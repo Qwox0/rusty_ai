@@ -25,14 +25,22 @@ impl Gradient {
     }
 }
 
-impl IterLayerParams for Gradient {
+impl FromIterator<GradientLayer> for Gradient {
+    fn from_iter<T: IntoIterator<Item = GradientLayer>>(iter: T) -> Self {
+        iter.into_iter().collect::<Vec<_>>().into()
+    }
+}
+
+impl<'a> LayerIter<'a> for Gradient {
+    type Iter = core::slice::Iter<'a, Self::Layer>;
+    type IterMut = core::slice::IterMut<'a, Self::Layer>;
     type Layer = GradientLayer;
 
-    fn iter_layers<'a>(&'a self) -> impl Iterator<Item = &'a Self::Layer> {
+    fn iter_layers(&'a self) -> Self::Iter {
         self.layers.iter()
     }
 
-    fn iter_mut_layers<'a>(&'a mut self) -> impl Iterator<Item = &'a mut Self::Layer> {
+    fn iter_mut_layers(&'a mut self) -> Self::IterMut {
         self.layers.iter_mut()
     }
 }

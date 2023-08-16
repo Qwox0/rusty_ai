@@ -6,25 +6,28 @@ use rayon::prelude::*;
 use std::{sync::Mutex, thread::ScopedJoinHandle};
 use test::black_box;
 
-fn calc_grad(nn: &mut TrainableNeuralNetwork<1, 1>, data: &[Pair<1, 1>]) {
+fn calc_grad<L>(nn: &mut TrainableNeuralNetwork<1, 1, L>, data: &[Pair<1, f64>])
+where L: LossFunction<1> {
     for pair in data {
+        /*
         let (input, expected_output) = pair.into();
         nn.backpropagation(nn.verbose_propagate(input), expected_output);
+        */
     }
 }
 
 trait BackpropBenches {
-    fn single_thread(&mut self, data: &[Pair<1, 1>]);
-    fn single_thread2(&mut self, data: &[Pair<1, 1>]);
-    fn arc_mutex(&mut self, data: &[Pair<1, 1>]);
-    fn mpsc_out(&mut self, data: &[Pair<1, 1>]);
-    fn spmc_in(&mut self, data: &[Pair<1, 1>]);
-    fn rayon_iter(&mut self, data: &[Pair<1, 1>]);
+    fn single_thread(&mut self, data: &[Pair<1, f64>]);
+    fn single_thread2(&mut self, data: &[Pair<1, f64>]);
+    fn arc_mutex(&mut self, data: &[Pair<1, f64>]);
+    fn mpsc_out(&mut self, data: &[Pair<1, f64>]);
+    fn spmc_in(&mut self, data: &[Pair<1, f64>]);
+    fn rayon_iter(&mut self, data: &[Pair<1, f64>]);
 }
 
 /*
-impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
-    fn single_thread(&mut self, data: &[Pair<1, 1>]) {
+impl BackpropBenches for TrainableNeuralNetwork<1, f64> {
+    fn single_thread(&mut self, data: &[Pair<1, f64>]) {
         let data_count = data.len();
         let mut gradient = self.network.init_zero_gradient();
         for (input, expected_output) in data.iter().map(Into::into) {
@@ -38,14 +41,14 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
         self.optimize();
     }
 
-    fn single_thread2(&mut self, data: &[Pair<1, 1>]) {
+    fn single_thread2(&mut self, data: &[Pair<1, f64>]) {
         let data_count = data.len();
         let mut gradient = calc_grad(self, data);
         gradient.div_scalar_mut(data_count as f64);
         self.optimize();
     }
 
-    fn arc_mutex(&mut self, data: &[Pair<1, 1>]) {
+    fn arc_mutex(&mut self, data: &[Pair<1, f64>]) {
         let data_count = data.len();
         let cpus = crate::util::cpu_count();
         let chunk_size = (data_count as f64 / cpus as f64).ceil() as usize;
@@ -89,7 +92,7 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
         return join(rx, CPUS);
     }
     */
-    fn mpsc_out(&mut self, data: &[Pair<1, 1>]) {
+    fn mpsc_out(&mut self, data: &[Pair<1, f64>]) {
         //let (send, recv) = std::sync::mpsc::channel();
 
         let data_count = data.len();
@@ -106,10 +109,10 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
         todo!()
     }
 
-    fn spmc_in(&mut self, data: &[Pair<1, 1>]) {
+    fn spmc_in(&mut self, data: &[Pair<1, f64>]) {
         let data_count = data.len();
         let cpus = crate::util::cpu_count();
-        let (mut send, recv) = spmc::channel::<Option<&Pair<1, 1>>>();
+        let (mut send, recv) = spmc::channel::<Option<&Pair<1, f64>>>();
 
         let mut gradient = std::thread::scope(|scope| {
             let nn = &self;
@@ -150,7 +153,7 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
         self.optimize();
     }
 
-    fn rayon_iter(&mut self, data: &[Pair<1, 1>]) {
+    fn rayon_iter(&mut self, data: &[Pair<1, f64>]) {
         let data_count = data.len();
         let mut gradient = data
             .par_iter()
@@ -174,22 +177,22 @@ impl BackpropBenches for TrainableNeuralNetwork<1, 1> {
 }
 */
 
-impl<'a> IntoParallelIterator for &'a PairList<1, 1> {
-    type Item = &'a Pair<1, 1>;
-    type Iter = rayon::slice::Iter<'a, Pair<1, 1>>;
+impl<'a> IntoParallelIterator for &'a PairList<1, f64> {
+    type Item = &'a Pair<1, f64>;
+    type Iter = rayon::slice::Iter<'a, Pair<1, f64>>;
 
     fn into_par_iter(self) -> Self::Iter {
         self.0.par_iter()
     }
 }
 
-impl ParallelSlice<Pair<1, 1>> for PairList<1, 1> {
-    fn as_parallel_slice(&self) -> &[Pair<1, 1>] {
+impl ParallelSlice<Pair<1, f64>> for PairList<1, f64> {
+    fn as_parallel_slice(&self) -> &[Pair<1, f64>] {
         self.0.as_parallel_slice()
     }
 }
 
-fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
+fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1, HalfSquaredError>, PairList<1, f64>) {
     const SEED: u64 = 69420;
     const NEURON_COUNT: usize = 5;
     /*
@@ -209,7 +212,7 @@ fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1>, PairList<1, 1>) {
     let ai = todo!();
 
     let data =
-        DataBuilder::uniform(-5.0..5.0).seed(SEED).build(data_count).gen_pairs(|x| [x[0].sin()]);
+        DataBuilder::uniform(-5.0..5.0).seed(SEED).build(data_count).gen_pairs(|x| x[0].sin());
 
     (ai, data)
 }

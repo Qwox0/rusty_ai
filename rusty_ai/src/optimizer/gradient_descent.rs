@@ -18,7 +18,7 @@ impl IsOptimizer for GradientDescent {
         nn: &mut NeuralNetwork<IN, OUT>,
         gradient: &Gradient,
     ) {
-        for (x, dx) in nn.iter_mut_parameters().zip(gradient.iter_parameters()) {
+        for (x, dx) in nn.iter_mut_params().zip(gradient.iter_params()) {
             *x -= self.learning_rate * dx;
         }
     }

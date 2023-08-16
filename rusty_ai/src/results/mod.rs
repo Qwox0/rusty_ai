@@ -1,6 +1,6 @@
 mod propagation;
 
-pub use propagation::{PropagationResult, VerbosePropagation};
+pub use propagation::*;
 
 #[derive(Debug)]
 pub struct TestsResult<const OUT: usize> {

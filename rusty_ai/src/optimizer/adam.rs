@@ -47,10 +47,10 @@ impl IsOptimizer for Adam {
         self.generation += 1;
         let time_step = self.generation as i32;
 
-        nn.iter_mut_parameters()
-            .zip(gradient.iter_parameters())
-            .zip(self.m.iter_mut_parameters())
-            .zip(self.v.iter_mut_parameters())
+        nn.iter_mut_params()
+            .zip(gradient.iter_params())
+            .zip(self.m.iter_mut_params())
+            .zip(self.v.iter_mut_params())
             .for_each(|(((x, dx), m), v)| {
                 m.lerp_mut(*dx, self.beta1);
                 v.lerp_mut(dx * dx, self.beta2);

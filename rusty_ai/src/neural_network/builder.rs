@@ -19,18 +19,23 @@ pub struct HasOptimizer(Optimizer);
 // Rng Markers
 pub struct Seed(Option<u64>);
 
-// Builder
+/// Builder
+///
+/// # Generics
+///
+/// `IN`: input dimension (not set yet or const usize)
+/// `LP`: layer parts (contains weights and bias til next activation function is set)
+/// `RNG`: rng type (seeded or not)
 #[derive(Debug)]
 pub struct NeuralNetworkBuilder<IN, LP, RNG> {
     layers: Vec<Layer>,
     layer_parts: LP,
-    error_function: Option<ErrorFunction>,
 
     input_dim: PhantomData<IN>,
 
     // for generation
-    rng: RNG,
     default_activation_function: ActivationFn,
+    rng: RNG,
 }
 
 impl Default for NeuralNetworkBuilder<NoDim, NoLayerParts, Seed> {
@@ -38,10 +43,9 @@ impl Default for NeuralNetworkBuilder<NoDim, NoLayerParts, Seed> {
         NeuralNetworkBuilder {
             layers: vec![],
             layer_parts: NoLayerParts,
-            error_function: None,
             input_dim: PhantomData,
-            rng: Seed(None),
             default_activation_function: ActivationFn::default(),
+            rng: Seed(None),
         }
     }
 }
@@ -59,11 +63,6 @@ impl NeuralNetworkBuilder<NoDim, NoLayerParts, Seed> {
 }
 
 impl<IN, LP, RNG> NeuralNetworkBuilder<IN, LP, RNG> {
-    pub fn error_function(mut self, error_function: ErrorFunction) -> Self {
-        let _ = self.error_function.insert(error_function);
-        self
-    }
-
     pub fn default_activation_function(mut self, act_func: ActivationFn) -> Self {
         self.default_activation_function = act_func;
         self
@@ -115,7 +114,9 @@ pub trait BuildLayer<const IN: usize>: Sized {
 
     fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT>;
 
-    fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT>;
+    fn to_trainable_builder<const OUT: usize>(
+        self,
+    ) -> TrainableNeuralNetworkBuilder<IN, OUT, HalfSquaredError>;
 }
 
 impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
@@ -180,7 +181,7 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
     /// Panics if `OUT` doesn't match the the neuron count of the last layer.
     fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT> {
         assert_eq!(self.last_neuron_count(), OUT);
-        NeuralNetwork::new(self.layers, self.error_function.unwrap_or_default())
+        NeuralNetwork::new(self.layers)
     }
 
     /// Alias for `.build().to_trainable_builder()`
@@ -188,19 +189,21 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
     /// # Panics
     ///
     /// See `NeuralNetworkBuilder::build`
-    fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
+    fn to_trainable_builder<const OUT: usize>(
+        self,
+    ) -> TrainableNeuralNetworkBuilder<IN, OUT, HalfSquaredError> {
         self.build().to_trainable_builder()
     }
 }
 
 macro_rules! activation_function {
-    ( $( $fn_name:ident $variant:ident $(($($arg:ident : $ty:ty),+))? : $variant_str:expr );+ ) => {
+    ( $( $fn_name:ident -> $variant:ident $( { $($arg:ident : $ty:ty),+ } )? : $variant_str:expr );+ ) => {
         $(
             #[doc = "Sets the `"]
             #[doc = $variant_str]
             #[doc = "` activation function for the previously defined layer."]
             pub fn $fn_name(self $(, $($arg : $ty),+)? ) -> BuilderWithoutParts<IN> {
-                self.activation_function(ActivationFn::$variant $(( $($arg),+ ))?)
+                self.activation_function(ActivationFn::$variant $({ $($arg),+ })?)
             }
          )+
     };
@@ -208,18 +211,18 @@ macro_rules! activation_function {
 
 impl<const IN: usize> BuilderWithParts<IN> {
     activation_function! {
-        identity Identity : "Identity" ;
-        relu ReLU(d0: f64) : "ReLU" ;
-        leaky_relu LeakyReLU(leak_rate: f64, d0: f64) : "LeakyReLU" ;
-        sigmoid Sigmoid : "Sigmoid" ;
-        softmax Softmax : "Softmax" ;
-        log_softmax LogSoftmax : "LogSoftmax"
+        identity -> Identity : "Identity" ;
+        relu -> ReLU : "ReLU" ;
+        leaky_relu -> LeakyReLU { leak_rate: f64 } : "LeakyReLU" ;
+        sigmoid -> Sigmoid : "Sigmoid" ;
+        softmax -> Softmax : "Softmax" ;
+        log_softmax -> LogSoftmax : "LogSoftmax"
     }
 
     /// Sets the [`ActivationFn`] for the previously defined layer.
-    pub fn activation_function(self, activation_function: ActivationFn) -> BuilderWithoutParts<IN> {
+    pub fn activation_function(self, af: ActivationFn) -> BuilderWithoutParts<IN> {
         let LayerParts { weights, bias } = self.layer_parts;
-        let layer = Layer::new(weights, bias, activation_function);
+        let layer = Layer::new(weights, bias, af);
         NeuralNetworkBuilder { layer_parts: NoLayerParts, ..self }._layer(layer)
     }
 
@@ -296,7 +299,9 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithParts<IN> {
     /// # Panics
     ///
     /// See `NeuralNetworkBuilder::build`
-    fn to_trainable_builder<const OUT: usize>(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
+    fn to_trainable_builder<const OUT: usize>(
+        self,
+    ) -> TrainableNeuralNetworkBuilder<IN, OUT, HalfSquaredError> {
         self.use_default_activation_function().to_trainable_builder()
     }
 }

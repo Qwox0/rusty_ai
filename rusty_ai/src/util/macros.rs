@@ -53,7 +53,6 @@ macro_rules! impl_fn_traits {
         }
     };
 }
-*/
 /// impl_fn_traits! { ActivationFunction : Fn<(f64,)> -> f64 ; call }
 macro_rules! impl_fn_traits {
     ($type:ty : $method:ident => FnOnce < $in:ty > -> $out:ty) => {
@@ -105,6 +104,7 @@ macro_rules! impl_fn {
     };
 }
 pub(crate) use impl_fn;
+*/
 
 /// ```rust, ignore
 /// struct Point { x: usize, y: usize, other: i32 }

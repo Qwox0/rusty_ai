@@ -4,7 +4,7 @@ pub trait Trainee {
     fn init_zero_gradient(&self) -> Gradient;
 }
 
-pub trait Trainer<const IN: usize, const OUT: usize> {
+pub trait Trainer<const IN: usize, EO> {
     type Trainee: Trainee;
 
     fn get_trainee(&self) -> &Self::Trainee;
@@ -15,7 +15,8 @@ pub trait Trainer<const IN: usize, const OUT: usize> {
         self.get_gradient_mut().set_zero()
     }
 
-    fn calc_gradient<'a>(&mut self, batch: impl IntoIterator<Item = &'a Pair<IN, OUT>>);
+    fn calc_gradient<'a>(&mut self, batch: impl IntoIterator<Item = &'a Pair<IN, EO>>)
+    where EO: 'a;
 
     fn clip_gradient(&mut self, clip_gradient_norm: ClipGradientNorm) {
         clip_gradient_norm.clip_gradient_pytorch(self.get_gradient_mut());
@@ -28,13 +29,14 @@ pub trait Trainer<const IN: usize, const OUT: usize> {
     /// Trains the neural network for one step/generation. Uses a small data set `data_pairs` to
     /// find an approximation for the weights gradient. The neural network's Optimizer changes the
     /// weights by using the calculated gradient.
-    fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>);
+    fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, EO>>)
+    where EO: 'a;
 
     /// Trains the `Self::Trainee` for `epoch_count` epochs. Each epoch the entire `training_data`
     /// is used to calculated the gradient approximation.
     fn full_train(
         &mut self,
-        training_data: &PairList<IN, OUT>,
+        training_data: &PairList<IN, EO>,
         epoch_count: usize,
         mut callback: impl FnMut(usize, &Self::Trainee),
     ) {
@@ -46,7 +48,7 @@ pub trait Trainer<const IN: usize, const OUT: usize> {
 
     fn train(
         &mut self,
-        training_data: &PairList<IN, OUT>,
+        training_data: &PairList<IN, EO>,
         training_amount: usize,
         epoch_count: usize,
         mut callback: impl FnMut(usize, &Self::Trainee),

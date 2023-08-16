@@ -125,7 +125,15 @@ impl Layer {
     }
 }
 
-impl_IterParams! {Layer: weights, bias }
+impl<'a> ParamsIter<'a> for Layer {
+    fn iter_parameters(&'a self) -> impl Iterator<Item = &'a f64> {
+        Self::default_chain(self.weights.iter(), self.bias.iter())
+    }
+
+    fn iter_mut_parameters(&'a mut self) -> impl Iterator<Item = &'a mut f64> {
+        Self::default_chain(self.weights.iter_mut(), self.bias.iter_mut())
+    }
+}
 
 impl std::fmt::Display for Layer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

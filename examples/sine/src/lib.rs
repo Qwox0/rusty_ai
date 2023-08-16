@@ -24,16 +24,16 @@ pub fn main() {
         .expect("could open file");
 
     let mut ai = NeuralNetworkBuilder::default()
-        .default_activation_function(ActivationFn::ReLU(0.0))
+        .default_activation_function(ActivationFn::ReLU)
         .input::<1>()
         .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .identity()
-        .error_function(ErrorFunction::SquaredError)
         .build::<1>()
         .to_trainable_builder()
+        .error_function(SquaredError)
         .sgd(GradientDescent { learning_rate: 0.01 })
         .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two)
@@ -44,7 +44,7 @@ pub fn main() {
     let training_data = DataBuilder::uniform(-2.0..2.0).build::<1>(1000).gen_pairs(|[x]| [x.sin()]);
     let test_data = DataBuilder::uniform(-2.0..2.0).build::<1>(30).gen_pairs(|[x]| [x.sin()]);
     let (x, y): (Vec<_>, Vec<_>) =
-        test_data.iter().map(|pair| (pair.input[0], pair.output[0])).unzip();
+        test_data.iter().map(|pair| (pair.input[0], pair.expected_output[0])).unzip();
 
     writeln!(
         js_file,
@@ -56,13 +56,13 @@ pub fn main() {
 
     let mut js_res_vars = vec![];
 
-    let res = ai.test_propagate(test_data.iter());
+    let res = ai.test(test_data.iter());
     println!("epoch: {:>4}, loss: {:<20}", 0, res.error);
     export_res(&mut js_file, &mut js_res_vars, 0, res);
 
     ai.full_train(&training_data, EPOCHS, |epoch, ai| {
         if epoch % 100 == 0 {
-            let res = ai.test_propagate(test_data.iter());
+            let res = ai.test(&SquaredError, test_data.iter());
             println!("epoch: {:>4}, loss: {:<20}", epoch, res.error);
             export_res(&mut js_file, &mut js_res_vars, epoch, res);
         }

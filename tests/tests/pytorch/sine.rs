@@ -1,20 +1,25 @@
 use rusty_ai::prelude::*;
 
-struct Args<'a, F>
-where F: Fn(usize) -> bool
+struct Args<'a, F, L>
+where
+    F: Fn(usize) -> bool,
+    L: LossFunction<1, ExpectedOutput = [f64; 1]>,
 {
-    ai: TrainableNeuralNetwork<1, 1>,
-    data: PairList<1, 1>,
+    ai: TrainableNeuralNetwork<1, 1, L>,
+    data: PairList<1, [f64; 1]>,
     losses: &'a [f64],
     epochs: usize,
     test_condition: F,
 }
 
-fn test<F>(args: Args<F>)
-where F: Fn(usize) -> bool {
+fn test<F, L>(args: Args<F, L>)
+where
+    F: Fn(usize) -> bool,
+    L: LossFunction<1, ExpectedOutput = [f64; 1]>,
+{
     let Args { mut ai, data, losses, epochs, test_condition } = args;
-    let test = |epoch: usize, ai: &TrainableNeuralNetwork<1, 1>, expected_loss: f64| {
-        let res = ai.test_propagate(data.iter());
+    let test = |epoch: usize, ai: &TrainableNeuralNetwork<1, 1, L>, expected_loss: f64| {
+        let res = ai.test(data.iter());
 
         println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, res.error, res.error.to_bits());
         println!("    expected_loss: {:<20} {:064b}", expected_loss, expected_loss.to_bits());
@@ -265,17 +270,17 @@ fn sine() {
     ];
 
     let ai = NeuralNetworkBuilder::default()
-        .default_activation_function(ActivationFn::ReLU(0.0))
+        .default_activation_function(ActivationFn::ReLU)
         .input::<1>()
         .layer_from_parameters(w1, b1)
         .layer_from_parameters(w2, b2)
         .layer_from_parameters(w3, b3)
         .layer_from_parameters(w4, b4)
         .layer_from_parameters(w5, b5)
-        .activation_function(ActivationFn::Identity)
-        .error_function(ErrorFunction::SquaredError)
+        .identity()
         .build()
         .to_trainable_builder()
+        .error_function(SquaredError)
         .sgd(GradientDescent { learning_rate: 0.01 })
         .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two)

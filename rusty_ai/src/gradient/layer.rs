@@ -5,8 +5,8 @@ use std::iter::once;
 /// weights and the bias of a layer in
 #[derive(Debug, Clone)]
 pub struct GradientLayer {
-    pub bias_gradient: BiasGradient,
     pub weight_gradient: WeightGradient,
+    pub bias_gradient: BiasGradient,
 }
 
 impl GradientLayer {
@@ -19,7 +19,15 @@ impl GradientLayer {
     }
 }
 
-impl_IterParams! { GradientLayer: weight_gradient, bias_gradient }
+impl<'a> ParamsIter<'a> for GradientLayer {
+    fn iter_parameters(&'a self) -> impl Iterator<Item = &'a f64> {
+        Self::default_chain(self.weight_gradient.iter(), self.bias_gradient.iter())
+    }
+
+    fn iter_mut_parameters(&'a mut self) -> impl Iterator<Item = &'a mut f64> {
+        Self::default_chain(self.weight_gradient.iter_mut(), self.bias_gradient.iter_mut())
+    }
+}
 
 impl std::fmt::Display for GradientLayer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
