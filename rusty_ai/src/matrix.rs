@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use itertools::Itertools;
 use rand::{distributions::DistIter, prelude::Distribution};
+use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display, Write},
     ops::{Add, Index, IndexMut, Mul},
@@ -23,7 +24,7 @@ impl_ring! { i8 i16 i32 i64 i128: 0 1 }
 impl_ring! { u8 u16 u32 u64 u128: 0 1 }
 impl_ring! { f32 f64: 0.0 1.0 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub struct Matrix<T: Sized> {
     width: usize,
     height: usize,

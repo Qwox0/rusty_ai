@@ -4,7 +4,7 @@ use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// layers contains all Hidden Layers and the Output Layers
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
     layers: Vec<Layer>,
 }

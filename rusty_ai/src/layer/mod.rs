@@ -2,11 +2,12 @@ mod bias;
 
 use crate::prelude::*;
 pub use bias::*;
+use serde::{Deserialize, Serialize};
 use std::iter::once;
 
 /// Layer: all input weights + bias for all neurons in layer + activation
 /// function The Propagation calculation is done in the same Order
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Layer {
     weights: Matrix<f64>,
     bias: LayerBias,
