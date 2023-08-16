@@ -4,9 +4,10 @@ mod softmax;
 
 use crate::prelude::*;
 use derive_more::Display;
+use serde::{Deserialize, Serialize};
 
 /// see the specific struct for documentation.
-#[derive(Debug, Clone, Copy, Display, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Display)]
 pub enum ActivationFn {
     /// Identity(x) = x
     /// Identity'(x) = 1

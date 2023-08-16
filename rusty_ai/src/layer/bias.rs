@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, derive_more::From)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, derive_more::From, PartialEq, Serialize, Deserialize)]
 pub struct LayerBias(Vec<f64>);
 
 impl LayerBias {
