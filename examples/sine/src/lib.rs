@@ -33,7 +33,7 @@ pub fn main() {
         .identity()
         .build::<1>()
         .to_trainable_builder()
-        .error_function(SquaredError)
+        .loss_function(SquaredError)
         .sgd(GradientDescent { learning_rate: 0.01 })
         .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two)

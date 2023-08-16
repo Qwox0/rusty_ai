@@ -66,7 +66,7 @@ pub fn main() {
         //.activation_function(ActivationFn::Sigmoid)
         .build::<10>()
         .to_trainable_builder()
-        .error_function(SquaredError)
+        .loss_function(SquaredError)
         .sgd(GradientDescent { learning_rate: 0.003 })
         .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two) // ?
@@ -294,7 +294,7 @@ pub mod tests {
             .sigmoid()
             .build::<OUTPUTS>()
             .to_trainable_builder()
-            .error_function(SquaredError)
+            .loss_function(SquaredError)
             .sgd(GradientDescent { learning_rate: 0.003 })
             .retain_gradient(true)
             .new_clip_gradient_norm(5.0, Norm::Two) // ?

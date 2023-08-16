@@ -29,7 +29,7 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetworkBuilder<IN, OUT, H
 impl<const IN: usize, const OUT: usize, EO, L> TrainableNeuralNetworkBuilder<IN, OUT, L>
 where L: LossFunction<OUT, ExpectedOutput = EO>
 {
-    pub fn error_function<NL: LossFunction<OUT>>(
+    pub fn loss_function<NL: LossFunction<OUT>>(
         self,
         loss_function: NL,
     ) -> TrainableNeuralNetworkBuilder<IN, OUT, NL> {
