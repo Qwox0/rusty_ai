@@ -91,15 +91,14 @@ pub enum ActivationFn {
 impl ActivationFunction for ActivationFn {
     fn propagate(&self, input: Vec<f64>) -> Vec<f64> {
         use ActivationFn::*;
+        use ActivationFunction as F;
         match *self {
-            Identity => ActivationFunction::propagate(&identity::Identity, input),
-            ReLU => ActivationFunction::propagate(&relu::ReLU, input),
-            LeakyReLU { leak_rate } => {
-                ActivationFunction::propagate(&relu::LeakyReLU { leak_rate }, input)
-            },
-            Sigmoid => ActivationFunction::propagate(&sigmoid::Sigmoid, input),
-            Softmax => ActivationFunction::propagate(&softmax::Softmax, input),
-            LogSoftmax => ActivationFunction::propagate(&softmax::LogSoftmax, input),
+            Identity => F::propagate(&identity::Identity, input),
+            ReLU => F::propagate(&relu::ReLU, input),
+            LeakyReLU { leak_rate } => F::propagate(&relu::LeakyReLU { leak_rate }, input),
+            Sigmoid => F::propagate(&sigmoid::Sigmoid, input),
+            Softmax => F::propagate(&softmax::Softmax, input),
+            LogSoftmax => F::propagate(&softmax::LogSoftmax, input),
         }
     }
 
@@ -108,7 +107,18 @@ impl ActivationFunction for ActivationFn {
         output_gradient: OutputGradient,
         self_output: &[f64],
     ) -> WeightedSumGradient {
-        todo!()
+        use ActivationFn::*;
+        use ActivationFunction as F;
+        match *self {
+            Identity => F::backpropagate(&identity::Identity, output_gradient, self_output),
+            ReLU => F::backpropagate(&relu::ReLU, output_gradient, self_output),
+            LeakyReLU { leak_rate } => {
+                F::backpropagate(&relu::LeakyReLU { leak_rate }, output_gradient, self_output)
+            },
+            Sigmoid => F::backpropagate(&sigmoid::Sigmoid, output_gradient, self_output),
+            Softmax => F::backpropagate(&softmax::Softmax, output_gradient, self_output),
+            LogSoftmax => F::backpropagate(&softmax::LogSoftmax, output_gradient, self_output),
+        }
     }
 }
 
