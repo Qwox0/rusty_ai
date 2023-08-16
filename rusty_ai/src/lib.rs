@@ -9,13 +9,15 @@
 #![feature(int_roundings)]
 #![feature(portable_simd)]
 
+#![feature(anonymous_lifetime_in_impl_trait)]
+
 pub mod activation_function;
 pub mod clip_gradient_norm;
 pub mod data;
-pub mod error_function;
 pub mod gradient;
 pub mod initializer;
 pub mod layer;
+pub mod loss_function;
 pub mod matrix;
 pub mod neural_network;
 pub mod optimizer;
@@ -27,8 +29,8 @@ pub mod util;
 
 // Ai Training steps
 // n: number of data points
-// 1. Propagation function (every Artificial neurons)
-//      weighted sum: net_j = ∑ x_i*w_(ij) from i = 1 to m (m: number of neurons
+// 1. Propagation function (every Artificial neurons) weighted sum: net_j = ∑ x_i*w_(ij) from i = 1
+//    to m (m: number of neurons
 // in layer j-1) 2. Activation function (every Artificial neurons)
 //      ReLU: o_j = max(0, net_j)                               (for hidden
 // layers)      sigmoid: o_j = 1/(1+e^(-net_j)) = e^net_j/(e^net_j + 1) (for
@@ -37,8 +39,7 @@ pub mod util;
 //
 //      o_i: components of the result vector
 //      t_i: components of the target vector (correct solution, given data)
-// 4. Backpropagation
-//      gradient of Error = ∇ E -> dE/dw_(ij)   =
+// 4. Backpropagation gradient of Error = ∇ E -> dE/dw_(ij)   =
 // dE/do_j*do_j/dnet_j*dnet_j/w_(ij)      with the given examples:
 //          dE/do_j         = o_j - t_j
 //                            {0 when net_j<0

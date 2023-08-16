@@ -16,7 +16,7 @@ const OUTPUTS: usize = 10;
 
 const NORMALIZE_MEAN: f64 = 0.5;
 const NORMALIZE_STD: f64 = 0.5;
-fn transform(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<IMAGE_SIZE, OUTPUTS> {
+fn transform(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<IMAGE_SIZE, [f64; OUTPUTS]> {
     img_vec
         .into_iter()
         .map(|x| ((x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD)
@@ -57,15 +57,16 @@ pub fn main() {
     let mut ai = NeuralNetworkBuilder::default()
         .input::<IMAGE_SIZE>()
         .layer(128, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .relu(0.0)
+        .relu()
         .layer(64, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .relu(0.0)
+        .relu()
         .layer(10, Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .sigmoid()
         //.activation_function(ActivationFn::LogSoftmax)
-        .activation_function(ActivationFn::Sigmoid)
-        .error_function(ErrorFunction::SquaredError)
+        //.activation_function(ActivationFn::Sigmoid)
         .build::<10>()
         .to_trainable_builder()
+        .error_function(SquaredError)
         .sgd(GradientDescent { learning_rate: 0.003 })
         .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two) // ?
@@ -78,7 +79,7 @@ pub fn main() {
 
     for e in 0..EPOCHS {
         for batch in training_data.chunks(BATCH_SIZE) {
-            ai.training_step(batch)
+            ai.training_step(batch);
         }
         // shuffle data after one full iteration
         training_data.shuffle();
@@ -95,7 +96,7 @@ pub fn main() {
         let errors = output
             .0
             .iter()
-            .zip(&test.output)
+            .zip(&test.expected_output)
             .map(|(o, e)| o - e)
             .map(|x| x * x)
             .collect::<Vec<_>>();
@@ -118,12 +119,12 @@ pub fn main() {
     */
 }
 
-pub fn print_image_tmp(pair: &Pair<IMAGE_SIZE, 10>, val_range: Range<f64>) {
-    println!("{} label: \n{:?}", image_to_string(&pair.input, val_range), pair.output);
+pub fn print_image_tmp(pair: &Pair<IMAGE_SIZE, [f64; 10]>, val_range: Range<f64>) {
+    println!("{} label: \n{:?}", image_to_string(&pair.input, val_range), pair.expected_output);
 }
 
-pub fn print_image(pair: &Pair<IMAGE_SIZE, 1>, val_range: Range<f64>) {
-    println!("{} label: {}", image_to_string(&pair.input, val_range), pair.output[0]);
+pub fn print_image(pair: &Pair<IMAGE_SIZE, u8>, val_range: Range<f64>) {
+    println!("{} label: {}", image_to_string(&pair.input, val_range), pair.expected_output);
 }
 
 /// each pixel has a size of 2x1 (`XX`).
@@ -261,7 +262,7 @@ pub mod tests {
     use super::*;
     use test::*;
 
-    fn load_data() -> Pair<IMAGE_SIZE, 1> {
+    fn load_data() -> Pair<IMAGE_SIZE, u8> {
         Pair::new(
             TEST_IMG
                 .iter()
@@ -269,31 +270,31 @@ pub mod tests {
                 .array_chunks()
                 .next()
                 .unwrap(),
-            [TEST_LBL as f64],
+            TEST_LBL,
         )
     }
 
-    fn load_data_hack() -> Pair<IMAGE_SIZE, 10> {
-        let Pair { input, output } = load_data();
-        let idx = output[0] as usize;
+    fn load_data_hack() -> Pair<IMAGE_SIZE, [f64; 10]> {
+        let Pair { input, expected_output: output } = load_data();
+        let idx = output as usize;
         let mut output = [0.0; 10];
         output[idx] = 1.0;
         Pair::new(input, output)
     }
 
-    fn setup_nn() -> TrainableNeuralNetwork<IMAGE_SIZE, 10> {
+    fn setup_nn() -> TrainableNeuralNetwork<IMAGE_SIZE, OUTPUTS, SquaredError> {
         NeuralNetworkBuilder::default()
             .input::<IMAGE_SIZE>()
             .layer(128, Initializer::PytorchDefault, Initializer::PytorchDefault)
-            .relu(0.0)
+            .activation_function(ActivationFn::ReLU)
             .layer(64, Initializer::PytorchDefault, Initializer::PytorchDefault)
-            .relu(0.0)
-            .layer(10, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .relu() // same as two lines above
+            .layer(OUTPUTS, Initializer::PytorchDefault, Initializer::PytorchDefault)
             //.activation_function(ActivationFn::LogSoftmax)
-            .activation_function(ActivationFn::Sigmoid)
-            .error_function(ErrorFunction::SquaredError)
-            .build::<10>()
+            .sigmoid()
+            .build::<OUTPUTS>()
             .to_trainable_builder()
+            .error_function(SquaredError)
             .sgd(GradientDescent { learning_rate: 0.003 })
             .retain_gradient(true)
             .new_clip_gradient_norm(5.0, Norm::Two) // ?

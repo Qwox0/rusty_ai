@@ -1,23 +1,39 @@
 use crate::prelude::*;
 
-pub struct TrainableNeuralNetworkBuilder<const IN: usize, const OUT: usize> {
+pub struct TrainableNeuralNetworkBuilder<const IN: usize, const OUT: usize, L>
+where L: LossFunction<OUT>
+{
     network: NeuralNetwork<IN, OUT>,
+    loss_function: L,
     optimizer: Optimizer,
     retain_gradient: bool,
     clip_gradient_norm: Option<ClipGradientNorm>,
 }
 
-impl<const IN: usize, const OUT: usize> TrainableNeuralNetworkBuilder<IN, OUT> {
+impl<const IN: usize, const OUT: usize> TrainableNeuralNetworkBuilder<IN, OUT, HalfSquaredError> {
+    /// `loss_function`: [`HalfSquaredError`]
     /// `retain_gradient`: `false`
     /// `optimizer`: Default [`GradientDescent`]
     /// `clip_gradient_norm`: [`None`]
     pub fn defaults(network: NeuralNetwork<IN, OUT>) -> Self {
         TrainableNeuralNetworkBuilder {
             network,
+            loss_function: HalfSquaredError,
             retain_gradient: false,
             optimizer: Optimizer::default_gradient_descent(),
             clip_gradient_norm: None,
         }
+    }
+}
+
+impl<const IN: usize, const OUT: usize, EO, L> TrainableNeuralNetworkBuilder<IN, OUT, L>
+where L: LossFunction<OUT, ExpectedOutput = EO>
+{
+    pub fn error_function<NL: LossFunction<OUT>>(
+        self,
+        loss_function: NL,
+    ) -> TrainableNeuralNetworkBuilder<IN, OUT, NL> {
+        TrainableNeuralNetworkBuilder { loss_function, ..self }
     }
 
     pub fn optimizer(mut self, optimizer: Optimizer) -> Self {
@@ -65,13 +81,20 @@ impl<const IN: usize, const OUT: usize> TrainableNeuralNetworkBuilder<IN, OUT> {
         self.clip_gradient_norm(clip_grad_norm)
     }
 
-    pub fn build(self) -> TrainableNeuralNetwork<IN, OUT> {
+    pub fn build(self) -> TrainableNeuralNetwork<IN, OUT, L> {
         let TrainableNeuralNetworkBuilder {
             network,
+            loss_function,
             optimizer,
             retain_gradient,
             clip_gradient_norm,
         } = self;
-        TrainableNeuralNetwork::new(network, optimizer, retain_gradient, clip_gradient_norm)
+        TrainableNeuralNetwork::new(
+            network,
+            loss_function,
+            optimizer,
+            retain_gradient,
+            clip_gradient_norm,
+        )
     }
 }

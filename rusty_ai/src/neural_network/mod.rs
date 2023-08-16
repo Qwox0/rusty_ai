@@ -6,49 +6,53 @@ use crate::prelude::*;
 #[derive(Debug)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
     layers: Vec<Layer>,
-    pub(crate) error_function: ErrorFunction,
-    propagation_buf_len: usize,
 }
 
 impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
+    /// use [`NeuralNetworkBuilder`] instead!
+    fn new(layers: Vec<Layer>) -> NeuralNetwork<IN, OUT> {
+        NeuralNetwork { layers }
+    }
+
+    pub fn to_trainable_builder(self) -> TrainableNeuralNetworkBuilder<IN, OUT, HalfSquaredError> {
+        TrainableNeuralNetworkBuilder::defaults(self)
+    }
+
     #[inline]
     pub fn get_layers(&self) -> &Vec<Layer> {
         &self.layers
     }
 
-    /// use [`NeuralNetworkBuilder`] instead!
-    fn new(layers: Vec<Layer>, error_function: ErrorFunction) -> NeuralNetwork<IN, OUT> {
-        let propagation_buf_len =
-            layers.iter().map(Layer::get_input_count).max().unwrap_or(0).max(OUT);
-        NeuralNetwork { layers, error_function, propagation_buf_len }
-    }
-
-    pub fn to_trainable_builder(self) -> TrainableNeuralNetworkBuilder<IN, OUT> {
-        TrainableNeuralNetworkBuilder::defaults(self)
-    }
-
-    /// get [`Vec<f64>`] with maximum length and capacity needed for
-    /// propagation. initialized with all `0.0`
-    #[allow(unused)]
-    fn get_propagation_buffer(&self) -> Vec<f64> {
-        let mut buf = vec![0.0; self.propagation_buf_len];
-        buf.shrink_to_fit();
-        buf
-    }
-
     pub fn init_zero_gradient(&self) -> Gradient {
-        self.iter_layers().map(Layer::init_zero_gradient).collect::<Vec<_>>().into()
+        self.iter_layers().map(Layer::init_zero_gradient).collect()
+    }
+
+    pub fn test<'a, EO: 'a>(
+        &self,
+        loss_function: &impl LossFunction<OUT, ExpectedOutput = EO>,
+        data_pairs: impl IntoIterator<Item = &'a Pair<IN, EO>>,
+    ) -> TestsResult<OUT> {
+        data_pairs
+            .into_iter()
+            .map(|pair| {
+                let output = self.propagate(&pair.input);
+                let error = loss_function.propagate(&output.0, &pair.expected_output);
+                (output, error)
+            })
+            .collect()
     }
 }
 
-impl<const IN: usize, const OUT: usize> IterLayerParams for NeuralNetwork<IN, OUT> {
+impl<'a, const IN: usize, const OUT: usize> LayerIter<'a> for NeuralNetwork<IN, OUT> {
+    type Iter = core::slice::Iter<'a, Layer>;
+    type IterMut = core::slice::IterMut<'a, Layer>;
     type Layer = Layer;
 
-    fn iter_layers<'a>(&'a self) -> ::core::slice::Iter<'a, Self::Layer> {
+    fn iter_layers(&'a self) -> Self::Iter {
         self.layers.iter()
     }
 
-    fn iter_mut_layers<'a>(&'a mut self) -> ::core::slice::IterMut<'a, Self::Layer> {
+    fn iter_mut_layers(&'a mut self) -> Self::IterMut {
         self.layers.iter_mut()
     }
 }
@@ -56,20 +60,6 @@ impl<const IN: usize, const OUT: usize> IterLayerParams for NeuralNetwork<IN, OU
 impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN, OUT> {
     fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
         self.iter_layers().fold(input.to_vec(), |acc, layer| layer.propagate(&acc)).into()
-    }
-
-    fn test_propagate<'a>(
-        &'a self,
-        data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>,
-    ) -> TestsResult<OUT> {
-        data_pairs
-            .into_iter()
-            .map(|pair| {
-                let output = self.propagate(&pair.input);
-                let error = self.error_function.calculate(&output.0, &pair.output);
-                (output, error)
-            })
-            .collect()
     }
 }
 
