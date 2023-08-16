@@ -7,12 +7,14 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-thiserror.workspace = true
 derive_more.workspace = true
-itertools.workspace = true
 enum_dispatch.workspace = true
+itertools.workspace = true
 rand.workspace = true
 rand_distr.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 rayon = "1.7.0"

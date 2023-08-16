@@ -1,9 +1,10 @@
 pub mod builder;
 
 use crate::prelude::*;
+use serde::{Deserialize, Serialize};
 
 /// layers contains all Hidden Layers and the Output Layers
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
     layers: Vec<Layer>,
 }
