@@ -1,24 +1,26 @@
 use rusty_ai::prelude::*;
 
-struct Args<'a, F, L>
+struct Args<'a, F, L, O>
 where
     F: Fn(usize) -> bool,
     L: LossFunction<1, ExpectedOutput = [f64; 1]>,
+    O: Optimizer,
 {
-    ai: TrainableNeuralNetwork<1, 1, L>,
+    ai: NNTrainer<1, 1, L, O>,
     data: PairList<1, [f64; 1]>,
     losses: &'a [f64],
     epochs: usize,
     test_condition: F,
 }
 
-fn test<F, L>(args: Args<F, L>)
+fn test<F, L, O>(args: Args<F, L, O>)
 where
     F: Fn(usize) -> bool,
     L: LossFunction<1, ExpectedOutput = [f64; 1]>,
+    O: Optimizer,
 {
     let Args { mut ai, data, losses, epochs, test_condition } = args;
-    let test = |epoch: usize, ai: &TrainableNeuralNetwork<1, 1, L>, expected_loss: f64| {
+    let test = |epoch: usize, ai: &NNTrainer<1, 1, L, O>, expected_loss: f64| {
         let res = ai.test(data.iter());
 
         println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, res.error, res.error.to_bits());
@@ -269,7 +271,7 @@ fn sine() {
         1.7792481476766535,
     ];
 
-    let ai = NeuralNetworkBuilder::default()
+    let ai = NNBuilder::default()
         .default_activation_function(ActivationFn::ReLU)
         .input::<1>()
         .layer_from_parameters(w1, b1)
@@ -281,7 +283,7 @@ fn sine() {
         .build()
         .to_trainable_builder()
         .loss_function(SquaredError)
-        .sgd(GradientDescent { learning_rate: 0.01 })
+        .optimizer(SGD { learning_rate: 0.01, ..SGD::default() })
         .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two)
         .build();

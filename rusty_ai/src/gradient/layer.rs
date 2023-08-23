@@ -1,9 +1,10 @@
 use crate::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::iter::once;
 
 /// Contains the estimated Gradient of the Costfunction with respect to the
 /// weights and the bias of a layer in
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GradientLayer {
     pub weight_gradient: WeightGradient,
     pub bias_gradient: BiasGradient,

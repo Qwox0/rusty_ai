@@ -1,0 +1,4 @@
+/mnist-raw/t10k-images-idx3-ubyte
+/mnist-raw/t10k-labels-idx1-ubyte
+/mnist-raw/train-images-idx3-ubyte
+/mnist-raw/train-labels-idx1-ubyte

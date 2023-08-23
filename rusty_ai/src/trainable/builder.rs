@@ -1,69 +1,40 @@
 use crate::prelude::*;
 
-pub struct TrainableNeuralNetworkBuilder<const IN: usize, const OUT: usize, L>
-where L: LossFunction<OUT>
-{
+pub struct NoLossFunction;
+pub struct NoOptimizer;
+
+pub struct NNTrainerBuilder<const IN: usize, const OUT: usize, L, O> {
     network: NeuralNetwork<IN, OUT>,
     loss_function: L,
-    optimizer: Optimizer,
+    optimizer: O,
     retain_gradient: bool,
     clip_gradient_norm: Option<ClipGradientNorm>,
 }
 
-impl<const IN: usize, const OUT: usize> TrainableNeuralNetworkBuilder<IN, OUT, HalfSquaredError> {
-    /// `loss_function`: [`HalfSquaredError`]
+impl<const IN: usize, const OUT: usize> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
     /// `retain_gradient`: `false`
     /// `optimizer`: Default [`GradientDescent`]
     /// `clip_gradient_norm`: [`None`]
-    pub fn defaults(network: NeuralNetwork<IN, OUT>) -> Self {
-        TrainableNeuralNetworkBuilder {
+    pub fn new(network: NeuralNetwork<IN, OUT>) -> Self {
+        NNTrainerBuilder {
             network,
-            loss_function: HalfSquaredError,
+            loss_function: NoLossFunction,
             retain_gradient: false,
-            optimizer: Optimizer::default_gradient_descent(),
+            optimizer: NoOptimizer,
             clip_gradient_norm: None,
         }
     }
 }
 
-impl<const IN: usize, const OUT: usize, EO, L> TrainableNeuralNetworkBuilder<IN, OUT, L>
-where L: LossFunction<OUT, ExpectedOutput = EO>
-{
-    pub fn loss_function<NL: LossFunction<OUT>>(
-        self,
-        loss_function: NL,
-    ) -> TrainableNeuralNetworkBuilder<IN, OUT, NL> {
-        TrainableNeuralNetworkBuilder { loss_function, ..self }
+impl<const IN: usize, const OUT: usize, L, O> NNTrainerBuilder<IN, OUT, L, O> {
+    pub fn loss_function<L2>(self, loss_function: L2) -> NNTrainerBuilder<IN, OUT, L2, O>
+    where L2: LossFunction<OUT> {
+        NNTrainerBuilder { loss_function, ..self }
     }
 
-    pub fn optimizer(mut self, optimizer: Optimizer) -> Self {
-        self.optimizer = optimizer;
-        self
-    }
-
-    pub fn sgd(self, sgd: GradientDescent) -> Self {
-        self.optimizer(Optimizer::GradientDescent(sgd))
-    }
-
-    pub fn sgd_default(self) -> Self {
-        self.sgd(GradientDescent::default())
-    }
-
-    pub fn new_sgd(self, learning_rate: f64) -> Self {
-        self.sgd(GradientDescent { learning_rate })
-    }
-
-    pub fn adam(self, adam: Adam) -> Self {
-        self.optimizer(Optimizer::Adam(adam))
-    }
-
-    pub fn adam_default(self, layers: &Vec<Layer>) -> Self {
-        self.adam(Adam::default(layers))
-    }
-
-    pub fn new_adam(self, learning_rate: f64, beta1: f64, beta2: f64, epsilon: f64) -> Self {
-        let adam = Adam::new(learning_rate, beta1, beta2, epsilon, self.network.get_layers());
-        self.adam(adam)
+    pub fn optimizer<O2>(self, optimizer: O2) -> NNTrainerBuilder<IN, OUT, L, O2>
+    where O2: OptimizerValues {
+        NNTrainerBuilder { optimizer, ..self }
     }
 
     pub fn retain_gradient(mut self, retain_gradient: bool) -> Self {
@@ -80,21 +51,22 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
         let clip_grad_norm = ClipGradientNorm::new(norm_type, max_norm);
         self.clip_gradient_norm(clip_grad_norm)
     }
+}
 
-    pub fn build(self) -> TrainableNeuralNetwork<IN, OUT, L> {
-        let TrainableNeuralNetworkBuilder {
+impl<const IN: usize, const OUT: usize, EO, L, O> NNTrainerBuilder<IN, OUT, L, O>
+where
+    L: LossFunction<OUT, ExpectedOutput = EO>,
+    O: OptimizerValues,
+{
+    pub fn build(self) -> NNTrainer<IN, OUT, L, O::Optimizer> {
+        let NNTrainerBuilder {
             network,
             loss_function,
             optimizer,
             retain_gradient,
             clip_gradient_norm,
         } = self;
-        TrainableNeuralNetwork::new(
-            network,
-            loss_function,
-            optimizer,
-            retain_gradient,
-            clip_gradient_norm,
-        )
+        let optimizer = optimizer.init_with_layers(network.get_layers()).into();
+        NNTrainer::new(network, loss_function, optimizer, retain_gradient, clip_gradient_norm)
     }
 }

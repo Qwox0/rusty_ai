@@ -1,6 +1,7 @@
 use crate::prelude::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ClipGradientNorm {
     pub max_norm: f64,
     pub norm_type: Norm,

@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use anyhow::Context;
 use derive_more::Display;
 use std::fmt::Display;
 
@@ -6,13 +7,35 @@ use std::fmt::Display;
 pub trait LossFunction<const N: usize>: Display {
     type ExpectedOutput;
 
-    fn propagate(&self, output: &[f64; N], expected_output: &Self::ExpectedOutput) -> f64;
+    fn propagate_arr(&self, output: &[f64; N], expected_output: &Self::ExpectedOutput) -> f64;
 
-    fn backpropagate(
+    #[inline]
+    fn propagate(
+        &self,
+        output: &impl PropResult<N>,
+        expected_output: &Self::ExpectedOutput,
+    ) -> f64 {
+        self.propagate_arr(&output.get_nn_output(), expected_output)
+    }
+
+    fn backpropagate_arr(
         &self,
         output: &[f64; N],
         expected_output: &Self::ExpectedOutput,
     ) -> OutputGradient;
+
+    #[inline]
+    fn backpropagate(
+        &self,
+        output: &impl PropResult<N>,
+        expected_output: &Self::ExpectedOutput,
+    ) -> OutputGradient {
+        self.backpropagate_arr(&output.get_nn_output(), expected_output)
+    }
+
+    fn check_layers(_layer: &Vec<Layer>) -> anyhow::Result<()> {
+        anyhow::Ok(())
+    }
 }
 
 /// squared error loss function.
@@ -23,11 +46,11 @@ pub struct SquaredError;
 impl<const N: usize> LossFunction<N> for SquaredError {
     type ExpectedOutput = [f64; N];
 
-    fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
+    fn propagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
         squared_errors(output, expected_output).sum()
     }
 
-    fn backpropagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
+    fn backpropagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
         differences(output, expected_output).map(|x| x * 2.0).collect()
     }
 }
@@ -42,11 +65,11 @@ pub struct HalfSquaredError;
 impl<const N: usize> LossFunction<N> for HalfSquaredError {
     type ExpectedOutput = [f64; N];
 
-    fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
-        SquaredError.propagate(output, expected_output) * 0.5
+    fn propagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
+        SquaredError.propagate_arr(output, expected_output) * 0.5
     }
 
-    fn backpropagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
+    fn backpropagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
         differences(output, expected_output).collect()
     }
 }
@@ -61,11 +84,11 @@ pub struct MeanSquaredError;
 impl<const N: usize> LossFunction<N> for MeanSquaredError {
     type ExpectedOutput = [f64; N];
 
-    fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
-        SquaredError.propagate(output, expected_output) / N as f64
+    fn propagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
+        SquaredError.propagate_arr(output, expected_output) / N as f64
     }
 
-    fn backpropagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
+    fn backpropagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
         differences(output, expected_output).map(|x| x * 2.0 / output.len() as f64).collect()
     }
 }
@@ -101,12 +124,12 @@ impl<const OUT: usize> LossFunction<OUT> for NLLLoss {
     /// # Panics
     ///
     /// Panics if `expected_output` is not a valid variant (is not in the range `0..IN`).
-    fn propagate(&self, output: &[f64; OUT], expected_output: &Self::ExpectedOutput) -> f64 {
+    fn propagate_arr(&self, output: &[f64; OUT], expected_output: &Self::ExpectedOutput) -> f64 {
         assert!((0..OUT).contains(expected_output));
         -output[*expected_output]
     }
 
-    fn backpropagate(
+    fn backpropagate_arr(
         &self,
         _output: &[f64; OUT],
         expected_output: &Self::ExpectedOutput,
@@ -114,6 +137,20 @@ impl<const OUT: usize> LossFunction<OUT> for NLLLoss {
         let mut gradient = [0.0; OUT];
         gradient[*expected_output] = -1.0;
         gradient.to_vec()
+    }
+
+    fn check_layers(layer: &Vec<Layer>) -> Result<(), anyhow::Error> {
+        let a =
+            layer.last().context("NLLLoss requires at least one layer")?.get_activation_function();
+
+        if *a != ActivationFn::LogSoftmax {
+            anyhow::bail!(
+                "NLLLoss requires log-probabilities as inputs. (hint: use `LogSoftmax` activation \
+                 function in the last layer)"
+            )
+        }
+
+        Ok(())
     }
 }
 

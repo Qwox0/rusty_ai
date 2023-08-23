@@ -10,13 +10,15 @@ pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
 }
 
 impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
-    /// use [`NeuralNetworkBuilder`] instead!
+    /// use [`NNBuilder`] instead!
+    #[inline]
     fn new(layers: Vec<Layer>) -> NeuralNetwork<IN, OUT> {
         NeuralNetwork { layers }
     }
 
-    pub fn to_trainable_builder(self) -> TrainableNeuralNetworkBuilder<IN, OUT, HalfSquaredError> {
-        TrainableNeuralNetworkBuilder::defaults(self)
+    #[inline]
+    pub fn to_trainable_builder(self) -> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
+        NNTrainerBuilder::new(self)
     }
 
     #[inline]
@@ -37,7 +39,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
             .into_iter()
             .map(|pair| {
                 let output = self.propagate(&pair.input);
-                let error = loss_function.propagate(&output.0, &pair.expected_output);
+                let error = loss_function.propagate_arr(&output.0, &pair.expected_output);
                 (output, error)
             })
             .collect()
@@ -64,7 +66,7 @@ impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN
     }
 }
 
-impl<const IN: usize, const OUT: usize> Trainee for NeuralNetwork<IN, OUT> {
+impl<const IN: usize, const OUT: usize> Trainable for NeuralNetwork<IN, OUT> {
     fn init_zero_gradient(&self) -> Gradient {
         self.iter_layers().map(Layer::init_zero_gradient).collect::<Vec<_>>().into()
     }

@@ -23,7 +23,7 @@ pub fn main() {
         .open(out_js_path)
         .expect("could open file");
 
-    let mut ai = NeuralNetworkBuilder::default()
+    let mut ai = NNBuilder::default()
         .default_activation_function(ActivationFn::ReLU)
         .input::<1>()
         .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
@@ -34,7 +34,7 @@ pub fn main() {
         .build::<1>()
         .to_trainable_builder()
         .loss_function(SquaredError)
-        .sgd(GradientDescent { learning_rate: 0.01 })
+        .optimizer(SGD { learning_rate: 0.01, ..SGD::default() })
         .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two)
         .build();

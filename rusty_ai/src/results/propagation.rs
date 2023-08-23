@@ -1,3 +1,7 @@
+pub trait PropResult<const OUT: usize> {
+    fn get_nn_output(&self) -> [f64; OUT];
+}
+
 #[derive(Debug, derive_more::From, derive_more::Into)]
 pub struct PropagationResult<const OUT: usize>(pub [f64; OUT]);
 
@@ -8,6 +12,12 @@ impl<const OUT: usize> From<Vec<f64>> for PropagationResult<OUT> {
         assert_eq!(value.len(), OUT);
         let arr: [f64; OUT] = value.try_into().unwrap();
         PropagationResult(arr)
+    }
+}
+
+impl<const OUT: usize> PropResult<OUT> for PropagationResult<OUT> {
+    fn get_nn_output(&self) -> [f64; OUT] {
+        self.0
     }
 }
 
@@ -24,20 +34,16 @@ impl<const OUT: usize> VerbosePropagation<OUT> {
         Self(vec)
     }
 
-    pub fn network_output_arr(&self) -> [f64; OUT] {
-        self.0.last().unwrap().as_slice().try_into().unwrap()
-    }
-
-    /*
-    pub fn layer_count(&self) -> usize {
-        self.0.len()
-    }
-    */
-
     pub fn iter_layers<'a>(
         &'a self,
     ) -> impl DoubleEndedIterator<Item = LayerPropagation<'a>> + ExactSizeIterator {
         self.0.array_windows().map(|[input, output]| LayerPropagation { input, output })
+    }
+}
+
+impl<const OUT: usize> PropResult<OUT> for VerbosePropagation<OUT> {
+    fn get_nn_output(&self) -> [f64; OUT] {
+        self.0.last().unwrap().as_slice().try_into().unwrap()
     }
 }
 

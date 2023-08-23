@@ -6,8 +6,11 @@ use rayon::prelude::*;
 use std::{sync::Mutex, thread::ScopedJoinHandle};
 use test::black_box;
 
-fn calc_grad<L>(nn: &mut TrainableNeuralNetwork<1, 1, L>, data: &[Pair<1, f64>])
-where L: LossFunction<1> {
+fn calc_grad<L, O>(nn: &mut NNTrainer<1, 1, L, O>, data: &[Pair<1, f64>])
+where
+    L: LossFunction<1>,
+    O: Optimizer,
+{
     for pair in data {
         /*
         let (input, expected_output) = pair.into();
@@ -192,7 +195,7 @@ impl ParallelSlice<Pair<1, f64>> for PairList<1, f64> {
     }
 }
 
-fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1, HalfSquaredError>, PairList<1, f64>) {
+fn setup(data_count: usize) -> (NNTrainer<1, 1, HalfSquaredError, SGD_>, PairList<1, f64>) {
     const SEED: u64 = 69420;
     const NEURON_COUNT: usize = 5;
     /*

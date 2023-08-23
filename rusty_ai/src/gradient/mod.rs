@@ -2,8 +2,9 @@ pub mod aliases;
 pub mod layer;
 
 use crate::prelude::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, derive_more::From)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, derive_more::From)]
 pub struct Gradient {
     layers: Vec<GradientLayer>,
 }

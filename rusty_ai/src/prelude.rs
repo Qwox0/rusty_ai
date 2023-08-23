@@ -8,14 +8,14 @@ pub use crate::{
     loss_function::*,
     matrix::Matrix,
     neural_network::{builder::*, NeuralNetwork},
-    optimizer::{Adam, GradientDescent, Optimizer},
-    results::{LayerPropagation, PropagationResult, TestsResult, VerbosePropagation},
-    trainable::{TrainableNeuralNetwork, TrainableNeuralNetworkBuilder},
+    optimizer::{
+        adam::{Adam, Adam_},
+        sgd::{SGD, SGD_},
+        Optimizer, OptimizerValues, DEFAULT_LEARNING_RATE,
+    },
+    results::{LayerPropagation, PropResult, PropagationResult, TestsResult, VerbosePropagation},
+    trainable::{NNTrainer, NNTrainerBuilder, NoLossFunction, NoOptimizer},
     traits::*,
     util::Norm,
 };
-pub(crate) use crate::{
-    gradient::aliases::*,
-    optimizer::{IsOptimizer, DEFAULT_LEARNING_RATE},
-    util::*,
-};
+pub(crate) use crate::{gradient::aliases::*, util::*};

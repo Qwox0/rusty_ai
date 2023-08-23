@@ -173,6 +173,7 @@ name = "mnist"
 version = "0.1.0"
 dependencies = [
  "mnist 0.5.0",
+ "mnist_nllloss",
  "rand",
  "rusty_ai",
 ]
@@ -184,6 +185,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2126097226757059ceb317a872fb9e3b289e67af0ba2681b1e1cf389b763c260"
 dependencies = [
  "byteorder",
+]
+
+[[package]]
+name = "mnist_nllloss"
+version = "0.1.0"
+dependencies = [
+ "mnist 0.5.0",
+ "rand",
+ "rusty_ai",
 ]
 
 [[package]]
