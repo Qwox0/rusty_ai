@@ -1,3 +1,4 @@
+use crate::traits::NNInput;
 use std::fmt::Display;
 
 /// an input-expected output-pair.
@@ -23,6 +24,12 @@ impl<const IN: usize, EO> Pair<IN, EO> {
     #[inline]
     pub fn with(input: [f64; IN], gen_output: impl FnOnce([f64; IN]) -> EO) -> Pair<IN, EO> {
         Self::from((input, gen_output(input)))
+    }
+}
+
+impl<const IN: usize, EO> NNInput<IN> for Pair<IN, EO> {
+    fn get_input(&self) -> &[f64; IN] {
+        &self.input
     }
 }
 

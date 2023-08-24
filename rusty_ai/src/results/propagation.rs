@@ -1,5 +1,69 @@
-pub trait PropResult<const OUT: usize> {
-    fn get_nn_output(&self) -> [f64; OUT];
+use crate::{
+    prelude::Pair,
+    traits::{NNInput, Propagator},
+};
+
+pub struct InputPropagation<'a, NN, I, const IN: usize>
+where I: Iterator<Item = &'a [f64; IN]>
+{
+    nn: &'a NN,
+    inputs: I,
+}
+
+impl<'a, NN, I, const IN: usize, const OUT: usize, EO> InputPropagation<'a, NN, I, IN>
+where
+    NN: Propagator<IN, OUT, EO>,
+    I: Iterator<Item = &'a [f64; IN]>,
+{
+    pub fn new(nn: &'a NN, inputs: impl IntoIterator<IntoIter = I>) -> Self {
+        InputPropagation { nn, inputs: inputs.into_iter() }
+    }
+
+    pub fn outputs(self) -> impl Iterator<Item = [f64; OUT]> {
+        self.inputs.map(|i| self.nn.propagate_single(i))
+    }
+
+    pub fn expected_outputs(
+        self,
+        expected_outputs: impl IntoIterator<Item = &'a EO>,
+    ) -> PairPropagation<'a, NN, impl Iterator<Item = &'a Pair<IN, EO>>, IN, EO> {
+        let pairs = self.inputs.zip(expected_outputs).map(Pair::from);
+        PairPropagation { nn: self.nn, pairs }
+    }
+}
+
+/// lazy
+pub struct PairPropagation<'a, NN, I, const IN: usize, EO>
+where I: Iterator<Item = &'a Pair<IN, EO>>
+{
+    nn: &'a NN,
+    pairs: I,
+}
+
+impl<'a, NN, I, const IN: usize, const OUT: usize, EO> PairPropagation<'a, NN, I, IN, EO>
+where
+    NN: Propagator<IN, OUT, EO>,
+    I: Iterator<Item = &'a Pair<IN, EO>>,
+{
+    pub fn new(nn: &'a NN, pairs: impl IntoIterator<IntoIter = I>) -> Self {
+        PairPropagation { nn, pairs: pairs.into_iter() }
+    }
+
+    pub fn outputs(self) -> impl Iterator<Item = [f64; OUT]> {
+        self.inputs.map(|i| self.nn.propagate_single(i))
+    }
+
+    pub fn error(self) -> f64 {
+        todo!()
+    }
+
+    pub fn output_with_error(self) -> ([f64; OUT], f64) {
+        todo!()
+    }
+
+    pub fn backpropagate(self) -> [f64; OUT] {
+        todo!()
+    }
 }
 
 #[derive(Debug, derive_more::From, derive_more::Into)]
@@ -12,12 +76,6 @@ impl<const OUT: usize> From<Vec<f64>> for PropagationResult<OUT> {
         assert_eq!(value.len(), OUT);
         let arr: [f64; OUT] = value.try_into().unwrap();
         PropagationResult(arr)
-    }
-}
-
-impl<const OUT: usize> PropResult<OUT> for PropagationResult<OUT> {
-    fn get_nn_output(&self) -> [f64; OUT] {
-        self.0
     }
 }
 
@@ -41,11 +99,13 @@ impl<const OUT: usize> VerbosePropagation<OUT> {
     }
 }
 
-impl<const OUT: usize> PropResult<OUT> for VerbosePropagation<OUT> {
+/*
+impl<const OUT: usize> PropResultT<OUT> for VerbosePropagation<OUT> {
     fn get_nn_output(&self) -> [f64; OUT] {
         self.0.last().unwrap().as_slice().try_into().unwrap()
     }
 }
+*/
 
 pub struct LayerPropagation<'a> {
     pub input: &'a Vec<f64>,

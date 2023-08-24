@@ -12,7 +12,7 @@ pub trait LossFunction<const N: usize>: Display {
     #[inline]
     fn propagate(
         &self,
-        output: &impl PropResult<N>,
+        output: &impl PropResultT<N>,
         expected_output: &Self::ExpectedOutput,
     ) -> f64 {
         self.propagate_arr(&output.get_nn_output(), expected_output)
@@ -27,7 +27,7 @@ pub trait LossFunction<const N: usize>: Display {
     #[inline]
     fn backpropagate(
         &self,
-        output: &impl PropResult<N>,
+        output: &impl PropResultT<N>,
         expected_output: &Self::ExpectedOutput,
     ) -> OutputGradient {
         self.backpropagate_arr(&output.get_nn_output(), expected_output)
@@ -47,7 +47,7 @@ impl<const N: usize> LossFunction<N> for SquaredError {
     type ExpectedOutput = [f64; N];
 
     fn propagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
-        squared_errors(output, expected_output).sum()
+        differences(output, expected_output).map(|err| err * err).sum()
     }
 
     fn backpropagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
@@ -162,12 +162,4 @@ fn differences<'a, const N: usize>(
     expected_output: &'a [f64; N],
 ) -> impl Iterator<Item = f64> + 'a {
     output.iter().zip(expected_output).map(|(out, expected)| out - expected)
-}
-
-#[inline]
-fn squared_errors<'a, const N: usize>(
-    output: &'a [f64; N],
-    expected_output: &'a [f64; N],
-) -> impl Iterator<Item = f64> + 'a {
-    differences(output, expected_output).map(|err| err * err)
 }

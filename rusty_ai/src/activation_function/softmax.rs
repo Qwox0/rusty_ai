@@ -80,4 +80,23 @@ mod tests {
 
         panic!()
     }
+
+    #[test]
+    fn log_softmax_prop() {
+        let input = [0.01, 0.999, 0.5];
+        let log_softmax = LogSoftmax;
+
+        let out = log_softmax.propagate(input.to_vec());
+
+        println!("out: {:?}", out);
+
+        let nllloss = NLLLoss;
+
+        let out: Result<[f64; 3], _> = out.as_slice().try_into();
+        let err = nllloss.propagate_arr(&out.unwrap(), &0);
+
+        println!("err: {:?}", err);
+
+        panic!()
+    }
 }

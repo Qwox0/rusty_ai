@@ -83,6 +83,7 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
+            PairPropagation::new(&ai, batch);
             ai.training_step(batch);
             running_loss += 1.0;
         }

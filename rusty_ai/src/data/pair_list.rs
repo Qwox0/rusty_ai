@@ -11,6 +11,12 @@ pub enum E {
 /// implements [`Index<usize, Output = Pair<IN, EO>>`].
 #[derive(Debug, Clone, derive_more::From)]
 pub struct PairList<const IN: usize, EO>(pub Vec<Pair<IN, EO>>);
+/*
+pub struct PairList<const IN: usize, EO> {
+    inputs: Vec<[f64; IN]>,
+    expected_outputs: Vec<EO>,
+}
+*/
 
 impl<const IN: usize, EO, P> FromIterator<P> for PairList<IN, EO>
 where P: Into<Pair<IN, EO>>
@@ -21,13 +27,21 @@ where P: Into<Pair<IN, EO>>
 }
 
 impl<const IN: usize, EO> PairList<IN, EO> {
+    pub fn new(
+        inputs: impl IntoIterator<Item = [f64; IN], IntoIter = impl ExactSizeIterator>,
+        expected_outputs: impl IntoIterator<Item = impl Into<EO>>,
+    ) -> Self {
+        let expected_outputs = expected_outputs.into_iter().map(EO::from);
+        inputs.into_iter().zip(expected_outputs).into()
+    }
+
     pub fn with_fn(
-        inputs: impl Into<Vec<[f64; IN]>>,
+        inputs: impl IntoIterator<Item = [f64; IN]>,
         f: impl Fn([f64; IN]) -> EO,
-    ) -> Result<Self, E> {
-        let inputs = inputs.into();
-        let outputs: Vec<_> = inputs.iter().map(Clone::clone).map(f).collect();
-        PairList::from_vecs(inputs, outputs)
+    ) -> Self {
+        let inputs = inputs.into_iter();
+        let outputs: Vec<EO> = inputs.map(f).collect();
+        PairList::new(inputs, outputs)
     }
 
     pub fn from_vecs(

@@ -19,7 +19,7 @@ pub mod neural_network;
 pub mod optimizer;
 pub mod prelude;
 pub mod results;
-pub mod trainable;
+pub mod trainer;
 pub mod traits;
 pub mod util;
 

@@ -212,8 +212,13 @@ where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
 {
-    fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
-        self.network.propagate(input)
+    fn propagate<'a>(&'a self, input: &'a [f64; IN]) -> PairPropagation<'a, Self, IN, OUT>
+    where Self: Sized {
+        PairPropagation::new(self, input)
+    }
+
+    fn propagate_direct(&self, input: &[f64; IN]) -> [f64; OUT] {
+        self.network.propagate_direct(input)
     }
 
     /*
