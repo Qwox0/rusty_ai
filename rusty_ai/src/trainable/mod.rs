@@ -130,7 +130,7 @@ where
     }
 
     /// this calls `set_zero_gradient` based on the `self.retain_gradient` option.
-    pub fn option_set_zero_gradient(&mut self) {
+    pub fn maybe_set_zero_gradient(&mut self) {
         if !self.retain_gradient {
             self.set_zero_gradient();
         }
@@ -153,6 +153,15 @@ where
         //clip_gradient_norm.clip_gradient_pytorch_device(&mut self.gradient);
     }
 
+    pub fn maybe_clip_gradient(&mut self) {
+        if let Some(clip_gradient_norm) = self.clip_gradient_norm {
+            self.clip_gradient(clip_gradient_norm);
+        } else {
+            #[cfg(debug_assertions)]
+            eprintln!("WARN: It is recommended to clip the gradient")
+        }
+    }
+
     pub fn optimize_trainee(&mut self) {
         self.optimizer.optimize_weights(&mut self.network, &self.gradient);
     }
@@ -162,18 +171,10 @@ where
     /// weights by using the calculated gradient.
     pub fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, EO>>)
     where EO: 'a {
-        self.option_set_zero_gradient();
-
+        self.maybe_set_zero_gradient();
         self.calc_gradient(data_pairs);
-
-        if let Some(clip_gradient_norm) = self.clip_gradient_norm {
-            self.clip_gradient(clip_gradient_norm);
-        } else {
-            #[cfg(debug_assertions)]
-            eprintln!("WARN: It is recommended to clip the gradient")
-        }
-
-        self.optimize_trainee()
+        self.maybe_clip_gradient();
+        self.optimize_trainee();
     }
 
     /// Trains the `Self::Trainee` for `epoch_count` epochs. Each epoch the entire `training_data`

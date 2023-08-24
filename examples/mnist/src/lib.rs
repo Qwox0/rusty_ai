@@ -52,7 +52,7 @@ pub fn main() {
     assert_eq!(training_data.len(), 60_000);
     assert_eq!(test_data.len(), 10_000);
 
-    println!("\nExample Image:");
+    println!("Example Image:");
     print_image(&training_data[50], -1.0..1.0);
 
     let mut ai = setup_ai();

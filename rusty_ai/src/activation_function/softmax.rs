@@ -58,3 +58,26 @@ impl ActivationFunction for LogSoftmax {
         output_gradient.into_iter().map(|dl_dy| dl_dy - s).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_log_softmax() {
+        let log_softmax = LogSoftmax;
+
+        let out = log_softmax.propagate(vec![2.0, 0.0, 0.35]);
+
+        println!("out: {:?}", out);
+
+        let nllloss = NLLLoss;
+
+        let out: Result<[f64; 3], _> = out.as_slice().try_into();
+        let err = nllloss.propagate_arr(&out.unwrap(), &0);
+
+        println!("err: {:?}", err);
+
+        panic!()
+    }
+}
