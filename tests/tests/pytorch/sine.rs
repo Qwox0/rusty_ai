@@ -288,7 +288,7 @@ fn sine() {
         .new_clip_gradient_norm(5.0, Norm::Two)
         .build();
 
-    let data = PairList::from_vecs(x, y).unwrap();
+    let data = PairList::new(x, y);
 
     println!("{:?}", data);
 

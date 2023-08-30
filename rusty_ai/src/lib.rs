@@ -18,6 +18,8 @@ pub mod matrix;
 pub mod neural_network;
 pub mod optimizer;
 pub mod prelude;
+pub mod propagation;
+pub mod propagator;
 pub mod results;
 pub mod trainer;
 pub mod traits;

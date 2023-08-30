@@ -1,7 +1,7 @@
 #![feature(test)]
 
 use rusty_ai::prelude::*;
-use std::{fmt::Display, fs::File, io::Write, path::Path};
+use std::{fmt::Display, fs::File, io::Write, path::Path, ops::Range};
 
 fn get_out_js_path() -> &'static str {
     if Path::new("./index.js").exists() {
@@ -40,9 +40,11 @@ pub fn main() {
         .build();
 
     const EPOCHS: usize = 1000;
+    const DATA_RANGE: Range<f64> = -10.0..10.0;
 
-    let training_data = DataBuilder::uniform(-2.0..2.0).build::<1>(1000).gen_pairs(|[x]| [x.sin()]);
-    let test_data = DataBuilder::uniform(-2.0..2.0).build::<1>(30).gen_pairs(|[x]| [x.sin()]);
+    let training_data =
+        DataBuilder::uniform(DATA_RANGE).build::<1>(1000).gen_pairs(|[x]| [x.sin()]);
+    let test_data = DataBuilder::uniform(DATA_RANGE).build::<1>(30).gen_pairs(|[x]| [x.sin()]);
     let (x, y): (Vec<_>, Vec<_>) =
         test_data.iter().map(|pair| (pair.input[0], pair.expected_output[0])).unzip();
 
@@ -62,9 +64,10 @@ pub fn main() {
 
     ai.full_train(&training_data, EPOCHS, |epoch, ai| {
         if epoch % 100 == 0 {
-            let res = ai.test(&SquaredError, test_data.iter());
-            println!("epoch: {:>4}, loss: {:<20}", epoch, res.error);
-            export_res(&mut js_file, &mut js_res_vars, epoch, res);
+            todo!()
+            //let res = ai.test(&SquaredError, test_data.iter());
+            //println!("epoch: {:>4}, loss: {:<20}", epoch, res.error);
+            //export_res(&mut js_file, &mut js_res_vars, epoch, res);
         }
     });
 

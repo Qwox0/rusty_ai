@@ -1,6 +1,6 @@
 pub mod builder;
 
-use crate::prelude::*;
+use crate::{prelude::*, propagator::SimplePropagator};
 use serde::{Deserialize, Serialize};
 
 /// layers contains all Hidden Layers and the Output Layers
@@ -30,19 +30,36 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         self.iter_layers().map(Layer::init_zero_gradient).collect()
     }
 
+    /*
     pub fn test<'a, EO: 'a>(
         &self,
         loss_function: &impl LossFunction<OUT, ExpectedOutput = EO>,
         data_pairs: impl IntoIterator<Item = &'a Pair<IN, EO>>,
     ) -> TestsResult<OUT> {
+        /*
         data_pairs
             .into_iter()
             .map(|pair| {
                 let output = self.propagate(&pair.input);
-                let error = loss_function.propagate_arr(&output.0, &pair.expected_output);
+                let error = loss_function.propagate_arr(&output, &pair.expected_output);
                 (output, error)
             })
             .collect()
+            */
+        todo!()
+    }
+    */
+}
+
+impl<'a, const IN: usize, const OUT: usize> Default for NeuralNetwork<IN, OUT> {
+    /// creates a [`NeuralNetwork`] with one layer. Every parameter is equal to `0.0`.
+    ///
+    /// This is probably only useful for testing.
+    fn default() -> Self {
+        NNBuilder::default()
+            .input()
+            .layer_from_parameters(Matrix::with_zeros(IN, OUT), vec![0.0; OUT].into())
+            .build()
     }
 }
 
@@ -60,9 +77,13 @@ impl<'a, const IN: usize, const OUT: usize> LayerIter<'a> for NeuralNetwork<IN, 
     }
 }
 
-impl<const IN: usize, const OUT: usize> Propagator<IN, OUT> for NeuralNetwork<IN, OUT> {
-    fn propagate(&self, input: &[f64; IN]) -> PropagationResult<OUT> {
-        self.iter_layers().fold(input.to_vec(), |acc, layer| layer.propagate(&acc)).into()
+impl<const IN: usize, const OUT: usize> SimplePropagator<IN, OUT> for NeuralNetwork<IN, OUT> {
+    fn propagate_arr(&self, input: &[f64; IN]) -> [f64; OUT] {
+        self.iter_layers()
+            .fold(input.to_vec(), |acc, layer| layer.propagate(&acc))
+            .as_slice()
+            .try_into()
+            .expect("last layer should have `OUT` neurons")
     }
 }
 

@@ -78,9 +78,9 @@ pub fn main() {
     println!("\nTest:");
     for test in test_data.iter().take(3) {
         print_image(test, -1.0..1.0);
-        let output = ai.propagate(&test.input);
-        println!("output: {:?}", output.0);
-        let error = ai.get_loss_function().propagate_arr(&output.0, &test.expected_output);
+        let output = ai.propagate_arr(&test.input);
+        println!("output: {:?}", output);
+        let error = ai.get_loss_function().propagate_arr(&output, &test.expected_output);
         println!("error: {}", error);
         assert!(error < 0.2);
     }
@@ -121,7 +121,7 @@ pub mod tests {
         let p = load_data();
 
         b.iter(|| {
-            black_box(ai.propagate(black_box(&p.input)));
+            black_box(ai.propagate_arr(black_box(&p.input)));
         })
     }
 

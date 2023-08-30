@@ -1,6 +1,4 @@
-mod propagation;
-
-pub use propagation::*;
+use crate::propagation::PropagationResult;
 
 #[derive(Debug)]
 pub struct TestsResult<const OUT: usize> {

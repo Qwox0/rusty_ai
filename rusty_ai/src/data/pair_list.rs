@@ -2,12 +2,6 @@ use crate::data::Pair;
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use std::ops::{Deref, Index};
 
-#[derive(Debug, thiserror::Error)]
-pub enum E {
-    #[error("Lengths are not equal.")]
-    UnequalLen,
-}
-
 /// implements [`Index<usize, Output = Pair<IN, EO>>`].
 #[derive(Debug, Clone, derive_more::From)]
 pub struct PairList<const IN: usize, EO>(pub Vec<Pair<IN, EO>>);
@@ -27,34 +21,21 @@ where P: Into<Pair<IN, EO>>
 }
 
 impl<const IN: usize, EO> PairList<IN, EO> {
+    /// if `inputs` and `expected_outputs` have different lengths, the additional elements of the
+    /// longer iterator will be ignored.
     pub fn new(
-        inputs: impl IntoIterator<Item = [f64; IN], IntoIter = impl ExactSizeIterator>,
+        inputs: impl IntoIterator<Item = [f64; IN]>,
         expected_outputs: impl IntoIterator<Item = impl Into<EO>>,
     ) -> Self {
-        let expected_outputs = expected_outputs.into_iter().map(EO::from);
-        inputs.into_iter().zip(expected_outputs).into()
+        let expected_outputs = expected_outputs.into_iter().map(Into::into);
+        inputs.into_iter().zip(expected_outputs).collect()
     }
 
     pub fn with_fn(
         inputs: impl IntoIterator<Item = [f64; IN]>,
         f: impl Fn([f64; IN]) -> EO,
     ) -> Self {
-        let inputs = inputs.into_iter();
-        let outputs: Vec<EO> = inputs.map(f).collect();
-        PairList::new(inputs, outputs)
-    }
-
-    pub fn from_vecs(
-        vec_in: impl Into<Vec<[f64; IN]>>,
-        vec_out: impl Into<Vec<EO>>,
-    ) -> Result<Self, E> {
-        let vec_in = vec_in.into();
-        let vec_out = vec_out.into();
-        if vec_in.len() != vec_out.len() {
-            Err(E::UnequalLen)
-        } else {
-            Ok(vec_in.into_iter().zip(vec_out).collect())
-        }
+        inputs.into_iter().map(|i| (i, f(i))).collect()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Pair<IN, EO>> {

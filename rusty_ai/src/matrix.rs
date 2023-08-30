@@ -80,6 +80,7 @@ impl<T> Matrix<T> {
         Matrix::new(width, height, elements)
     }
 
+    /*
     /// Creates a [`Matrix`] containing an empty elements [`Vec`] with a
     /// capacity of `height`. Insert new rows with `Matrix::push_row`.
     pub fn new_empty(width: usize, height: usize) -> Matrix<T> {
@@ -92,6 +93,7 @@ impl<T> Matrix<T> {
         assert_eq!(row.len(), self.width);
         self.elements.push(row);
     }
+    */
 
     #[inline]
     pub fn get_row(&self, y: usize) -> Option<&Vec<T>> {

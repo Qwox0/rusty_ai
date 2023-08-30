@@ -83,7 +83,6 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            PairPropagation::new(&ai, batch);
             ai.training_step(batch);
             running_loss += 1.0;
         }
@@ -100,9 +99,9 @@ pub fn main() {
     println!("\nTest:");
     for test in test_data.iter().take(3) {
         print_image(test, -1.0..1.0);
-        let output = ai.propagate(&test.input);
-        println!("output: {:?}", output.0);
-        let propab = output.0.iter().copied().map(f64::exp).collect::<Vec<_>>();
+        let output = ai.propagate_arr(&test.input);
+        println!("output: {:?}", output);
+        let propab = output.iter().copied().map(f64::exp).collect::<Vec<_>>();
         let guess = propab
             .iter()
             .enumerate()
@@ -110,7 +109,7 @@ pub fn main() {
             .unwrap()
             .0;
         println!("propab: {:?}; guess: {}", propab, guess);
-        let error = ai.get_loss_function().propagate_arr(&output.0, &test.expected_output);
+        let error = ai.get_loss_function().propagate_arr(&output, &test.expected_output);
         println!("error: {}", error);
         assert!(error < 0.2);
     }

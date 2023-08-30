@@ -304,12 +304,13 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithParts<IN> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::propagator::SimplePropagator;
 
     #[test]
     fn empty() {
         let ai = NNBuilder::default().input().build::<2>();
         let input = [1.0, 2.0];
-        let prop = ai.propagate(&input).0;
+        let prop = ai.propagate_arr(&input);
 
         assert_eq!(prop, input);
     }

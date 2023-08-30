@@ -4,11 +4,12 @@ use derive_more::Display;
 use std::fmt::Display;
 
 /// See `rusty_ai::loss_function::*` for some implementations.
-pub trait LossFunction<const N: usize>: Display {
+pub trait LossFunction<const OUT: usize>: Display {
     type ExpectedOutput;
 
-    fn propagate_arr(&self, output: &[f64; N], expected_output: &Self::ExpectedOutput) -> f64;
+    fn propagate_arr(&self, output: &[f64; OUT], expected_output: &Self::ExpectedOutput) -> f64;
 
+    /*
     #[inline]
     fn propagate(
         &self,
@@ -17,17 +18,18 @@ pub trait LossFunction<const N: usize>: Display {
     ) -> f64 {
         self.propagate_arr(&output.get_nn_output(), expected_output)
     }
+    */
 
     fn backpropagate_arr(
         &self,
-        output: &[f64; N],
+        output: &[f64; OUT],
         expected_output: &Self::ExpectedOutput,
     ) -> OutputGradient;
 
     #[inline]
     fn backpropagate(
         &self,
-        output: &impl PropResultT<N>,
+        output: &VerbosePropagation<OUT>,
         expected_output: &Self::ExpectedOutput,
     ) -> OutputGradient {
         self.backpropagate_arr(&output.get_nn_output(), expected_output)
@@ -40,7 +42,7 @@ pub trait LossFunction<const N: usize>: Display {
 
 /// squared error loss function.
 /// implements [`LossFunction`].
-#[derive(Debug, Clone, Copy, Display)]
+#[derive(Debug, Clone, Copy, Default, Display)]
 pub struct SquaredError;
 
 impl<const N: usize> LossFunction<N> for SquaredError {
@@ -59,7 +61,7 @@ impl<const N: usize> LossFunction<N> for SquaredError {
 /// implements [`LossFunction`].
 ///
 /// Same as [`SquaredError`] but loss is multiplied by `0.5`.
-#[derive(Debug, Clone, Copy, Display)]
+#[derive(Debug, Clone, Copy, Default, Display)]
 pub struct HalfSquaredError;
 
 impl<const N: usize> LossFunction<N> for HalfSquaredError {
@@ -78,7 +80,7 @@ impl<const N: usize> LossFunction<N> for HalfSquaredError {
 /// implements [`LossFunction`].
 ///
 /// Similar to [`SquaredError`] but calculates mean instead of sum
-#[derive(Debug, Clone, Copy, Display)]
+#[derive(Debug, Clone, Copy, Default, Display)]
 pub struct MeanSquaredError;
 
 impl<const N: usize> LossFunction<N> for MeanSquaredError {
@@ -115,7 +117,7 @@ impl<const N: usize> LossFunction<N> for MeanSquaredError {
 /// `N`: number of network outputs
 /// `e`: expected variant/class (unsigned integer in range `0..N`)
 /// `L`: Loss
-#[derive(Debug, Clone, Copy, Display)]
+#[derive(Debug, Clone, Copy, Default, Display)]
 pub struct NLLLoss;
 
 impl<const OUT: usize> LossFunction<OUT> for NLLLoss {

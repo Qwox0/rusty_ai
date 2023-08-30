@@ -1,16 +1,16 @@
 mod builder;
 
-use crate::prelude::*;
+use crate::{
+    prelude::*,
+    propagation::{Backprop, Prop},
+    propagator::{NNInput, SimplePropagator},
+};
 pub use builder::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NNTrainer<const IN: usize, const OUT: usize, L, O>
-where
-    L: LossFunction<OUT>,
-    O: Optimizer,
-{
+pub struct NNTrainer<const IN: usize, const OUT: usize, L, O> {
     network: NeuralNetwork<IN, OUT>,
     gradient: Gradient,
     loss_function: L,
@@ -35,9 +35,95 @@ where
         Self { network, gradient, loss_function, retain_gradient, optimizer, clip_gradient_norm }
     }
 
+    /// creates a sample [`NNTrainer`].
+    ///
+    /// This is probably only useful for testing.
+    pub fn default<V>() -> Self
+    where
+        L: Default,
+        V: OptimizerValues<Optimizer = O> + Default,
+    {
+        NeuralNetwork::default()
+            .to_trainable_builder()
+            .loss_function(L::default())
+            .optimizer(V::default())
+            .build()
+    }
+
     #[inline]
     pub fn get_loss_function(&self) -> &L {
         &self.loss_function
+    }
+
+    #[must_use = "`Iterators` must be consumed to do work."]
+    #[inline]
+    pub fn propagate_batch<'a, B>(&'a self, batch: B) -> impl Iterator<Item = [f64; OUT]> + 'a
+    where B: IntoIterator<Item = &'a [f64; IN]> + 'a {
+        batch.into_iter().map(|i| self.propagate_arr(i))
+    }
+
+    #[must_use = "`Iterators` must be consumed to do work."]
+    #[inline]
+    pub fn propagate<'a, B>(&'a self, batch: B) -> impl Iterator<Item = [f64; OUT]> + 'a
+    where
+        B: IntoIterator + 'a,
+        B::Item: NNInput<IN>,
+    {
+        batch.into_iter().map(|i| self.propagate_arr(i.get_input()))
+    }
+
+    #[inline]
+    pub fn propagate_pairs<'a, B, I>(
+        &'a self,
+        batch: B,
+    ) -> Prop<'a, IN, OUT, L, O, impl Iterator<Item = (&'a [f64; IN], &'a EO)>>
+    where
+        B: IntoIterator<Item = I> + 'a,
+        I: Into<(&'a [f64; IN], &'a EO)>,
+        EO: 'a,
+    {
+        Prop::new(self, batch.into_iter().map(|a| a.into()))
+    }
+
+    #[inline]
+    pub fn propagate_new_pairs<'a, I, U>(
+        &'a self,
+        inputs: impl IntoIterator<IntoIter = I>,
+        expected_outputs: impl IntoIterator<IntoIter = U>,
+    ) -> Prop<'a, IN, OUT, L, O, std::iter::Zip<I, U>>
+    where
+        I: Iterator<Item = &'a [f64; IN]> + 'a,
+        U: Iterator<Item = &'a EO> + 'a,
+        EO: 'a,
+    {
+        Prop::new(self, inputs.into_iter().zip(expected_outputs))
+    }
+
+    #[inline]
+    pub fn backpropagate_pairs<'a, B, I>(
+        &'a mut self,
+        batch: B,
+    ) -> Backprop<'a, IN, OUT, L, O, impl Iterator<Item = (&'a [f64; IN], &'a EO)>>
+    where
+        B: IntoIterator<Item = I> + 'a,
+        I: Into<(&'a [f64; IN], &'a EO)>,
+        EO: 'a,
+    {
+        Backprop::new(self, batch.into_iter().map(|a| a.into()))
+    }
+
+    #[inline]
+    pub fn backpropagate_new_pairs<'a, I, U>(
+        &'a mut self,
+        inputs: impl IntoIterator<IntoIter = I>,
+        expected_outputs: impl IntoIterator<IntoIter = U>,
+    ) -> Backprop<'a, IN, OUT, L, O, std::iter::Zip<I, U>>
+    where
+        I: Iterator<Item = &'a [f64; IN]> + 'a,
+        U: Iterator<Item = &'a EO> + 'a,
+        EO: 'a,
+    {
+        Backprop::new(self, inputs.into_iter().zip(expected_outputs))
     }
 
     /// calculates the output of every layer
@@ -55,7 +141,11 @@ where
     }
 
     pub fn calculate_loss(&self, res: &PropagationResult<OUT>, expected_output: &EO) -> f64 {
-        self.loss_function.propagate_arr(&res.0, expected_output)
+        self.calculate_loss_(&res.0, expected_output)
+    }
+
+    pub fn calculate_loss_(&self, out: &[f64; OUT], expected_output: &EO) -> f64 {
+        self.loss_function.propagate_arr(out, expected_output)
     }
 
     /// Propagate a [`VerbosePropagation`] Result backwards through the Neural
@@ -97,9 +187,13 @@ where
     ///               = (o_L_i - e_i) *     f'(z_i) *       w_ij
     /// dC/db_L       = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
     ///               = (o_L_i - e_i) *     f'(z_i)
-    pub fn backpropagation(&mut self, verbose_prop: VerbosePropagation<OUT>, expected_output: &EO) {
+    pub fn backpropagation(
+        &mut self,
+        verbose_prop: &VerbosePropagation<OUT>,
+        expected_output: &EO,
+    ) {
         // gradient of the cost function with respect to the neuron output of the last layer.
-        let mut output_gradient = self.loss_function.backpropagate(&verbose_prop, expected_output);
+        let mut output_gradient = self.loss_function.backpropagate(verbose_prop, expected_output);
 
         let layer_iter = self.network.iter_layers();
         let grad_iter = self.gradient.iter_mut_layers();
@@ -118,7 +212,8 @@ where
     where
         EO: 'a,
     {
-        self.network.test(&self.loss_function, data_pairs)
+        //self.network.test(&self.loss_function, data_pairs)
+        todo!()
     }
 
     pub fn get_trainee(&self) -> &NeuralNetwork<IN, OUT> {
@@ -144,7 +239,7 @@ where
     where EO: 'a {
         for (input, expected_output) in batch.into_iter().map(Into::into) {
             let out = self.verbose_propagate(input);
-            self.backpropagation(out, expected_output);
+            //self.backpropagation(out, expected_output);
         }
     }
 
@@ -207,28 +302,14 @@ where
     }
 }
 
-impl<const IN: usize, const OUT: usize, EO, L, O> Propagator<IN, OUT> for NNTrainer<IN, OUT, L, O>
+impl<const IN: usize, const OUT: usize, L, O> SimplePropagator<IN, OUT> for NNTrainer<IN, OUT, L, O>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO>,
+    L: LossFunction<OUT>,
     O: Optimizer,
 {
-    fn propagate<'a>(&'a self, input: &'a [f64; IN]) -> PairPropagation<'a, Self, IN, OUT>
-    where Self: Sized {
-        PairPropagation::new(self, input)
+    fn propagate_arr(&self, input: &[f64; IN]) -> [f64; OUT] {
+        self.network.propagate_arr(input)
     }
-
-    fn propagate_direct(&self, input: &[f64; IN]) -> [f64; OUT] {
-        self.network.propagate_direct(input)
-    }
-
-    /*
-    fn test_propagate<'a>(
-        &'a self,
-        data_pairs: impl IntoIterator<Item = &'a Pair<IN, OUT>>,
-    ) -> TestsResult<OUT> {
-        self.network.test_propagate(data_pairs)
-    }
-    */
 }
 
 impl<const IN: usize, const OUT: usize, L, EO, O> Display for NNTrainer<IN, OUT, L, O>
@@ -244,3 +325,15 @@ where
 
 #[cfg(test)]
 mod benches;
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_prop() {
+        let ai: NNTrainer<10, 10, NLLLoss, SGD_> = todo!();
+
+        let a = ai.propagate_pairs(std::iter::once(&Pair::new([1.618; 10], 3)));
+    }
+}
