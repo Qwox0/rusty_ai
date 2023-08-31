@@ -64,6 +64,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn log_softmax_backprop() {
+        let log_softmax = LogSoftmax;
+        let nllloss = NLLLoss;
+
+        let input = [0.0, 0.5, 3.0];
+        let expected = 3;
+        let expected = &(expected - 1);
+
+        println!("x: {:?}", input);
+
+        let o = log_softmax.propagate(input.to_vec());
+        let o: [f64; 3] = o.as_slice().try_into().unwrap();
+
+        println!("o: {:?}", o);
+
+        let loss = nllloss.propagate_arr(&o, expected);
+
+        println!("loss: {:?}", loss);
+
+        let d_o = nllloss.backpropagate_arr(&o, expected);
+
+        println!("d_o: {:?}", d_o);
+        assert_eq!(d_o, vec![0.0, 0.0, -1.0]);
+
+        let d_x = log_softmax.backpropagate(d_o, o.as_slice());
+
+        println!("d_x: {:?}", d_x);
+        assert_eq!(d_x, vec![0.04398648, 0.072521446, -0.11650793]);
+    }
+
+    #[test]
     fn simple_log_softmax() {
         let log_softmax = LogSoftmax;
 

@@ -31,7 +31,7 @@ fn test() {
 
     //let a = ai.backpropagate(batch);
 
-    asdf(batch);
+    //asdf(batch);
 }
 
 fn asdf<'a, const IN: usize, B>(input: B)
