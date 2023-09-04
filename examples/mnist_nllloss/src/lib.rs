@@ -3,7 +3,7 @@
 #![feature(array_chunks)]
 #![feature(test)]
 
-use rusty_ai::prelude::*;
+use rusty_ai::{prelude::*, propagation::Propagator};
 use std::{cmp::Ordering, ops::Range, path::PathBuf, time::Instant};
 
 #[cfg(not(target_os = "windows"))]
@@ -83,15 +83,15 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            ai.training_step(batch);
-            running_loss += 1.0;
+            let loss = ai.backpropagate_pairs(batch).mean_error();
+            running_loss += loss;
         }
         // shuffle data after one full iteration
         training_data.shuffle();
 
         let training_loss = running_loss / batch_num as f64;
 
-        println!("Epoch {} - Training loss: {}", e, training_loss); //, running_loss / len(trainloader));
+        println!("Epoch {} - Training loss: {}", e, training_loss);
         let secs = start.elapsed().as_secs();
         println!("Training Time: {} min {} s", secs / 60, secs % 60);
     }

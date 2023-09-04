@@ -1,9 +1,10 @@
+#![feature(int_roundings)]
 #![feature(iter_array_chunks)]
 #![feature(array_chunks)]
 #![feature(test)]
 
 use mnist_nllloss_example::{get_data, image_to_string};
-use rusty_ai::prelude::*;
+use rusty_ai::{prelude::*, propagation::Propagator};
 use std::{iter::once, ops::Range, time::Instant};
 
 const IMAGE_SIDE: usize = 28;
@@ -59,18 +60,23 @@ pub fn main() {
 
     const EPOCHS: usize = 5;
     const BATCH_SIZE: usize = 64;
+    let batch_num = training_data.len().div_ceil(BATCH_SIZE);
 
     println!("\nTraining:");
     let start = Instant::now();
 
     for e in 0..EPOCHS {
+        let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            ai.training_step(batch);
+            let loss = ai.backpropagate_pairs(batch).mean_error();
+            running_loss += loss;
         }
         // shuffle data after one full iteration
         training_data.shuffle();
 
-        println!("Epoch {} - Training loss: ?", e); //, running_loss / len(trainloader));
+        let training_loss = running_loss / batch_num as f64;
+
+        println!("Epoch {} - Training loss: {}", e, training_loss);
         let secs = start.elapsed().as_secs();
         println!("Training Time: {} min {} s", secs / 60, secs % 60);
     }

@@ -43,6 +43,18 @@ pub trait Propagator<const OUT: usize> {
     where Self: Sized {
         self.outputs_errors().map(|(_, e)| e)
     }
+
+    /// consumes `self` and returns the arithmetic mean of the propagation errors.
+    #[inline]
+    fn mean_error(self) -> f64
+    where Self: Sized {
+        let mut count = 0;
+        let sum = self.errors().fold(0.0, |acc, e| {
+            count += 1;
+            acc + e
+        });
+        sum / count as f64
+    }
 }
 
 #[must_use = "`Prop` is lazy and does nothing unless consumed"]
