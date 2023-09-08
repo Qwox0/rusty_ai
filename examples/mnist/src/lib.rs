@@ -4,7 +4,7 @@
 #![feature(test)]
 
 use mnist_nllloss_example::{get_data, image_to_string};
-use rusty_ai::{prelude::*, propagation::Propagator};
+use rusty_ai::prelude::*;
 use std::{iter::once, ops::Range, time::Instant};
 
 const IMAGE_SIDE: usize = 28;
@@ -36,7 +36,7 @@ fn setup_ai() -> NNTrainer<IMAGE_SIZE, OUTPUTS, SquaredError, SGD_> {
         .layer(OUTPUTS, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .sigmoid()
         .build::<OUTPUTS>()
-        .to_trainable_builder()
+        .to_trainer()
         .loss_function(SquaredError)
         .optimizer(SGD { learning_rate: 0.003, momentum: 0.9 })
         .retain_gradient(false)
@@ -58,7 +58,7 @@ pub fn main() {
 
     let mut ai = setup_ai();
 
-    const EPOCHS: usize = 5;
+    const EPOCHS: usize = 15;
     const BATCH_SIZE: usize = 64;
     let batch_num = training_data.len().div_ceil(BATCH_SIZE);
 
@@ -68,7 +68,7 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            let loss = ai.backpropagate_pairs(batch).mean_error();
+            let loss = ai.backpropagate(batch).loss_mean();
             running_loss += loss;
         }
         // shuffle data after one full iteration
@@ -84,11 +84,10 @@ pub fn main() {
     println!("\nTest:");
     for test in test_data.iter().take(3) {
         print_image(test, -1.0..1.0);
-        let output = ai.propagate_arr(&test.input);
-        println!("output: {:?}", output);
-        let error = ai.get_loss_function().propagate_arr(&output, &test.expected_output);
-        println!("error: {}", error);
-        assert!(error < 0.2);
+        let (out, loss) = ai.test(&test.input, &test.expected_output);
+        println!("output: {:?}", out);
+        println!("loss: {}", loss);
+        assert!(loss < 0.2);
     }
 }
 
@@ -127,7 +126,7 @@ pub mod tests {
         let p = load_data();
 
         b.iter(|| {
-            black_box(ai.propagate_arr(black_box(&p.input)));
+            black_box(ai.propagate(black_box(&p.input)));
         })
     }
 

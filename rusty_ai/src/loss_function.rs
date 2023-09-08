@@ -7,7 +7,7 @@ use std::fmt::Display;
 pub trait LossFunction<const OUT: usize>: Display {
     type ExpectedOutput;
 
-    fn propagate_arr(&self, output: &[f64; OUT], expected_output: &Self::ExpectedOutput) -> f64;
+    fn propagate(&self, output: &[f64; OUT], expected_output: &Self::ExpectedOutput) -> f64;
 
     /*
     #[inline]
@@ -48,7 +48,7 @@ pub struct SquaredError;
 impl<const N: usize> LossFunction<N> for SquaredError {
     type ExpectedOutput = [f64; N];
 
-    fn propagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
+    fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
         differences(output, expected_output).map(|err| err * err).sum()
     }
 
@@ -67,8 +67,8 @@ pub struct HalfSquaredError;
 impl<const N: usize> LossFunction<N> for HalfSquaredError {
     type ExpectedOutput = [f64; N];
 
-    fn propagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
-        SquaredError.propagate_arr(output, expected_output) * 0.5
+    fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
+        SquaredError.propagate(output, expected_output) * 0.5
     }
 
     fn backpropagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
@@ -86,8 +86,8 @@ pub struct MeanSquaredError;
 impl<const N: usize> LossFunction<N> for MeanSquaredError {
     type ExpectedOutput = [f64; N];
 
-    fn propagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
-        SquaredError.propagate_arr(output, expected_output) / N as f64
+    fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
+        SquaredError.propagate(output, expected_output) / N as f64
     }
 
     fn backpropagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
@@ -126,7 +126,7 @@ impl<const OUT: usize> LossFunction<OUT> for NLLLoss {
     /// # Panics
     ///
     /// Panics if `expected_output` is not a valid variant (is not in the range `0..IN`).
-    fn propagate_arr(&self, output: &[f64; OUT], expected_output: &Self::ExpectedOutput) -> f64 {
+    fn propagate(&self, output: &[f64; OUT], expected_output: &Self::ExpectedOutput) -> f64 {
         assert!((0..OUT).contains(expected_output));
         -output[*expected_output]
     }

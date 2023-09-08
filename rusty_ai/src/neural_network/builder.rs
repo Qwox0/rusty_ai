@@ -67,7 +67,10 @@ impl<IN, LP, RNG> NNBuilder<IN, LP, RNG> {
 
 impl<const IN: usize, LP, RNG> NNBuilder<In<IN>, LP, RNG> {
     fn last_neuron_count(&self) -> usize {
-        self.layers.last().map(Layer::get_neuron_count).unwrap_or(IN)
+        self.layers
+            .last()
+            .map(Layer::get_neuron_count)
+            .unwrap_or(IN)
     }
 }
 
@@ -109,9 +112,8 @@ pub trait BuildLayer<const IN: usize>: Sized {
 
     fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT>;
 
-    fn to_trainable_builder<const OUT: usize>(
-        self,
-    ) -> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer>;
+    fn to_trainer<const OUT: usize>(self)
+    -> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer>;
 }
 
 impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
@@ -151,11 +153,13 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
         bias_init: Initializer<LayerBias>,
         activation_function: ActivationFn,
     ) -> BuilderWithoutParts<IN> {
-        neurons.into_iter().fold(self, |builder: Self, neurons: &usize| {
-            builder
-                .layer(*neurons, weights_init.clone(), bias_init.clone())
-                .activation_function(activation_function)
-        })
+        neurons
+            .into_iter()
+            .fold(self, |builder: Self, neurons: &usize| {
+                builder
+                    .layer(*neurons, weights_init.clone(), bias_init.clone())
+                    .activation_function(activation_function)
+            })
     }
 
     /// similar to `layers` but uses the default activation function for every layer.
@@ -179,15 +183,15 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
         NeuralNetwork::new(self.layers)
     }
 
-    /// Alias for `.build().to_trainable_builder()`
+    /// Alias for `.build().to_trainer()`
     ///
     /// # Panics
     ///
     /// See `NeuralNetworkBuilder::build`
-    fn to_trainable_builder<const OUT: usize>(
+    fn to_trainer<const OUT: usize>(
         self,
     ) -> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
-        self.build().to_trainable_builder()
+        self.build().to_trainer()
     }
 }
 
@@ -245,7 +249,8 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithParts<IN> {
         weights_init: Initializer<Matrix<f64>>,
         bias_init: Initializer<LayerBias>,
     ) -> Self {
-        self.use_default_activation_function().layer(neurons, weights_init, bias_init)
+        self.use_default_activation_function()
+            .layer(neurons, weights_init, bias_init)
     }
 
     /// Use the same [`Initializer`] to add multiple new [`Layer`]s to the NeuralNetwork.
@@ -275,7 +280,8 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithParts<IN> {
         weights_init: Initializer<Matrix<f64>>,
         bias_init: Initializer<LayerBias>,
     ) -> BuilderWithoutParts<IN> {
-        self.use_default_activation_function().layers_default(neurons, weights_init, bias_init)
+        self.use_default_activation_function()
+            .layers_default(neurons, weights_init, bias_init)
     }
 
     /// Builds [`NeuralNetwork`].
@@ -288,30 +294,15 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithParts<IN> {
         self.use_default_activation_function().build()
     }
 
-    /// Alias for `.build().to_trainable_builder()`
+    /// Alias for `.build().to_trainer()`
     /// This uses the `self.default_activation_function` for the previously defined layer.
     ///
     /// # Panics
     ///
     /// See `NeuralNetworkBuilder::build`
-    fn to_trainable_builder<const OUT: usize>(
+    fn to_trainer<const OUT: usize>(
         self,
     ) -> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
-        self.use_default_activation_function().to_trainable_builder()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::propagator::SimplePropagator;
-
-    #[test]
-    fn empty() {
-        let ai = NNBuilder::default().input().build::<2>();
-        let input = [1.0, 2.0];
-        let prop = ai.propagate_arr(&input);
-
-        assert_eq!(prop, input);
+        self.use_default_activation_function().to_trainer()
     }
 }

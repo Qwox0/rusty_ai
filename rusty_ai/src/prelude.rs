@@ -14,7 +14,6 @@ pub use crate::{
         Optimizer, OptimizerValues, DEFAULT_LEARNING_RATE,
     },
     propagation::{LayerPropagation, PropagationResult, VerbosePropagation},
-    propagator::SimplePropagator,
     results::TestsResult,
     trainer::{NNTrainer, NNTrainerBuilder, NoLossFunction, NoOptimizer},
     traits::*,

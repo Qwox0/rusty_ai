@@ -44,17 +44,11 @@ impl Optimizer for SGD_ {
         gradient: &Gradient,
     ) {
         let SGD { learning_rate, momentum } = self.val;
-        /*
         for ((x, dx), change) in
             nn.iter_mut_params().zip(gradient.iter_params()).zip(self.prev_change.iter_mut_params())
         {
             *change = momentum * *change - learning_rate * dx;
             *x += *change;
-        }
-        */
-
-        for (x, dx) in nn.iter_mut_params().zip(gradient.iter_params()) {
-            *x -= learning_rate * dx;
         }
     }
 }

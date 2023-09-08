@@ -208,7 +208,7 @@ fn setup(data_count: usize) -> (NNTrainer<1, 1, HalfSquaredError, SGD_>, PairLis
         .random_layer(NEURON_COUNT)
         .default_activation_function(ActivationFn::Identity)
         .random_layer(1)
-        .to_trainable_builder()
+        .to_trainer()
         .sgd(GradientDescent::default())
         .build();
         */

@@ -1,8 +1,8 @@
 use crate::{
     optimizer::Optimizer,
     prelude::{LossFunction, NNTrainer},
-    propagator::SimplePropagator,
 };
+use std::slice::ArrayWindows;
 
 pub trait HasEO {
     type EO;
@@ -17,6 +17,7 @@ impl<'a, const IN: usize, EO> HasEO for (&[f64; IN], &EO) {
     }
 }
 
+/*
 pub trait Propagator<const OUT: usize> {
     /// consumes `self` and creates an [`Iterator`] over the network outputs and errors.
     ///
@@ -56,7 +57,9 @@ pub trait Propagator<const OUT: usize> {
         sum / count as f64
     }
 }
+*/
 
+/*
 #[must_use = "`Prop` is lazy and does nothing unless consumed"]
 pub struct Prop<'a, const IN: usize, const OUT: usize, L, O, I> {
     nn: &'a NNTrainer<IN, OUT, L, O>,
@@ -88,6 +91,7 @@ where
         })
     }
 }
+*/
 
 #[must_use = "`Backprop` is lazy and does nothing unless consumed"]
 pub struct Backprop<'a, const IN: usize, const OUT: usize, L, O, I> {
@@ -107,30 +111,125 @@ where
         Backprop { nn, pairs: pairs.into_iter() }
     }
 }
-impl<'a, const IN: usize, const OUT: usize, L, O, EO, I> Propagator<OUT>
-    for Backprop<'a, IN, OUT, L, O, I>
+
+impl<'a, const IN: usize, const OUT: usize, L, O, EO, I> Backprop<'a, IN, OUT, L, O, I>
+where
+    L: LossFunction<OUT, ExpectedOutput = EO>,
+    O: Optimizer,
+    I: ExactSizeIterator<Item = (&'a [f64; IN], &'a EO)> + 'a,
+    EO: 'a,
+{
+    pub fn test(self) {}
+}
+
+macro_rules! out_err_iter {
+    ($self:ident) => {
+        $self.pairs.map(|(input, expected_output)| {
+            let out = $self.nn.verbose_propagate(input);
+            $self.nn.backpropagation(&out, expected_output);
+            let out = out.get_nn_output();
+            let err = $self.nn.calculate_loss_(&out, expected_output);
+            (out, err)
+        })
+    };
+}
+
+//impl<'a, const IN: usize, const OUT: usize, L, O, EO, I> Propagator<OUT>
+impl<'a, const IN: usize, const OUT: usize, L, O, EO, I> Backprop<'a, IN, OUT, L, O, I>
 where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
     I: Iterator<Item = (&'a [f64; IN], &'a EO)> + 'a,
     EO: 'a,
 {
-    fn outputs(self) -> impl Iterator<Item = [f64; OUT]> + 'a {
-        self.pairs.map(|(input, expected_output)| {
+    /// consumes `self` and execute the backpropagation calculation.
+    ///
+    /// If you want the calculated outputs or losses use other methods, like `outputs`, instead.
+    pub fn execute(self) {
+        self.nn.maybe_set_zero_gradient();
+        for (input, expected_output) in self.pairs {
             let out = self.nn.verbose_propagate(input);
-            self.nn.backpropagation(&out, expected_output);
-            out.get_nn_output()
-        })
+            self.nn.backpropagate(&out, expected_output);
+        }
+        self.nn.maybe_clip_gradient();
+        self.nn.optimize_trainee();
     }
 
-    fn outputs_errors(self) -> impl Iterator<Item = ([f64; OUT], f64)> + 'a {
-        self.pairs.map(|(input, expected_output)| {
-            let out = self.nn.verbose_propagate(input);
-            self.nn.backpropagation(&out, expected_output);
-            let out = out.get_nn_output();
-            let err = self.nn.calculate_loss_(&out, expected_output);
-            (out, err)
-        })
+    /// consumes `self`, executes the backpropagation calculation and returns the calculated
+    /// outputs and losses.
+    ///
+    /// This will consume more memory than `execute` because it has to allocate the returned
+    /// [`Vec`].
+    pub fn outputs_errors(self) -> Vec<([f64; OUT], f64)> {
+        self.nn.maybe_set_zero_gradient();
+        let o = out_err_iter!(self).collect::<Vec<_>>();
+        self.nn.maybe_clip_gradient();
+        self.nn.optimize_trainee();
+        o
+    }
+
+    /// consumes `self`, executes the backpropagation calculation and returns the calculated
+    /// outputs.
+    ///
+    /// This will consume more memory than `execute` because it has to allocate the returned
+    /// [`Vec`].
+    pub fn outputs(self) -> Vec<[f64; OUT]> {
+        self.nn.maybe_set_zero_gradient();
+        let o = self
+            .pairs
+            .map(|(input, expected_output)| {
+                let out = self.nn.verbose_propagate(input);
+                self.nn.backpropagate(&out, expected_output);
+                out.get_nn_output()
+            })
+            .collect::<Vec<_>>();
+        self.nn.maybe_clip_gradient();
+        self.nn.optimize_trainee();
+        o
+    }
+
+    /// consumes `self`, executes the backpropagation calculation and returns the calculated
+    /// losses.
+    ///
+    /// This will consume more memory than `execute` because it has to allocate the returned
+    /// [`Vec`].
+    pub fn errors(self) -> Vec<f64>
+    where Self: Sized {
+        self.nn.maybe_set_zero_gradient();
+        let o = out_err_iter!(self).map(|(_, e)| e).collect::<Vec<_>>();
+        self.nn.maybe_clip_gradient();
+        self.nn.optimize_trainee();
+        o
+    }
+
+    /// consumes `self`, executes the backpropagation calculation and returns the calculated
+    /// losses.
+    ///
+    /// This *won't* allocate the losses as a [`Vec`].
+    pub fn loss_sum(self) -> f64
+    where Self: Sized {
+        self.nn.maybe_set_zero_gradient();
+        let sum = out_err_iter!(self).map(|(_, e)| e).sum();
+        self.nn.maybe_clip_gradient();
+        self.nn.optimize_trainee();
+        sum
+    }
+
+    /// consumes `self`, executes the backpropagation calculation and returns the calculated
+    /// losses.
+    ///
+    /// This *won't* allocate the losses as a [`Vec`].
+    pub fn loss_mean(self) -> f64
+    where Self: Sized {
+        self.nn.maybe_set_zero_gradient();
+        let mut count = 0;
+        let sum = out_err_iter!(self).map(|(_, e)| e).fold(0.0, |acc, e| {
+            count += 1;
+            acc + e
+        });
+        self.nn.maybe_clip_gradient();
+        self.nn.optimize_trainee();
+        sum / count as f64
     }
 }
 
@@ -163,10 +262,9 @@ impl<const OUT: usize> VerbosePropagation<OUT> {
         Self(vec)
     }
 
-    pub fn iter_layers<'a>(
-        &'a self,
-    ) -> impl DoubleEndedIterator<Item = LayerPropagation<'a>> + ExactSizeIterator {
-        self.0.array_windows().map(|[input, output]| LayerPropagation { input, output })
+    /// Returns an [`Iterator`] over the input and output of every layer.
+    pub fn iter_layers<'a>(&'a self) -> ArrayWindows<'a, Vec<f64>, 2> {
+        self.0.array_windows()
     }
 
     pub fn get_nn_output(&self) -> [f64; OUT] {

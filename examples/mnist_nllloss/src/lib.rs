@@ -3,7 +3,7 @@
 #![feature(array_chunks)]
 #![feature(test)]
 
-use rusty_ai::{prelude::*, propagation::Propagator};
+use rusty_ai::prelude::*;
 use std::{cmp::Ordering, ops::Range, path::PathBuf, time::Instant};
 
 #[cfg(not(target_os = "windows"))]
@@ -19,7 +19,10 @@ pub fn get_data() -> load_mnist::Mnist {
     let exe_path = std::env::current_exe().expect("could get path of executable");
     let exe_dir = exe_path.parent().unwrap_or(&exe_path).display();
     let data_path = PathBuf::from(format!("{}/../../../examples/mnist/mnist-raw/", exe_dir));
-    let data_path = data_path.as_os_str().to_str().expect("could convert path to &str");
+    let data_path = data_path
+        .as_os_str()
+        .to_str()
+        .expect("could convert path to &str");
 
     load_mnist::MnistBuilder::new()
         .base_path(data_path)
@@ -51,7 +54,7 @@ fn setup_ai() -> NNTrainer<IMAGE_SIZE, OUTPUTS, NLLLoss, SGD_> {
         .layer(OUTPUTS, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .log_softmax()
         .build::<OUTPUTS>()
-        .to_trainable_builder()
+        .to_trainer()
         .loss_function(NLLLoss)
         .optimizer(SGD { learning_rate: 0.003, momentum: 0.9 })
         .retain_gradient(false)
@@ -73,7 +76,7 @@ pub fn main() {
 
     let mut ai = setup_ai();
 
-    const EPOCHS: usize = 5;
+    const EPOCHS: usize = 15;
     const BATCH_SIZE: usize = 64;
     let batch_num = training_data.len().div_ceil(BATCH_SIZE);
 
@@ -83,7 +86,7 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            let loss = ai.backpropagate_pairs(batch).mean_error();
+            let loss = ai.backpropagate(batch).loss_mean();
             running_loss += loss;
         }
         // shuffle data after one full iteration
@@ -99,19 +102,13 @@ pub fn main() {
     println!("\nTest:");
     for test in test_data.iter().take(3) {
         print_image(test, -1.0..1.0);
-        let output = ai.propagate_arr(&test.input);
-        println!("output: {:?}", output);
-        let propab = output.iter().copied().map(f64::exp).collect::<Vec<_>>();
-        let guess = propab
-            .iter()
-            .enumerate()
-            .max_by(|x, y| x.1.partial_cmp(y.1).unwrap_or(Ordering::Less))
-            .unwrap()
-            .0;
+        let (out, loss) = ai.test(&test.input, &test.expected_output);
+        println!("output: {:?}", out);
+        let propab = out.iter().copied().map(f64::exp).collect::<Vec<_>>();
+        let guess = propab.iter().enumerate().max_by_key(|(_, x)| *x).unwrap().0;
         println!("propab: {:?}; guess: {}", propab, guess);
-        let error = ai.get_loss_function().propagate_arr(&output, &test.expected_output);
-        println!("error: {}", error);
-        assert!(error < 0.2);
+        println!("error: {}", loss);
+        assert!(loss < 0.2);
     }
 }
 

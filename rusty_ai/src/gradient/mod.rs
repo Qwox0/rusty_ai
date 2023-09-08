@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, derive_more::From)]
 pub struct Gradient {
-    layers: Vec<GradientLayer>,
+    pub(crate) layers: Vec<GradientLayer>,
 }
 
 impl Gradient {

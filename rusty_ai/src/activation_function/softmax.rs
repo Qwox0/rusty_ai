@@ -127,7 +127,7 @@ mod tests {
 
         println!("o: {:?}", o);
 
-        let loss = nllloss.propagate_arr(&o, expected);
+        let loss = nllloss.propagate(&o, expected);
 
         println!("loss: {:?}", loss);
 
@@ -156,7 +156,7 @@ mod tests {
         let nllloss = NLLLoss;
 
         let out: Result<[f64; 3], _> = out.as_slice().try_into();
-        let err = nllloss.propagate_arr(&out.unwrap(), &0);
+        let err = nllloss.propagate(&out.unwrap(), &0);
 
         println!("err: {:?}", err);
 
@@ -175,7 +175,7 @@ mod tests {
         let nllloss = NLLLoss;
 
         let out: Result<[f64; 3], _> = out.as_slice().try_into();
-        let err = nllloss.propagate_arr(&out.unwrap(), &0);
+        let err = nllloss.propagate(&out.unwrap(), &0);
 
         println!("err: {:?}", err);
 

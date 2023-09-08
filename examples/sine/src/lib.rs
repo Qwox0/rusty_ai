@@ -32,7 +32,7 @@ pub fn main() {
         .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .identity()
         .build::<1>()
-        .to_trainable_builder()
+        .to_trainer()
         .loss_function(SquaredError)
         .optimizer(SGD { learning_rate: 0.01, ..SGD::default() })
         .retain_gradient(true)
@@ -58,9 +58,9 @@ pub fn main() {
 
     let mut js_res_vars = vec![];
 
-    let res = ai.test(test_data.iter());
-    println!("epoch: {:>4}, loss: {:<20}", 0, res.error);
-    export_res(&mut js_file, &mut js_res_vars, 0, res);
+    let error = ai.test_batch(&test_data).sum::<f64>();
+    println!("epoch: {:>4}, loss: {:<20}", 0, error);
+    export_res(&mut js_file, &mut js_res_vars, 0, error);
 
     ai.full_train(&training_data, EPOCHS, |epoch, ai| {
         if epoch % 100 == 0 {

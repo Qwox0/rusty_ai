@@ -21,17 +21,17 @@ where
 {
     let Args { mut ai, data, losses, epochs, test_condition } = args;
     let test = |epoch: usize, ai: &NNTrainer<1, 1, L, O>, expected_loss: f64| {
-        let res = ai.test(data.iter());
+        let error = ai.test(data.iter()).sum::<f64>();
 
-        println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, res.error, res.error.to_bits());
+        println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, error, error.to_bits());
         println!("    expected_loss: {:<20} {:064b}", expected_loss, expected_loss.to_bits());
         println!(
             "{}diff:
         {:064b}\n",
             " ".repeat(34),
-            res.error.to_bits() ^ expected_loss.to_bits()
+            error.to_bits() ^ expected_loss.to_bits()
         );
-        let diff = (res.error - expected_loss).abs();
+        let diff = (error - expected_loss).abs();
         println!("diff: {} = 10^{}", diff, diff.log10());
         assert!(diff < 1e-14);
     };
@@ -281,7 +281,7 @@ fn sine() {
         .layer_from_parameters(w5, b5)
         .identity()
         .build()
-        .to_trainable_builder()
+        .to_trainer()
         .loss_function(SquaredError)
         .optimizer(SGD { learning_rate: 0.01, ..SGD::default() })
         .retain_gradient(true)
