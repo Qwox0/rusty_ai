@@ -13,7 +13,7 @@ pub use crate::{
         sgd::{SGD, SGD_},
         Optimizer, OptimizerValues, DEFAULT_LEARNING_RATE,
     },
-    propagation::{LayerPropagation, PropagationResult, VerbosePropagation},
+    propagation::{PropagationResult, VerbosePropagation},
     results::TestsResult,
     trainer::{NNTrainer, NNTrainerBuilder, NoLossFunction, NoOptimizer},
     traits::*,

@@ -2,7 +2,10 @@ pub mod builder;
 
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::iter::Map;
+use std::{
+    iter::{Flatten, Map},
+    slice::{Iter, IterMut},
+};
 
 /// layers contains all Hidden Layers and the Output Layers
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -26,6 +29,8 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     pub fn get_layers(&self) -> &Vec<Layer> {
         &self.layers
     }
+
+    pub fn iter_params() {}
 
     pub fn init_zero_gradient(&self) -> Gradient {
         self.layers.iter().map(Layer::init_zero_gradient).collect()
@@ -65,14 +70,12 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         nn_output_gradient: OutputGradient,
         gradient: &mut Gradient,
     ) {
-        self.layers
-            .iter()
-            .zip(&mut gradient.layers)
-            .zip(verbose_prop.iter_layers())
-            .rev()
-            .fold(nn_output_gradient, |output_gradient, ((layer, gradient), [input, output])| {
+        self.layers.iter().zip(&mut gradient.layers).zip(verbose_prop.iter_layers()).rev().fold(
+            nn_output_gradient,
+            |output_gradient, ((layer, gradient), [input, output])| {
                 layer.backpropagate(input, output, output_gradient, gradient)
-            });
+            },
+        );
     }
 
     pub fn test<L: LossFunction<OUT>>(
@@ -118,9 +121,22 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         B: IntoIterator<Item = (&'a [f64; IN], &'a EO)>,
         L: LossFunction<OUT, ExpectedOutput = EO>,
     {
-        batch
-            .into_iter()
-            .map(|(input, eo)| self.test(input, eo, loss_fn))
+        batch.into_iter().map(|(input, eo)| self.test(input, eo, loss_fn))
+    }
+}
+
+impl<'a, const IN: usize, const OUT: usize> ParamsIter<'a> for NeuralNetwork<IN, OUT> {
+    type Iter = Flatten<Map<Iter<'a, Layer>, impl FnMut(&'a Layer) -> <Layer as ParamsIter>::Iter>>;
+    type IterMut = Flatten<
+        Map<IterMut<'a, Layer>, impl FnMut(&'a mut Layer) -> <Layer as ParamsIter>::IterMut>,
+    >;
+
+    fn iter(&'a self) -> Self::Iter {
+        self.layers.iter().map(Layer::iter).flatten()
+    }
+
+    fn iter_mut(&'a mut self) -> Self::IterMut {
+        self.layers.iter_mut().map(Layer::iter_mut).flatten()
     }
 }
 
@@ -145,12 +161,8 @@ impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, 
             get_plural_s(IN),
             get_plural_s(OUT),
         )?;
-        let layers_text = self
-            .layers
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>()
-            .join("\n");
+        let layers_text =
+            self.layers.iter().map(ToString::to_string).collect::<Vec<String>>().join("\n");
         write!(f, "{}", layers_text)
     }
 }

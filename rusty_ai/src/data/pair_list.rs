@@ -1,10 +1,10 @@
 use crate::data::Pair;
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
-use std::ops::{Deref, Index};
+use std::ops::Index;
 
 /// implements [`Index<usize, Output = Pair<IN, EO>>`].
-#[derive(Debug, Clone, derive_more::From)]
-pub struct PairList<const IN: usize, EO>(pub Vec<Pair<IN, EO>>);
+#[derive(Debug, Clone, derive_more::From, derive_more::Deref, derive_more::IntoIterator)]
+pub struct PairList<const IN: usize, EO>(#[into_iterator(ref, ref_mut)] pub Vec<Pair<IN, EO>>);
 /*
 pub struct PairList<const IN: usize, EO> {
     inputs: Vec<[f64; IN]>,
@@ -78,20 +78,15 @@ impl<const IN: usize, EO> PairList<IN, EO> {
     }
 }
 
-impl<const IN: usize, EO> Deref for PairList<IN, EO> {
-    type Target = [Pair<IN, EO>];
+impl<const IN: usize, EO: ::core::iter::IntoIterator> ::core::iter::IntoIterator
+    for PairList<IN, EO>
+{
+    type IntoIter = <Vec<Pair<IN, EO>> as ::core::iter::IntoIterator>::IntoIter;
+    type Item = <Vec<Pair<IN, EO>> as ::core::iter::IntoIterator>::Item;
 
-    fn deref(&self) -> &Self::Target {
-        self.0.deref()
-    }
-}
-
-impl<const IN: usize, EO> IntoIterator for PairList<IN, EO> {
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-    type Item = Pair<IN, EO>;
-
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+        <Vec<Pair<IN, EO>> as ::core::iter::IntoIterator>::into_iter(self.0)
     }
 }
 
@@ -111,7 +106,9 @@ impl PairList<1, f64> {
     }
 
     pub fn into_iter_tuple_simple(self) -> impl Iterator<Item = (f64, f64)> {
-        self.into_iter().map(Into::into)
+        let a = self.into_iter();
+        a.map(|x| x.into())
+        //self.into_iter().map(Into::into)
     }
 
     pub fn iter_tuple_simple(&self) -> impl Iterator<Item = (f64, f64)> + '_ {

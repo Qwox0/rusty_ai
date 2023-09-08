@@ -10,7 +10,7 @@ pub struct Training<'a, NN, I> {
 }
 
 impl<'a, NN, I> Training<'a, NN, I> {
-    pub(crate) fn new(nn: &mut NN, iter: I) -> Self {
+    pub(crate) fn new(nn: &'a mut NN, iter: I) -> Self {
         Training { nn, iter }
     }
 }
@@ -36,8 +36,8 @@ where
         TrainingOutputs::new(self.nn, self.iter)
     }
 
-    pub fn losses(self) {
-        todo!()
+    pub fn losses(self) -> TrainingLosses<'a, IN, OUT, L, O, I> {
+        TrainingLosses::new(self.nn, self.iter)
     }
 }
 
@@ -50,7 +50,7 @@ pub struct TrainingOutputs<'a, const IN: usize, const OUT: usize, L, O, I: Itera
 impl<'a, const IN: usize, const OUT: usize, L, O, I: Iterator>
     TrainingOutputs<'a, IN, OUT, L, O, I>
 {
-    fn new(nn: &mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
+    fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
         TrainingOutputs { nn, iter: iter.peekable(), while_grad: false }
     }
@@ -90,7 +90,7 @@ pub struct TrainingLosses<'a, const IN: usize, const OUT: usize, L, O, I: Iterat
 impl<'a, const IN: usize, const OUT: usize, L, O, I: Iterator>
     TrainingLosses<'a, IN, OUT, L, O, I>
 {
-    fn new(nn: &mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
+    fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
         TrainingLosses { nn, iter: iter.peekable(), while_grad: false }
     }

@@ -20,7 +20,11 @@ impl OptimizerValues for Adam {
     type Optimizer = Adam_;
 
     fn init_with_layers(self, layers: &Vec<Layer>) -> Self::Optimizer {
-        let v: Gradient = layers.iter().map(Layer::init_zero_gradient).collect::<Vec<_>>().into();
+        let v: Gradient = layers
+            .iter()
+            .map(Layer::init_zero_gradient)
+            .collect::<Vec<_>>()
+            .into();
         Adam_ { val: self, generation: 0, m: v.clone(), v }
     }
 }
@@ -48,10 +52,10 @@ impl Optimizer for Adam_ {
         self.generation += 1;
         let time_step = self.generation as i32;
 
-        nn.iter_mut_params()
-            .zip(gradient.iter_params())
-            .zip(self.m.iter_mut_params())
-            .zip(self.v.iter_mut_params())
+        nn.iter_mut()
+            .zip(gradient.iter())
+            .zip(self.m.iter_mut())
+            .zip(self.v.iter_mut())
             .for_each(|(((x, dx), m), v)| {
                 m.lerp_mut(*dx, beta1);
                 v.lerp_mut(dx * dx, beta2);

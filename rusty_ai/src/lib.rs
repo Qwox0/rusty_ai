@@ -1,5 +1,7 @@
 #![feature(array_windows)]
 #![feature(return_position_impl_trait_in_trait)]
+#![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 #![feature(test)]
 #![feature(type_changing_struct_update)]
 #![feature(iter_array_chunks)]

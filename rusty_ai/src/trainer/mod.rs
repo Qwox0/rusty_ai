@@ -1,13 +1,9 @@
 mod builder;
 
-use crate::{prelude::*, propagation::Backprop, training::Training};
+use crate::{prelude::*, training::Training};
 pub use builder::*;
-use itertools::structs;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Display,
-    iter::{Map, Zip},
-};
+use std::{fmt::Display, iter::Map};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NNTrainer<const IN: usize, const OUT: usize, L, O> {
@@ -58,6 +54,7 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
         batch.into_iter().map(|input| self.propagate(input))
     }
 
+    #[inline]
     pub fn set_zero_gradient(&mut self) {
         self.gradient.set_zero()
     }
@@ -69,6 +66,7 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
         }
     }
 
+    #[inline]
     pub fn clip_gradient(&mut self, clip_gradient_norm: ClipGradientNorm) {
         clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);
         //clip_gradient_norm.clip_gradient_pytorch_device(&mut self.gradient);
@@ -135,18 +133,15 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     ///               = (o_L_i - e_i) *     f'(z_i)
     pub fn backpropagate(&mut self, verbose_prop: &VerbosePropagation<OUT>, expected_output: &EO) {
         // gradient of the cost function with respect to the neuron output of the last layer.
-        let mut output_gradient = self
-            .loss_function
-            .backpropagate(verbose_prop, expected_output);
+        let mut output_gradient = self.loss_function.backpropagate(verbose_prop, expected_output);
 
-        self.network
-            .backpropagate(verbose_prop, output_gradient, &mut self.gradient);
+        self.network.backpropagate(verbose_prop, output_gradient, &mut self.gradient);
     }
 
+    /// To test a batch of multiple pairs use `test_batch`.
     #[inline]
     pub fn test(&self, input: &[f64; IN], expected_output: &EO) -> ([f64; OUT], f64) {
-        self.network
-            .test(input, expected_output, &self.loss_function)
+        self.network.test(input, expected_output, &self.loss_function)
     }
 
     /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
@@ -170,9 +165,9 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
 impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O>
 where O: Optimizer
 {
+    #[inline]
     pub fn optimize_trainee(&mut self) {
-        self.optimizer
-            .optimize_weights(&mut self.network, &self.gradient);
+        self.optimizer.optimize_weights(&mut self.network, &self.gradient);
     }
 }
 
@@ -181,6 +176,7 @@ where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
 {
+    #[inline]
     pub fn train<'a, B>(&'a mut self, batch: B) -> Training<Self, B::IntoIter>
     where
         B: IntoIterator<Item = (&'a [f64; IN], &'a EO)>,
@@ -244,7 +240,6 @@ where
     {
         Backprop::new(self, inputs.into_iter().zip(expected_outputs))
     }
-    */
 
     pub fn calculate_loss(&self, res: &PropagationResult<OUT>, expected_output: &EO) -> f64 {
         self.calculate_loss_(&res.0, expected_output)
@@ -272,6 +267,7 @@ where
         self.maybe_clip_gradient();
         self.optimize_trainee();
     }
+    */
 }
 
 /*

@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, derive_more::From, PartialEq, Serialize, Deserialize)]
-pub struct LayerBias(Vec<f64>);
+#[derive(
+    Debug, Clone, derive_more::From, PartialEq, Serialize, Deserialize, derive_more::IntoIterator,
+)]
+pub struct LayerBias(#[into_iterator(ref, ref_mut)] Vec<f64>);
 
 impl LayerBias {
     /// # Panics
@@ -38,12 +40,8 @@ impl LayerBias {
         self
     }
 
-    pub fn iter(&self) -> core::slice::Iter<'_, f64> {
+    pub fn iter<'a>(&'a self) -> core::slice::Iter<'a, f64> {
         self.0.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, f64> {
-        self.0.iter_mut()
     }
 }
 

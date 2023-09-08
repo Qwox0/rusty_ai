@@ -1,21 +1,4 @@
-use crate::{
-    optimizer::Optimizer,
-    prelude::{LossFunction, NNTrainer},
-};
 use std::slice::ArrayWindows;
-
-pub trait HasEO {
-    type EO;
-    fn get_eo(&self) -> &Self::EO;
-}
-
-impl<'a, const IN: usize, EO> HasEO for (&[f64; IN], &EO) {
-    type EO = EO;
-
-    fn get_eo(&self) -> &Self::EO {
-        self.1
-    }
-}
 
 /*
 pub trait Propagator<const OUT: usize> {
@@ -91,7 +74,6 @@ where
         })
     }
 }
-*/
 
 #[must_use = "`Backprop` is lazy and does nothing unless consumed"]
 pub struct Backprop<'a, const IN: usize, const OUT: usize, L, O, I> {
@@ -232,6 +214,7 @@ where
         sum / count as f64
     }
 }
+*/
 
 // ======================
 
@@ -270,9 +253,4 @@ impl<const OUT: usize> VerbosePropagation<OUT> {
     pub fn get_nn_output(&self) -> [f64; OUT] {
         self.0.last().unwrap().as_slice().try_into().unwrap()
     }
-}
-
-pub struct LayerPropagation<'a> {
-    pub input: &'a Vec<f64>,
-    pub output: &'a Vec<f64>,
 }

@@ -1,9 +1,15 @@
 mod bias;
 
-use crate::prelude::*;
+use crate::{
+    matrix::{MatrixIter, MatrixIterMut},
+    prelude::*,
+};
 pub use bias::*;
 use serde::{Deserialize, Serialize};
-use std::iter::once;
+use std::{
+    iter::{once, Chain},
+    slice::{Iter, IterMut},
+};
 
 /// Layer: all input weights + bias for all neurons in layer + activation
 /// function The Propagation calculation is done in the same Order
@@ -15,26 +21,6 @@ pub struct Layer {
 }
 
 impl Layer {
-    pub fn get_weights(&self) -> &Matrix<f64> {
-        &self.weights
-    }
-
-    pub fn get_weights_mut(&mut self) -> &mut Matrix<f64> {
-        &mut self.weights
-    }
-
-    pub fn get_bias(&self) -> &LayerBias {
-        &self.bias
-    }
-
-    pub fn get_bias_mut(&mut self) -> &mut LayerBias {
-        &mut self.bias
-    }
-
-    pub fn get_activation_function(&self) -> &ActivationFn {
-        &self.activation_function
-    }
-
     pub fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
         assert_eq!(
             weights.get_height(),
@@ -42,6 +28,10 @@ impl Layer {
             "Weights and Bias don't have matching neuron counts."
         );
         Self { weights, bias, activation_function }
+    }
+
+    pub fn get_activation_function(&self) -> &ActivationFn {
+        &self.activation_function
     }
 
     /// # Panics
@@ -78,11 +68,11 @@ impl Layer {
     }
 
     pub fn iter_neurons(&self) -> impl Iterator<Item = (&Vec<f64>, &f64)> {
-        self.weights.iter_rows().zip(self.bias.iter())
+        self.weights.iter_rows().zip(&self.bias)
     }
 
     pub fn iter_mut_neurons(&mut self) -> impl Iterator<Item = (&mut Vec<f64>, &mut f64)> {
-        self.weights.iter_rows_mut().zip(self.bias.iter_mut())
+        self.weights.iter_rows_mut().zip(&mut self.bias)
     }
 
     pub(crate) fn backpropagate(
@@ -115,7 +105,6 @@ impl Layer {
                 }
             },
         );
-
         inputs_grad
     }
 
@@ -127,13 +116,23 @@ impl Layer {
 }
 
 impl<'a> ParamsIter<'a> for Layer {
-    fn iter_parameters(&'a self) -> impl Iterator<Item = &'a f64> {
-        Self::default_chain(self.weights.iter(), self.bias.iter())
+    type Iter = Chain<MatrixIter<'a, f64>, Iter<'a, f64>>;
+    type IterMut = Chain<MatrixIterMut<'a, f64>, IterMut<'a, f64>>;
+
+    fn iter(&'a self) -> Self::Iter {
+        self.weights.iter().chain(&self.bias)
     }
 
-    fn iter_mut_parameters(&'a mut self) -> impl Iterator<Item = &'a mut f64> {
-        Self::default_chain(self.weights.iter_mut(), self.bias.iter_mut())
+    fn iter_mut(&'a mut self) -> Self::IterMut {
+        self.weights.iter_mut().chain(&mut self.bias)
     }
+}
+
+fn default_chain<T>(
+    weights: impl IntoIterator<Item = T>,
+    bias: impl IntoIterator<Item = T>,
+) -> impl Iterator<Item = T> {
+    weights.into_iter().chain(bias)
 }
 
 impl std::fmt::Display for Layer {

@@ -21,7 +21,11 @@ impl OptimizerValues for SGD {
     type Optimizer = SGD_;
 
     fn init_with_layers(self, layers: &Vec<Layer>) -> Self::Optimizer {
-        let prev_change = layers.iter().map(Layer::init_zero_gradient).collect::<Vec<_>>().into();
+        let prev_change = layers
+            .iter()
+            .map(Layer::init_zero_gradient)
+            .collect::<Vec<_>>()
+            .into();
         SGD_ { val: self, prev_change }
     }
 }
@@ -44,8 +48,10 @@ impl Optimizer for SGD_ {
         gradient: &Gradient,
     ) {
         let SGD { learning_rate, momentum } = self.val;
-        for ((x, dx), change) in
-            nn.iter_mut_params().zip(gradient.iter_params()).zip(self.prev_change.iter_mut_params())
+        for ((x, dx), change) in nn
+            .iter_mut()
+            .zip(gradient.iter())
+            .zip(self.prev_change.iter_mut())
         {
             *change = momentum * *change - learning_rate * dx;
             *x += *change;

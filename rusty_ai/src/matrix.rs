@@ -4,7 +4,9 @@ use rand::{distributions::DistIter, prelude::Distribution};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display, Write},
+    iter::{Flatten, Map},
     ops::{Add, Index, IndexMut, Mul},
+    slice::{Iter, IterMut},
 };
 
 pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
@@ -80,44 +82,31 @@ impl<T> Matrix<T> {
         Matrix::new(width, height, elements)
     }
 
-    /*
-    /// Creates a [`Matrix`] containing an empty elements [`Vec`] with a
-    /// capacity of `height`. Insert new rows with `Matrix::push_row`.
-    pub fn new_empty(width: usize, height: usize) -> Matrix<T> {
-        Matrix::new(width, height, Vec::with_capacity(height))
-    }
-
-    /// use with `Matrix::new_unchecked`.
-    pub fn push_row(&mut self, row: Vec<T>) {
-        assert!(self.elements.len() < self.height);
-        assert_eq!(row.len(), self.width);
-        self.elements.push(row);
-    }
-    */
-
     #[inline]
     pub fn get_row(&self, y: usize) -> Option<&Vec<T>> {
         self.elements.get(y)
     }
 
     pub fn get(&self, y: usize, x: usize) -> Option<&T> {
-        self.get_row(y).map(|row| row.get(x)).flatten()
+        self.get_row(y)?.get(x)
     }
 
-    pub fn iter_rows(&self) -> impl Iterator<Item = &Vec<T>> {
+    #[inline]
+    pub fn iter_rows<'a>(&'a self) -> Iter<'a, Vec<T>> {
         self.elements.iter()
     }
 
-    pub fn iter_rows_mut(&mut self) -> impl Iterator<Item = &mut Vec<T>> {
+    #[inline]
+    pub fn iter_rows_mut<'a>(&'a mut self) -> IterMut<'a, Vec<T>> {
         self.elements.iter_mut()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.iter_rows().map(|row| row.iter()).flatten()
+    pub fn iter<'a>(&'a self) -> MatrixIter<'a, T> {
+        self.iter_rows().map(IntoIterator::into_iter).flatten()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.iter_rows_mut().map(|row| row.iter_mut()).flatten()
+    pub fn iter_mut<'a>(&'a mut self) -> MatrixIterMut<'a, T> {
+        self.iter_rows_mut().map(IntoIterator::into_iter).flatten()
     }
 
     /// (width, height)
@@ -125,6 +114,10 @@ impl<T> Matrix<T> {
         (self.width, self.height)
     }
 }
+
+pub type MatrixIter<'a, T: 'a> = Flatten<Map<Iter<'a, Vec<T>>, impl FnMut(&'a Vec<T>) -> Iter<'a, T>>>;
+pub type MatrixIterMut<'a, T: 'a> =
+    Flatten<Map<IterMut<'a, Vec<T>>, impl FnMut(&'a mut Vec<T>) -> IterMut<'a, T>>>;
 
 impl<T: Ring + Clone> Matrix<T> {
     pub fn with_zeros(width: usize, height: usize) -> Matrix<T> {
