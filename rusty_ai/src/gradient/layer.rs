@@ -28,18 +28,13 @@ impl GradientLayer {
     }
 }
 
-impl<'a> ParamsIter<'a> for GradientLayer {
-    type Iter = Chain<MatrixIter<'a, f64>, Iter<'a, f64>>;
-    type IterMut = Chain<MatrixIterMut<'a, f64>, IterMut<'a, f64>>;
-
-    fn iter(&'a self) -> Self::Iter {
-        self.weight_gradient.iter().chain(&self.bias_gradient)
+impl ParamsIter for GradientLayer {
+    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64> {
+        default_params_chain(&self.weight_gradient, &self.bias_gradient)
     }
 
-    fn iter_mut(&'a mut self) -> Self::IterMut {
-        self.weight_gradient
-            .iter_mut()
-            .chain(&mut self.bias_gradient)
+    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64> {
+        default_params_chain(&mut self.weight_gradient, &mut self.bias_gradient)
     }
 }
 
@@ -48,7 +43,7 @@ impl std::fmt::Display for GradientLayer {
         let bias_header = "Biases:".to_string();
         let bias_str_iter =
             once(bias_header).chain(self.bias_gradient.iter().map(ToString::to_string));
-        todo!();
+        // Todo
         let bias_column_width = bias_str_iter.clone().map(|s| s.len()).max().unwrap_or(0);
         let mut bias_lines = bias_str_iter.map(|s| format!("{s:^bias_column_width$}"));
         for (idx, l) in self

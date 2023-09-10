@@ -1,7 +1,7 @@
 #![feature(test)]
 
 use rusty_ai::prelude::*;
-use std::{fmt::Display, fs::File, io::Write, path::Path, ops::Range};
+use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
 
 fn get_out_js_path() -> &'static str {
     if Path::new("./index.js").exists() {
@@ -42,11 +42,16 @@ pub fn main() {
     const EPOCHS: usize = 1000;
     const DATA_RANGE: Range<f64> = -10.0..10.0;
 
-    let training_data =
-        DataBuilder::uniform(DATA_RANGE).build::<1>(1000).gen_pairs(|[x]| [x.sin()]);
-    let test_data = DataBuilder::uniform(DATA_RANGE).build::<1>(30).gen_pairs(|[x]| [x.sin()]);
-    let (x, y): (Vec<_>, Vec<_>) =
-        test_data.iter().map(|pair| (pair.input[0], pair.expected_output[0])).unzip();
+    let training_data = DataBuilder::uniform(DATA_RANGE)
+        .build::<1>(1000)
+        .gen_pairs(|[x]| [x.sin()]);
+    let test_data = DataBuilder::uniform(DATA_RANGE)
+        .build::<1>(30)
+        .gen_pairs(|[x]| [x.sin()]);
+    let (x, y): (Vec<_>, Vec<_>) = test_data
+        .iter()
+        .map(|(input, expected_output)| (input[0], expected_output[0]))
+        .unzip();
 
     writeln!(
         js_file,
@@ -58,18 +63,21 @@ pub fn main() {
 
     let mut js_res_vars = vec![];
 
-    let error = ai.test_batch(&test_data).sum::<f64>();
+    let (outputs, losses): (Vec<_>, Vec<_>) = ai.test_batch(test_data.iter()).unzip();
+    let error = losses.into_iter().sum::<f64>();
     println!("epoch: {:>4}, loss: {:<20}", 0, error);
-    export_res(&mut js_file, &mut js_res_vars, 0, error);
+    export_res(&mut js_file, &mut js_res_vars, 0, outputs, error);
 
-    ai.full_train(&training_data, EPOCHS, |epoch, ai| {
+    for epoch in 0..EPOCHS {
+        ai.train(&training_data).execute();
+
         if epoch % 100 == 0 {
-            todo!()
-            //let res = ai.test(&SquaredError, test_data.iter());
-            //println!("epoch: {:>4}, loss: {:<20}", epoch, res.error);
-            //export_res(&mut js_file, &mut js_res_vars, epoch, res);
+            let (outputs, losses): (Vec<_>, Vec<_>) = ai.test_batch(test_data.iter()).unzip();
+            let error = losses.into_iter().sum::<f64>();
+            println!("epoch: {:>4}, loss: {:<20}", epoch, error);
+            export_res(&mut js_file, &mut js_res_vars, epoch, outputs, error);
         }
-    });
+    }
 
     writeln!(js_file, "let generations = [ {} ];", js_res_vars.join(", ")).unwrap();
 }
@@ -78,14 +86,15 @@ fn export_res(
     js_file: &mut File,
     js_res_vars: &mut Vec<String>,
     epoch: usize,
-    res: TestsResult<1>,
+    outputs: Vec<[f64; 1]>,
+    error_sum: f64,
 ) {
     let js_var_name = format!("gen{epoch}_result");
     writeln!(
         js_file,
         "let {js_var_name} = {{ gen: {epoch}, error: '{}', outputs: {} }};",
-        res.error,
-        stringify_arr(res.outputs.into_iter().map(|out| out.0[0]))
+        error_sum,
+        stringify_arr(outputs.into_iter().map(|out| out[0]))
     )
     .unwrap();
     js_res_vars.push(js_var_name);

@@ -86,7 +86,7 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            let loss = ai.backpropagate(batch).loss_mean();
+            let loss = ai.train(batch).mean_loss();
             running_loss += loss;
         }
         // shuffle data after one full iteration
@@ -100,12 +100,18 @@ pub fn main() {
     }
 
     println!("\nTest:");
-    for test in test_data.iter().take(3) {
-        print_image(test, -1.0..1.0);
-        let (out, loss) = ai.test(&test.input, &test.expected_output);
+    for pair in test_data.iter().take(3) {
+        print_image(pair, -1.0..1.0);
+        let (input, expected_output) = pair;
+        let (out, loss) = ai.test(input, expected_output);
         println!("output: {:?}", out);
         let propab = out.iter().copied().map(f64::exp).collect::<Vec<_>>();
-        let guess = propab.iter().enumerate().max_by_key(|(_, x)| *x).unwrap().0;
+        let guess = propab
+            .iter()
+            .enumerate()
+            .max_by(|x, y| x.1.total_cmp(y.1))
+            .unwrap()
+            .0;
         println!("propab: {:?}; guess: {}", propab, guess);
         println!("error: {}", loss);
         assert!(loss < 0.2);
@@ -113,7 +119,7 @@ pub fn main() {
 }
 
 pub fn print_image(pair: &Pair<IMAGE_SIZE, usize>, val_range: Range<f64>) {
-    println!("{} label: {}", image_to_string(&pair.input, val_range), pair.expected_output);
+    println!("{} label: {}", image_to_string(&pair.0, val_range), pair.1);
 }
 
 /// each pixel has a size of 2x1 (`XX`).

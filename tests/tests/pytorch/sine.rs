@@ -21,7 +21,10 @@ where
 {
     let Args { mut ai, data, losses, epochs, test_condition } = args;
     let test = |epoch: usize, ai: &NNTrainer<1, 1, L, O>, expected_loss: f64| {
-        let error = ai.test(data.iter()).sum::<f64>();
+        let error = ai
+            .test_batch(data.iter())
+            .map(|(_, loss)| loss)
+            .sum::<f64>();
 
         println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, error, error.to_bits());
         println!("    expected_loss: {:<20} {:064b}", expected_loss, expected_loss.to_bits());
@@ -40,9 +43,8 @@ where
 
     test(0, &ai, losses.next().unwrap());
 
-    for epoch in 0..epochs {
-        let epoch = epoch + 1;
-        ai.training_step(data.iter());
+    for epoch in 1..epochs + 1 {
+        ai.train(&data).execute();
         if test_condition(epoch) {
             test(epoch, &ai, losses.next().unwrap());
         }

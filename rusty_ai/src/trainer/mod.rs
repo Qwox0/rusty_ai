@@ -133,15 +133,19 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     ///               = (o_L_i - e_i) *     f'(z_i)
     pub fn backpropagate(&mut self, verbose_prop: &VerbosePropagation<OUT>, expected_output: &EO) {
         // gradient of the cost function with respect to the neuron output of the last layer.
-        let mut output_gradient = self.loss_function.backpropagate(verbose_prop, expected_output);
+        let mut output_gradient = self
+            .loss_function
+            .backpropagate(verbose_prop, expected_output);
 
-        self.network.backpropagate(verbose_prop, output_gradient, &mut self.gradient);
+        self.network
+            .backpropagate(verbose_prop, output_gradient, &mut self.gradient);
     }
 
     /// To test a batch of multiple pairs use `test_batch`.
     #[inline]
     pub fn test(&self, input: &[f64; IN], expected_output: &EO) -> ([f64; OUT], f64) {
-        self.network.test(input, expected_output, &self.loss_function)
+        self.network
+            .test(input, expected_output, &self.loss_function)
     }
 
     /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
@@ -153,9 +157,9 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     pub fn test_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut((&'a [f64; IN], &'a EO)) -> ([f64; OUT], f64)>
+    ) -> Map<B::IntoIter, impl FnMut(&'a ([f64; IN], EO)) -> ([f64; OUT], f64)>
     where
-        B: IntoIterator<Item = (&'a [f64; IN], &'a EO)>,
+        B: IntoIterator<Item = &'a ([f64; IN], EO)>,
         EO: 'a,
     {
         batch.into_iter().map(|(input, eo)| self.test(input, eo))
@@ -167,7 +171,8 @@ where O: Optimizer
 {
     #[inline]
     pub fn optimize_trainee(&mut self) {
-        self.optimizer.optimize_weights(&mut self.network, &self.gradient);
+        self.optimizer
+            .optimize_weights(&mut self.network, &self.gradient);
     }
 }
 
@@ -179,7 +184,7 @@ where
     #[inline]
     pub fn train<'a, B>(&'a mut self, batch: B) -> Training<Self, B::IntoIter>
     where
-        B: IntoIterator<Item = (&'a [f64; IN], &'a EO)>,
+        B: IntoIterator<Item = &'a ([f64; IN], EO)>,
         EO: 'a,
     {
         Training::new(self, batch.into_iter())

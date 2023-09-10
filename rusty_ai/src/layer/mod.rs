@@ -90,10 +90,14 @@ impl Layer {
 
         let mut inputs_grad = vec![0.0; input_count];
 
-        let weighted_sums_grad = self.activation_function.backpropagate(output_gradient, output);
+        let weighted_sums_grad = self
+            .activation_function
+            .backpropagate(output_gradient, output);
 
-        self.iter_neurons().zip(gradient.iter_mut_neurons()).zip(weighted_sums_grad).for_each(
-            |(((weights, _), (weights_grad, bias_grad)), weighted_sum_grad)| {
+        self.iter_neurons()
+            .zip(gradient.iter_mut_neurons())
+            .zip(weighted_sums_grad)
+            .for_each(|(((weights, _), (weights_grad, bias_grad)), weighted_sum_grad)| {
                 *bias_grad += weighted_sum_grad;
 
                 for (weight_derivative, input) in weights_grad.iter_mut().zip(input) {
@@ -103,8 +107,7 @@ impl Layer {
                 for (input_derivative, weight) in inputs_grad.iter_mut().zip(weights) {
                     *input_derivative += weight * weighted_sum_grad;
                 }
-            },
-        );
+            });
         inputs_grad
     }
 
@@ -115,24 +118,14 @@ impl Layer {
     }
 }
 
-impl<'a> ParamsIter<'a> for Layer {
-    type Iter = Chain<MatrixIter<'a, f64>, Iter<'a, f64>>;
-    type IterMut = Chain<MatrixIterMut<'a, f64>, IterMut<'a, f64>>;
-
-    fn iter(&'a self) -> Self::Iter {
-        self.weights.iter().chain(&self.bias)
+impl ParamsIter for Layer {
+    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64> {
+        default_params_chain(&self.weights, &self.bias)
     }
 
-    fn iter_mut(&'a mut self) -> Self::IterMut {
-        self.weights.iter_mut().chain(&mut self.bias)
+    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64> {
+        default_params_chain(&mut self.weights, &mut self.bias)
     }
-}
-
-fn default_chain<T>(
-    weights: impl IntoIterator<Item = T>,
-    bias: impl IntoIterator<Item = T>,
-) -> impl Iterator<Item = T> {
-    weights.into_iter().chain(bias)
 }
 
 impl std::fmt::Display for Layer {

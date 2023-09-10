@@ -32,33 +32,16 @@ impl FromIterator<GradientLayer> for Gradient {
     }
 }
 
-impl<'a> ParamsIter<'a> for Gradient {
-    type Iter = Flatten<
-        Map<
-            Iter<'a, GradientLayer>,
-            impl FnMut(&'a GradientLayer) -> <GradientLayer as ParamsIter>::Iter,
-        >,
-    >;
-    type IterMut = Flatten<
-        Map<
-            IterMut<'a, GradientLayer>,
-            impl FnMut(&'a mut GradientLayer) -> <GradientLayer as ParamsIter>::IterMut,
-        >,
-    >;
-
-    fn iter(&'a self) -> Self::Iter {
+impl ParamsIter for Gradient {
+    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64> {
         self.layers.iter().map(GradientLayer::iter).flatten()
     }
 
-    fn iter_mut(&'a mut self) -> Self::IterMut {
-        self.layers
-            .iter_mut()
-            .map(GradientLayer::iter_mut)
-            .flatten()
+    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64> {
+        self.layers.iter_mut().map(GradientLayer::iter_mut).flatten()
     }
 }
 
-impl_IntoIterator! { Gradient}
 
 impl std::fmt::Display for Gradient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

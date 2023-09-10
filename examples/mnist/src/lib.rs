@@ -68,7 +68,7 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            let loss = ai.backpropagate(batch).loss_mean();
+            let loss = ai.train(batch).mean_loss();
             running_loss += loss;
         }
         // shuffle data after one full iteration
@@ -82,17 +82,26 @@ pub fn main() {
     }
 
     println!("\nTest:");
-    for test in test_data.iter().take(3) {
-        print_image(test, -1.0..1.0);
-        let (out, loss) = ai.test(&test.input, &test.expected_output);
+    for pair in test_data.iter().take(3) {
+        print_image(pair, -1.0..1.0);
+        let (input, expected_output) = pair;
+        let (out, loss) = ai.test(input, expected_output);
         println!("output: {:?}", out);
-        println!("loss: {}", loss);
+        let propab = out.iter().copied().map(f64::exp).collect::<Vec<_>>();
+        let guess = propab
+            .iter()
+            .enumerate()
+            .max_by(|x, y| x.1.total_cmp(y.1))
+            .unwrap()
+            .0;
+        println!("propab: {:?}; guess: {}", propab, guess);
+        println!("error: {}", loss);
         assert!(loss < 0.2);
     }
 }
 
 pub fn print_image(pair: &Pair<IMAGE_SIZE, [f64; 10]>, val_range: Range<f64>) {
-    println!("{} label: {:?}", image_to_string(&pair.input, val_range), pair.expected_output);
+    println!("{} label: {:?}", image_to_string(&pair.0, val_range), pair.1);
 }
 
 pub mod tests {
@@ -101,7 +110,7 @@ pub mod tests {
     use test::*;
 
     fn load_data() -> Pair<IMAGE_SIZE, u8> {
-        Pair::new(
+        (
             TEST_IMG
                 .iter()
                 .map(|x| ((*x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD)
@@ -113,11 +122,11 @@ pub mod tests {
     }
 
     fn load_data_hack() -> Pair<IMAGE_SIZE, [f64; 10]> {
-        let Pair { input, expected_output: output } = load_data();
+        let (input, output) = load_data();
         let idx = output as usize;
         let mut output = [0.0; 10];
         output[idx] = 1.0;
-        Pair::new(input, output)
+        (input, output)
     }
 
     /// #[bench]
@@ -126,10 +135,11 @@ pub mod tests {
         let p = load_data();
 
         b.iter(|| {
-            black_box(ai.propagate(black_box(&p.input)));
+            black_box(ai.propagate(black_box(&p.0)));
         })
     }
 
+    /*
     /// #[bench]
     pub fn test_train_hack(b: &mut Bencher) {
         let mut ai = setup_ai();
@@ -139,6 +149,7 @@ pub mod tests {
             black_box(ai.training_step(black_box(once(&p))));
         })
     }
+    */
 
     /// ...
     /// ...,   ,    ,    ,  12,  56, 140, 126, 175, 200,  96,   2,    ,    ,    , ...

@@ -1,3 +1,4 @@
+use crate::traits::ParamsIter;
 use serde::{Deserialize, Serialize};
 
 #[derive(
@@ -39,9 +40,15 @@ impl LayerBias {
         self.0.iter_mut().for_each(|x| *x = x.sqrt());
         self
     }
+}
 
-    pub fn iter<'a>(&'a self) -> core::slice::Iter<'a, f64> {
-        self.0.iter()
+impl ParamsIter for LayerBias {
+    fn iter<'a>(&'a self) -> std::slice::Iter<'_, f64> {
+        self.into_iter()
+    }
+
+    fn iter_mut<'a>(&'a mut self) -> std::slice::IterMut<'a, f64> {
+        self.into_iter()
     }
 }
 

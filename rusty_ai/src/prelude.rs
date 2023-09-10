@@ -1,7 +1,7 @@
 pub use crate::{
     activation_function::*,
     clip_gradient_norm::ClipGradientNorm,
-    data::{DataBuilder, Pair, PairList, ValueList},
+    data::{DataBuilder, Pair, PairList},
     gradient::{layer::GradientLayer, Gradient},
     initializer::*,
     layer::{Layer, LayerBias},

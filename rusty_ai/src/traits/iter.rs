@@ -1,43 +1,20 @@
-pub trait ParamsIter<'a> {
-    type Iter: Iterator<Item = &'a f64>;
-    type IterMut: Iterator<Item = &'a mut f64>;
-
-    fn iter(&'a self) -> Self::Iter;
-    fn iter_mut(&'a mut self) -> Self::IterMut;
-
-    fn default_chain<T>(
-        weights: impl IntoIterator<Item = T>,
-        bias: impl IntoIterator<Item = T>,
-    ) -> impl Iterator<Item = T> {
-        weights.into_iter().chain(bias)
-    }
+pub trait ParamsIter {
+    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64>;
+    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64>;
 }
 
-mod macros {
-    macro_rules! impl_IntoIterator {
-        ($ty:ty) => {
-            impl<'a> IntoIterator for &'a $ty {
-                type IntoIter = <$ty as ParamsIter<'a>>::Iter;
-                type Item = &'a f64;
-
-                fn into_iter(self) -> Self::IntoIter {
-                    self.iter()
-                }
-            }
-
-            impl<'a> IntoIterator for &'a mut $ty {
-                type IntoIter = <$ty as ParamsIter<'a>>::IterMut;
-                type Item = &'a mut f64;
-
-                fn into_iter(self) -> Self::IntoIter {
-                    self.iter_mut()
-                }
-            }
-        };
-    }
-    pub(crate) use impl_IntoIterator;
+pub(crate) fn default_params_chain<W, B, T>(
+    weights: W,
+    bias: B,
+) -> impl DoubleEndedIterator<Item = T>
+where
+    W: IntoIterator<Item = T>,
+    W::IntoIter: DoubleEndedIterator,
+    B: IntoIterator<Item = T>,
+    B::IntoIter: DoubleEndedIterator,
+{
+    weights.into_iter().chain(bias)
 }
-pub(crate) use macros::impl_IntoIterator;
 
 /*
 pub trait LayerIter<'a> {

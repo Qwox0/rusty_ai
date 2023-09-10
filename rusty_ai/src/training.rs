@@ -4,6 +4,7 @@ use crate::{
 };
 use std::iter::Peekable;
 
+#[must_use = "`Training` must be consumed to do work."]
 pub struct Training<'a, NN, I> {
     nn: &'a mut NN,
     iter: I,
@@ -19,7 +20,7 @@ impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Training<'a, NNTrainer<
 where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
-    I: Iterator<Item = (&'a [f64; IN], &'a EO)>,
+    I: Iterator<Item = &'a ([f64; IN], EO)>,
     EO: 'a,
 {
     pub fn execute(self) {
@@ -39,8 +40,18 @@ where
     pub fn losses(self) -> TrainingLosses<'a, IN, OUT, L, O, I> {
         TrainingLosses::new(self.nn, self.iter)
     }
+
+    pub fn mean_loss(self) -> f64 {
+        let mut count = 0;
+        let sum = self.losses().fold(0.0, |acc, (_, loss)| {
+            count += 1;
+            acc + loss
+        });
+        sum / count as f64
+    }
 }
 
+#[must_use = "`Iterators` must be consumed to do work."]
 pub struct TrainingOutputs<'a, const IN: usize, const OUT: usize, L, O, I: Iterator> {
     nn: &'a mut NNTrainer<IN, OUT, L, O>,
     iter: Peekable<I>,
@@ -61,7 +72,7 @@ impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Iterator
 where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
-    I: Iterator<Item = (&'a [f64; IN], &'a EO)>,
+    I: Iterator<Item = &'a ([f64; IN], EO)>,
     EO: 'a,
 {
     type Item = [f64; OUT];
@@ -81,6 +92,7 @@ where
     }
 }
 
+#[must_use = "`Iterators` must be consumed to do work."]
 pub struct TrainingLosses<'a, const IN: usize, const OUT: usize, L, O, I: Iterator> {
     nn: &'a mut NNTrainer<IN, OUT, L, O>,
     iter: Peekable<I>,
@@ -101,7 +113,7 @@ impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Iterator
 where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
-    I: Iterator<Item = (&'a [f64; IN], &'a EO)>,
+    I: Iterator<Item = &'a ([f64; IN], EO)>,
     EO: 'a,
 {
     type Item = ([f64; OUT], f64);
