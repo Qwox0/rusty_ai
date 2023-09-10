@@ -55,14 +55,14 @@ impl Layer {
         self.weights.get_width()
     }
 
-    fn weighted_sums(&self, inputs: &Vec<f64>) -> Vec<f64> {
+    fn weighted_sums(&self, inputs: &[f64]) -> Vec<f64> {
         (&self.weights * inputs).add_entries(self.bias.get_vec())
     }
 
     /// An Input layer doesn't change the input, but still multiplies by the
     /// identity matrix and uses the identity activation function. It might
     /// be a good idea to skip the Input layer to reduce calculations.
-    pub fn propagate(&self, inputs: &Vec<f64>) -> Vec<f64> {
+    pub fn propagate(&self, inputs: &[f64]) -> Vec<f64> {
         let tmp = self.weighted_sums(inputs);
         self.activation_function.propagate(tmp)
     }

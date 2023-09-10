@@ -211,12 +211,12 @@ impl Matrix<f64> {
     }
 }
 
-impl<T> std::ops::Mul<&Vec<T>> for &Matrix<T>
+impl<T> std::ops::Mul<&[T]> for &Matrix<T>
 where T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>
 {
     type Output = Vec<T>;
 
-    fn mul(self, rhs: &Vec<T>) -> Self::Output {
+    fn mul(self, rhs: &[T]) -> Self::Output {
         assert_eq!(self.width, rhs.len(), "Vector has incompatible dimensions",);
         self.elements
             .iter()

@@ -114,8 +114,8 @@ pub mod tests {
             TEST_IMG
                 .iter()
                 .map(|x| ((*x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD)
-                .array_chunks()
-                .next()
+                .collect::<Vec<_>>()
+                .try_into()
                 .unwrap(),
             TEST_LBL,
         )

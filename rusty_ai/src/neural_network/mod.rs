@@ -34,17 +34,33 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         self.layers.iter().map(Layer::init_zero_gradient).collect()
     }
 
-    pub fn propagate(&self, input: &[f64; IN]) -> [f64; OUT] {
+    pub fn propagate(&self, input: &Input<IN>) -> [f64; OUT] {
+        // TODO: remove clone (`input.to_vec()`)
         self.layers
             .iter()
             .fold(input.to_vec(), |acc, layer| layer.propagate(&acc))
-            .as_slice()
             .try_into()
             .expect("last layer should have `OUT` neurons")
     }
 
+    /// Iterates over a `batch` of inputs and returns an [`Iterator`] over the outputs.
+    ///
+    /// This [`Iterator`] must be consumed otherwise no calculations are done.
+    ///
+    /// If you also want to calculate losses use `test` or `prop_with_test`.
+    #[must_use = "`Iterators` must be consumed to do work."]
+    pub fn propagate_batch<'a, B>(
+        &'a self,
+        batch: B,
+    ) -> Map<B::IntoIter, impl FnMut(&'a Input<IN>) -> [f64; OUT]>
+    where
+        B: IntoIterator<Item = &'a Input<IN>>,
+    {
+        batch.into_iter().map(|input| self.propagate(input))
+    }
+
     /// like `propagate` but returns the output of every layer ([`VerbosePropagation`]).
-    pub fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation<OUT> {
+    pub fn verbose_propagate(&self, input: &Input<IN>) -> VerbosePropagation<OUT> {
         let mut outputs = Vec::with_capacity(self.layers.len() + 1);
         let nn_out = self.layers.iter().fold(input.to_vec(), |input, layer| {
             let out = layer.propagate(&input);
@@ -80,29 +96,13 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
 
     pub fn test<L: LossFunction<OUT>>(
         &self,
-        input: &[f64; IN],
+        input: &Input<IN>,
         expected_output: &L::ExpectedOutput,
         loss_function: &L,
     ) -> ([f64; OUT], f64) {
         let out = self.propagate(input);
         let loss = loss_function.propagate(&out, expected_output);
         (out, loss)
-    }
-
-    /// Iterates over a `batch` of inputs and returns an [`Iterator`] over the outputs.
-    ///
-    /// This [`Iterator`] must be consumed otherwise no calculations are done.
-    ///
-    /// If you also want to calculate losses use `test` or `prop_with_test`.
-    #[must_use = "`Iterators` must be consumed to do work."]
-    pub fn propagate_batch<'a, B>(
-        &'a self,
-        batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a [f64; IN]) -> [f64; OUT]>
-    where
-        B: IntoIterator<Item = &'a [f64; IN]>,
-    {
-        batch.into_iter().map(|input| self.propagate(input))
     }
 
     /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
@@ -116,9 +116,9 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         &'a self,
         batch: B,
         loss_fn: &'a L,
-    ) -> Map<B::IntoIter, impl FnMut((&'a [f64; IN], &'a EO)) -> ([f64; OUT], f64)>
+    ) -> Map<B::IntoIter, impl FnMut((&'a Input<IN>, &'a EO)) -> ([f64; OUT], f64)>
     where
-        B: IntoIterator<Item = (&'a [f64; IN], &'a EO)>,
+        B: IntoIterator<Item = (&'a Input<IN>, &'a EO)>,
         L: LossFunction<OUT, ExpectedOutput = EO>,
     {
         batch

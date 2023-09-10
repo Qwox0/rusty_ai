@@ -20,7 +20,7 @@ impl Default for SGD {
 impl OptimizerValues for SGD {
     type Optimizer = SGD_;
 
-    fn init_with_layers(self, layers: &Vec<Layer>) -> Self::Optimizer {
+    fn init_with_layers(self, layers: &[Layer]) -> Self::Optimizer {
         let prev_change = layers
             .iter()
             .map(Layer::init_zero_gradient)

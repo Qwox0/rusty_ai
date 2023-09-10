@@ -16,5 +16,5 @@ pub trait Optimizer {
 pub trait OptimizerValues {
     type Optimizer: Optimizer;
 
-    fn init_with_layers(self, layers: &Vec<Layer>) -> Self::Optimizer;
+    fn init_with_layers(self, layers: &[Layer]) -> Self::Optimizer;
 }

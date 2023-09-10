@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-pub type Pair<const IN: usize, EO> = ([f64; IN], EO);
-
 /*
 /// an input-expected output-pair.
 /// Is used to contain an expected output for training or to contain the output

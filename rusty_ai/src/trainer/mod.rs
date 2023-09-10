@@ -28,12 +28,12 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
     }
 
     #[inline]
-    pub fn propagate(&self, input: &[f64; IN]) -> [f64; OUT] {
+    pub fn propagate(&self, input: &Input<IN>) -> [f64; OUT] {
         self.network.propagate(input)
     }
 
     #[inline]
-    pub fn verbose_propagate(&self, input: &[f64; IN]) -> VerbosePropagation<OUT> {
+    pub fn verbose_propagate(&self, input: &Input<IN>) -> VerbosePropagation<OUT> {
         self.network.verbose_propagate(input)
     }
 
@@ -47,9 +47,9 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
     pub fn propagate_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a [f64; IN]) -> [f64; OUT]>
+    ) -> Map<B::IntoIter, impl FnMut(&'a Input<IN>) -> [f64; OUT]>
     where
-        B: IntoIterator<Item = &'a [f64; IN]>,
+        B: IntoIterator<Item = &'a Input<IN>>,
     {
         batch.into_iter().map(|input| self.propagate(input))
     }
@@ -143,7 +143,7 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
 
     /// To test a batch of multiple pairs use `test_batch`.
     #[inline]
-    pub fn test(&self, input: &[f64; IN], expected_output: &EO) -> ([f64; OUT], f64) {
+    pub fn test(&self, input: &Input<IN>, expected_output: &EO) -> ([f64; OUT], f64) {
         self.network
             .test(input, expected_output, &self.loss_function)
     }
@@ -157,9 +157,9 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     pub fn test_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a ([f64; IN], EO)) -> ([f64; OUT], f64)>
+    ) -> Map<B::IntoIter, impl FnMut(&'a (Input<IN>, EO)) -> ([f64; OUT], f64)>
     where
-        B: IntoIterator<Item = &'a ([f64; IN], EO)>,
+        B: IntoIterator<Item = &'a (Input<IN>, EO)>,
         EO: 'a,
     {
         batch.into_iter().map(|(input, eo)| self.test(input, eo))
@@ -184,7 +184,7 @@ where
     #[inline]
     pub fn train<'a, B>(&'a mut self, batch: B) -> Training<Self, B::IntoIter>
     where
-        B: IntoIterator<Item = &'a ([f64; IN], EO)>,
+        B: IntoIterator<Item = &'a (Input<IN>, EO)>,
         EO: 'a,
     {
         Training::new(self, batch.into_iter())
@@ -210,10 +210,10 @@ where
     pub fn propagate_pairs<'a, B>(
         &'a self,
         batch: B,
-    ) -> Prop<'a, IN, OUT, L, O, Map<B::IntoIter, impl FnMut(B::Item) -> (&'a [f64; IN], &'a EO)>>
+    ) -> Prop<'a, IN, OUT, L, O, Map<B::IntoIter, impl FnMut(B::Item) -> (Input<'a, IN>, &'a EO)>>
     where
         B: IntoIterator + 'a,
-        B::Item: Into<(&'a [f64; IN], &'a EO)>,
+        B::Item: Into<(Input<'a, IN>, &'a EO)>,
         EO: 'a,
     {
         Prop::new(self, batch.into_iter().map(Into::into))
@@ -223,10 +223,10 @@ where
     pub fn backpropagate<'a, B>(
         &'a mut self,
         batch: B,
-    ) -> Backprop<'a, IN, OUT, L, O, Map<B::IntoIter, impl FnMut(B::Item) -> (&'a [f64; IN], &'a EO)>>
+    ) -> Backprop<'a, IN, OUT, L, O, Map<B::IntoIter, impl FnMut(B::Item) -> (Input<'a, IN>, &'a EO)>>
     where
         B: IntoIterator + 'a,
-        B::Item: Into<(&'a [f64; IN], &'a EO)>,
+        B::Item: Into<(Input<'a, IN>, &'a EO)>,
         EO: 'a,
     {
         Backprop::new(self, batch.into_iter().map(Into::into))
@@ -239,7 +239,7 @@ where
         expected_outputs: impl IntoIterator<IntoIter = U>,
     ) -> Backprop<'a, IN, OUT, L, O, Zip<I, U>>
     where
-        I: Iterator<Item = &'a [f64; IN]> + 'a,
+        I: Iterator<Item = Input<'a, IN>> + 'a,
         U: Iterator<Item = &'a EO> + 'a,
         EO: 'a,
     {
@@ -279,7 +279,7 @@ where
 impl<const IN: usize, const OUT: usize, L, O, EO> Propagator<IN, OUT> for NNTrainer<IN, OUT, L, O>
 where L: LossFunction<OUT, ExpectedOutput = EO>
 {
-    fn propagate_arr(&self, input: &[f64; IN]) -> [f64; OUT] {
+    fn propagate_arr(&self, input: Input<IN>) -> [f64; OUT] {
         self.network.propagate_arr(input)
     }
 }

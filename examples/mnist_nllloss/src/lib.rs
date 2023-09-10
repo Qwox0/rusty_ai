@@ -123,7 +123,7 @@ pub fn print_image(pair: &Pair<IMAGE_SIZE, usize>, val_range: Range<f64>) {
 }
 
 /// each pixel has a size of 2x1 (`XX`).
-pub fn image_to_string(image: &[f64; IMAGE_SIZE], val_range: Range<f64>) -> String {
+pub fn image_to_string(image: &Input<IMAGE_SIZE>, val_range: Range<f64>) -> String {
     let v_border = "─".repeat(IMAGE_SIDE * 2);
     let v_border = v_border.as_str();
 

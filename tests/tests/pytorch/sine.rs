@@ -290,6 +290,7 @@ fn sine() {
         .new_clip_gradient_norm(5.0, Norm::Two)
         .build();
 
+    let x = x.into_iter().map(Input::from);
     let data = PairList::new(x, y);
 
     println!("{:?}", data);

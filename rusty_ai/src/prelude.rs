@@ -4,6 +4,7 @@ pub use crate::{
     data::{DataBuilder, Pair, PairList},
     gradient::{layer::GradientLayer, Gradient},
     initializer::*,
+    input::Input,
     layer::{Layer, LayerBias},
     loss_function::*,
     matrix::Matrix,

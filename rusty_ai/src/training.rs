@@ -1,4 +1,5 @@
 use crate::{
+    input::Input,
     optimizer::Optimizer,
     prelude::{LossFunction, NNTrainer},
 };
@@ -20,7 +21,7 @@ impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Training<'a, NNTrainer<
 where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
-    I: Iterator<Item = &'a ([f64; IN], EO)>,
+    I: Iterator<Item = &'a (Input<IN>, EO)>,
     EO: 'a,
 {
     pub fn execute(self) {
@@ -72,7 +73,7 @@ impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Iterator
 where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
-    I: Iterator<Item = &'a ([f64; IN], EO)>,
+    I: Iterator<Item = &'a (Input<IN>, EO)>,
     EO: 'a,
 {
     type Item = [f64; OUT];
@@ -113,7 +114,7 @@ impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Iterator
 where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
-    I: Iterator<Item = &'a ([f64; IN], EO)>,
+    I: Iterator<Item = &'a (Input<IN>, EO)>,
     EO: 'a,
 {
     type Item = ([f64; OUT], f64);

@@ -184,16 +184,16 @@ impl BackpropBenches for TrainableNeuralNetwork<1, f64> {
 */
 
 impl<'a> IntoParallelIterator for &'a PairList<1, f64> {
-    type Item = &'a ([f64; 1], f64);
-    type Iter = rayon::slice::Iter<'a, ([f64; 1], f64)>;
+    type Item = &'a (Input<1>, f64);
+    type Iter = rayon::slice::Iter<'a, (Input<1>, f64)>;
 
     fn into_par_iter(self) -> Self::Iter {
         self.0.par_iter()
     }
 }
 
-impl ParallelSlice<([f64; 1], f64)> for PairList<1, f64> {
-    fn as_parallel_slice(&self) -> &[([f64; 1], f64)] {
+impl ParallelSlice<(Input<1>, f64)> for PairList<1, f64> {
+    fn as_parallel_slice(&self) -> &[(Input<1>, f64)] {
         self.0.as_parallel_slice()
     }
 }

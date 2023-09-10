@@ -19,7 +19,7 @@ impl Default for Adam {
 impl OptimizerValues for Adam {
     type Optimizer = Adam_;
 
-    fn init_with_layers(self, layers: &Vec<Layer>) -> Self::Optimizer {
+    fn init_with_layers(self, layers: &[Layer]) -> Self::Optimizer {
         let v: Gradient = layers
             .iter()
             .map(Layer::init_zero_gradient)

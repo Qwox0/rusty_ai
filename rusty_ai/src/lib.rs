@@ -14,6 +14,7 @@ pub mod clip_gradient_norm;
 pub mod data;
 pub mod gradient;
 pub mod initializer;
+pub mod input;
 pub mod layer;
 pub mod loss_function;
 pub mod matrix;
