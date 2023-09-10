@@ -1,7 +1,10 @@
+use crate::traits::ParamsIter;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, derive_more::From, PartialEq, Serialize, Deserialize)]
-pub struct LayerBias(Vec<f64>);
+#[derive(
+    Debug, Clone, derive_more::From, PartialEq, Serialize, Deserialize, derive_more::IntoIterator,
+)]
+pub struct LayerBias(#[into_iterator(ref, ref_mut)] Vec<f64>);
 
 impl LayerBias {
     /// # Panics
@@ -37,13 +40,15 @@ impl LayerBias {
         self.0.iter_mut().for_each(|x| *x = x.sqrt());
         self
     }
+}
 
-    pub fn iter(&self) -> core::slice::Iter<'_, f64> {
-        self.0.iter()
+impl ParamsIter for LayerBias {
+    fn iter<'a>(&'a self) -> std::slice::Iter<'_, f64> {
+        self.into_iter()
     }
 
-    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, f64> {
-        self.0.iter_mut()
+    fn iter_mut<'a>(&'a mut self) -> std::slice::IterMut<'a, f64> {
+        self.into_iter()
     }
 }
 

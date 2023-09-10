@@ -1,14 +1,12 @@
-#![feature(unboxed_closures)]
 #![feature(array_windows)]
 #![feature(return_position_impl_trait_in_trait)]
-#![feature(associated_type_defaults)]
+#![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 #![feature(test)]
-#![feature(fn_traits)]
 #![feature(type_changing_struct_update)]
 #![feature(iter_array_chunks)]
 #![feature(int_roundings)]
 #![feature(portable_simd)]
-
 #![feature(anonymous_lifetime_in_impl_trait)]
 
 pub mod activation_function;
@@ -22,8 +20,11 @@ pub mod matrix;
 pub mod neural_network;
 pub mod optimizer;
 pub mod prelude;
+pub mod propagation;
+pub mod propagator;
 pub mod results;
-pub mod trainable;
+pub mod trainer;
+pub mod training;
 pub mod traits;
 pub mod util;
 
@@ -68,5 +69,5 @@ pub mod util;
 //  (all sums from i=1 to n)
 //
 //  Iterate:
-//  w := w - a*∇ E(w) = w - a * [d/dw1(w1 + w2*xi - yi)^2 d/dw2(w1 + w2*xi -
-// yi)^2]^T     = w - a * [2(w1 + w2*xi - yi) 2xi(w1 + w2*xi - yi)]^T
+//  w := w - a*∇ E(w) = w - a * [d/dw1(w1 + w2*xi - yi)^2 d/dw2(w1 + w2*xi - yi)^2]^T
+//     = w - a * [2(w1 + w2*xi - yi) 2xi(w1 + w2*xi - yi)]^T

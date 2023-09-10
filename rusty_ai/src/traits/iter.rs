@@ -1,15 +1,22 @@
-pub trait ParamsIter<'a> {
-    fn iter_parameters(&'a self) -> impl Iterator<Item = &'a f64>;
-    fn iter_mut_parameters(&'a mut self) -> impl Iterator<Item = &'a mut f64>;
-
-    fn default_chain<T>(
-        weights: impl IntoIterator<Item = T>,
-        bias: impl IntoIterator<Item = T>,
-    ) -> impl Iterator<Item = T> {
-        weights.into_iter().chain(bias)
-    }
+pub trait ParamsIter {
+    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64>;
+    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64>;
 }
 
+pub(crate) fn default_params_chain<W, B, T>(
+    weights: W,
+    bias: B,
+) -> impl DoubleEndedIterator<Item = T>
+where
+    W: IntoIterator<Item = T>,
+    W::IntoIter: DoubleEndedIterator,
+    B: IntoIterator<Item = T>,
+    B::IntoIter: DoubleEndedIterator,
+{
+    weights.into_iter().chain(bias)
+}
+
+/*
 pub trait LayerIter<'a> {
     type Layer: 'a + ParamsIter<'a>;
 
@@ -21,16 +28,15 @@ pub trait LayerIter<'a> {
 
     fn iter_params(&'a self) -> impl Iterator<Item = &'a f64>
     where Self::Layer: ParamsIter<'a> {
-        self.iter_layers().map(ParamsIter::iter_parameters).flatten()
+        self.iter_layers().map(ParamsIter::iter_params).flatten()
     }
 
     fn iter_mut_params(&'a mut self) -> impl Iterator<Item = &'a mut f64>
     where Self::Layer: ParamsIter<'a> {
-        self.iter_mut_layers().map(ParamsIter::iter_mut_parameters).flatten()
+        self.iter_mut_layers().map(ParamsIter::iter_mut_params).flatten()
     }
 }
 
-/*
 mod macros {
     /// impl_IterParams! { $ty:ty : $weights:ident , $bias:ident }
     macro_rules! impl_IterParams {

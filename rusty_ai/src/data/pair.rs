@@ -1,5 +1,8 @@
 use std::fmt::Display;
 
+pub type Pair<const IN: usize, EO> = ([f64; IN], EO);
+
+/*
 /// an input-expected output-pair.
 /// Is used to contain an expected output for training or to contain the output
 /// calculated during propagation.
@@ -12,6 +15,12 @@ pub struct Pair<const IN: usize, EO> {
 impl<'a, const IN: usize, EO> Into<(&'a [f64; IN], &'a EO)> for &'a Pair<IN, EO> {
     fn into(self) -> (&'a [f64; IN], &'a EO) {
         (&self.input, &self.expected_output)
+    }
+}
+
+impl<'a, const IN: usize, EO> Into<&'a [f64; IN]> for &'a Pair<IN, EO> {
+    fn into(self) -> &'a [f64; IN] {
+        &self.input
     }
 }
 
@@ -53,3 +62,4 @@ impl Into<(f64, f64)> for Pair<1, f64> {
         self.simple_tuple()
     }
 }
+*/

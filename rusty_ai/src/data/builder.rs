@@ -2,6 +2,8 @@ use crate::prelude::*;
 use rand::{distributions::Uniform, prelude::Distribution, Rng};
 use std::ops::Range;
 
+use super::value_list::ValueList;
+
 pub struct DataBuilder<D: Distribution<f64>> {
     distr: D,
     rng_seed: Option<u64>,

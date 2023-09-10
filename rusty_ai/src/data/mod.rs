@@ -6,4 +6,3 @@ mod value_list;
 pub use builder::DataBuilder;
 pub use pair::Pair;
 pub use pair_list::PairList;
-pub use value_list::ValueList;

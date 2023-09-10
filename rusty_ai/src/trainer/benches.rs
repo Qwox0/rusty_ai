@@ -1,13 +1,18 @@
 #![allow(unused)]
+
 extern crate test;
 
 use crate::prelude::*;
 use rayon::prelude::*;
 use std::{sync::Mutex, thread::ScopedJoinHandle};
 use test::black_box;
+/*
 
-fn calc_grad<L>(nn: &mut TrainableNeuralNetwork<1, 1, L>, data: &[Pair<1, f64>])
-where L: LossFunction<1> {
+fn calc_grad<L, O>(nn: &mut NNTrainer<1, 1, L, O>, data: &[Pair<1, f64>])
+where
+    L: LossFunction<1>,
+    O: Optimizer,
+{
     for pair in data {
         /*
         let (input, expected_output) = pair.into();
@@ -24,6 +29,7 @@ trait BackpropBenches {
     fn spmc_in(&mut self, data: &[Pair<1, f64>]);
     fn rayon_iter(&mut self, data: &[Pair<1, f64>]);
 }
+*/
 
 /*
 impl BackpropBenches for TrainableNeuralNetwork<1, f64> {
@@ -178,21 +184,21 @@ impl BackpropBenches for TrainableNeuralNetwork<1, f64> {
 */
 
 impl<'a> IntoParallelIterator for &'a PairList<1, f64> {
-    type Item = &'a Pair<1, f64>;
-    type Iter = rayon::slice::Iter<'a, Pair<1, f64>>;
+    type Item = &'a ([f64; 1], f64);
+    type Iter = rayon::slice::Iter<'a, ([f64; 1], f64)>;
 
     fn into_par_iter(self) -> Self::Iter {
         self.0.par_iter()
     }
 }
 
-impl ParallelSlice<Pair<1, f64>> for PairList<1, f64> {
-    fn as_parallel_slice(&self) -> &[Pair<1, f64>] {
+impl ParallelSlice<([f64; 1], f64)> for PairList<1, f64> {
+    fn as_parallel_slice(&self) -> &[([f64; 1], f64)] {
         self.0.as_parallel_slice()
     }
 }
 
-fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1, HalfSquaredError>, PairList<1, f64>) {
+fn setup(data_count: usize) -> (NNTrainer<1, 1, HalfSquaredError, SGD_>, PairList<1, f64>) {
     const SEED: u64 = 69420;
     const NEURON_COUNT: usize = 5;
     /*
@@ -205,14 +211,16 @@ fn setup(data_count: usize) -> (TrainableNeuralNetwork<1, 1, HalfSquaredError>, 
         .random_layer(NEURON_COUNT)
         .default_activation_function(ActivationFn::Identity)
         .random_layer(1)
-        .to_trainable_builder()
+        .to_trainer()
         .sgd(GradientDescent::default())
         .build();
         */
     let ai = todo!();
 
-    let data =
-        DataBuilder::uniform(-5.0..5.0).seed(SEED).build(data_count).gen_pairs(|x| x[0].sin());
+    let data = DataBuilder::uniform(-5.0..5.0)
+        .seed(SEED)
+        .build(data_count)
+        .gen_pairs(|x| x[0].sin());
 
     (ai, data)
 }

@@ -4,7 +4,10 @@ use rand::{distributions::DistIter, prelude::Distribution};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display, Write},
+    iter::{Flatten, Map},
     ops::{Add, Index, IndexMut, Mul},
+    slice::{Iter, IterMut},
+    vec::IntoIter,
 };
 
 pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
@@ -53,8 +56,12 @@ impl<T> Matrix<T> {
     /// # Panics
     /// Panics if the iterator is too small.
     pub fn from_iter(width: usize, height: usize, iter: impl Iterator<Item = T>) -> Matrix<T> {
-        let elements: Vec<_> =
-            iter.chunks(width).into_iter().take(height).map(Iterator::collect).collect();
+        let elements: Vec<_> = iter
+            .chunks(width)
+            .into_iter()
+            .take(height)
+            .map(Iterator::collect)
+            .collect();
         assert_eq!(elements.len(), height);
         assert_eq!(elements.last().map(Vec::len), Some(width));
         Matrix::new(width, height, elements)
@@ -80,47 +87,71 @@ impl<T> Matrix<T> {
         Matrix::new(width, height, elements)
     }
 
-    /// Creates a [`Matrix`] containing an empty elements [`Vec`] with a
-    /// capacity of `height`. Insert new rows with `Matrix::push_row`.
-    pub fn new_empty(width: usize, height: usize) -> Matrix<T> {
-        Matrix::new(width, height, Vec::with_capacity(height))
-    }
-
-    /// use with `Matrix::new_unchecked`.
-    pub fn push_row(&mut self, row: Vec<T>) {
-        assert!(self.elements.len() < self.height);
-        assert_eq!(row.len(), self.width);
-        self.elements.push(row);
-    }
-
     #[inline]
     pub fn get_row(&self, y: usize) -> Option<&Vec<T>> {
         self.elements.get(y)
     }
 
     pub fn get(&self, y: usize, x: usize) -> Option<&T> {
-        self.get_row(y).map(|row| row.get(x)).flatten()
+        self.get_row(y)?.get(x)
     }
 
-    pub fn iter_rows(&self) -> impl Iterator<Item = &Vec<T>> {
+    #[inline]
+    pub fn iter_rows<'a>(&'a self) -> Iter<'a, Vec<T>> {
         self.elements.iter()
     }
 
-    pub fn iter_rows_mut(&mut self) -> impl Iterator<Item = &mut Vec<T>> {
+    #[inline]
+    pub fn iter_rows_mut<'a>(&'a mut self) -> IterMut<'a, Vec<T>> {
         self.elements.iter_mut()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.iter_rows().map(|row| row.iter()).flatten()
+    pub fn iter<'a>(&'a self) -> MatrixIter<'a, T> {
+        self.iter_rows().map(IntoIterator::into_iter).flatten()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.iter_rows_mut().map(|row| row.iter_mut()).flatten()
+    pub fn iter_mut<'a>(&'a mut self) -> MatrixIterMut<'a, T> {
+        self.iter_rows_mut().map(IntoIterator::into_iter).flatten()
     }
 
     /// (width, height)
     pub fn get_dimensions(&self) -> (usize, usize) {
         (self.width, self.height)
+    }
+}
+
+pub type MatrixIter<'a, T: 'a> =
+    Flatten<Map<Iter<'a, Vec<T>>, impl FnMut(&'a Vec<T>) -> Iter<'a, T>>>;
+pub type MatrixIterMut<'a, T: 'a> =
+    Flatten<Map<IterMut<'a, Vec<T>>, impl FnMut(&'a mut Vec<T>) -> IterMut<'a, T>>>;
+
+impl<T> IntoIterator for Matrix<T> {
+    type IntoIter = Flatten<Map<IntoIter<Vec<T>>, impl FnMut(Vec<T>) -> IntoIter<T>>>;
+    type Item = T;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements.into_iter().map(Vec::into_iter).flatten()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Matrix<T> {
+    type IntoIter = MatrixIter<'a, T>;
+    type Item = &'a T;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements.iter().map(IntoIterator::into_iter).flatten()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut Matrix<T> {
+    type IntoIter = MatrixIterMut<'a, T>;
+    type Item = &'a mut T;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements
+            .iter_mut()
+            .map(IntoIterator::into_iter)
+            .flatten()
     }
 }
 
@@ -131,10 +162,12 @@ impl<T: Ring + Clone> Matrix<T> {
 
     /// Creates the `n` by `n` identity Matrix.
     pub fn identity(n: usize) -> Matrix<T> {
-        (0..n).into_iter().fold(Matrix::with_zeros(n, n), |mut acc, i| {
-            acc.elements[i][i] = T::ONE;
-            acc
-        })
+        (0..n)
+            .into_iter()
+            .fold(Matrix::with_zeros(n, n), |mut acc, i| {
+                acc.elements[i][i] = T::ONE;
+                acc
+            })
     }
 }
 
@@ -147,7 +180,10 @@ impl<T: Clone> Matrix<T> {
         Matrix {
             width,
             height,
-            elements: rows.into_iter().map(|row| row.set_length(width, default.clone())).collect(),
+            elements: rows
+                .into_iter()
+                .map(|row| row.set_length(width, default.clone()))
+                .collect(),
         }
     }
 
@@ -165,7 +201,12 @@ impl Matrix<f64> {
         Matrix {
             width,
             height,
-            elements: rng.chunks(width).into_iter().take(height).map(Iterator::collect).collect(),
+            elements: rng
+                .chunks(width)
+                .into_iter()
+                .take(height)
+                .map(Iterator::collect)
+                .collect(),
         }
     }
 }
@@ -177,7 +218,10 @@ where T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Out
 
     fn mul(self, rhs: &Vec<T>) -> Self::Output {
         assert_eq!(self.width, rhs.len(), "Vector has incompatible dimensions",);
-        self.elements.iter().map(|row| dot_product(&row, &rhs)).collect::<Vec<T>>()
+        self.elements
+            .iter()
+            .map(|row| dot_product(&row, &rhs))
+            .collect::<Vec<T>>()
     }
 }
 
@@ -222,7 +266,10 @@ impl<T: Display> Matrix<T> {
         let mut title = title.trim();
 
         let column_widths = self.elements.iter().fold(vec![0; self.width], |acc, row| {
-            row.iter().zip(acc).map(|(e, max)| e.to_string().len().max(max)).collect()
+            row.iter()
+                .zip(acc)
+                .map(|(e, max)| e.to_string().len().max(max))
+                .collect()
         });
 
         let content_width = column_widths.len() + column_widths.iter().sum::<usize>() - 1;

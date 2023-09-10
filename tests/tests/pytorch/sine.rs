@@ -1,35 +1,40 @@
 use rusty_ai::prelude::*;
 
-struct Args<'a, F, L>
+struct Args<'a, F, L, O>
 where
     F: Fn(usize) -> bool,
     L: LossFunction<1, ExpectedOutput = [f64; 1]>,
+    O: Optimizer,
 {
-    ai: TrainableNeuralNetwork<1, 1, L>,
+    ai: NNTrainer<1, 1, L, O>,
     data: PairList<1, [f64; 1]>,
     losses: &'a [f64],
     epochs: usize,
     test_condition: F,
 }
 
-fn test<F, L>(args: Args<F, L>)
+fn test<F, L, O>(args: Args<F, L, O>)
 where
     F: Fn(usize) -> bool,
     L: LossFunction<1, ExpectedOutput = [f64; 1]>,
+    O: Optimizer,
 {
     let Args { mut ai, data, losses, epochs, test_condition } = args;
-    let test = |epoch: usize, ai: &TrainableNeuralNetwork<1, 1, L>, expected_loss: f64| {
-        let res = ai.test(data.iter());
+    let test = |epoch: usize, ai: &NNTrainer<1, 1, L, O>, expected_loss: f64| {
+        let error = ai
+            .test_batch(data.iter())
+            .map(|(_, loss)| loss)
+            .sum::<f64>();
 
-        println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, res.error, res.error.to_bits());
+        println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, error, error.to_bits());
         println!("    expected_loss: {:<20} {:064b}", expected_loss, expected_loss.to_bits());
         println!(
             "{}diff:
         {:064b}\n",
             " ".repeat(34),
-            res.error.to_bits() ^ expected_loss.to_bits()
+            error.to_bits() ^ expected_loss.to_bits()
         );
-        let diff = (res.error - expected_loss).abs();
+        let diff = (error - expected_loss).abs();
         println!("diff: {} = 10^{}", diff, diff.log10());
         assert!(diff < 1e-14);
     };
@@ -38,9 +43,8 @@ where
 
     test(0, &ai, losses.next().unwrap());
 
-    for epoch in 0..epochs {
-        let epoch = epoch + 1;
-        ai.training_step(data.iter());
+    for epoch in 1..epochs + 1 {
+        ai.train(&data).execute();
         if test_condition(epoch) {
             test(epoch, &ai, losses.next().unwrap());
         }
@@ -269,7 +273,7 @@ fn sine() {
         1.7792481476766535,
     ];
 
-    let ai = NeuralNetworkBuilder::default()
+    let ai = NNBuilder::default()
         .default_activation_function(ActivationFn::ReLU)
         .input::<1>()
         .layer_from_parameters(w1, b1)
@@ -279,14 +283,14 @@ fn sine() {
         .layer_from_parameters(w5, b5)
         .identity()
         .build()
-        .to_trainable_builder()
+        .to_trainer()
         .loss_function(SquaredError)
-        .sgd(GradientDescent { learning_rate: 0.01 })
+        .optimizer(SGD { learning_rate: 0.01, ..SGD::default() })
         .retain_gradient(true)
         .new_clip_gradient_norm(5.0, Norm::Two)
         .build();
 
-    let data = PairList::from_vecs(x, y).unwrap();
+    let data = PairList::new(x, y);
 
     println!("{:?}", data);
 

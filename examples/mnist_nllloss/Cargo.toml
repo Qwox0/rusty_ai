@@ -1,5 +1,5 @@
 [package]
-name = "mnist"
+name = "mnist_nllloss"
 edition.workspace = true
 version.workspace = true
 
@@ -9,4 +9,3 @@ version.workspace = true
 rusty_ai.workspace = true
 rand.workspace = true
 load_mnist = { version = "0.5.0", package = "mnist" }
-mnist_nllloss_example = { path = "../mnist_nllloss", package = "mnist_nllloss" }

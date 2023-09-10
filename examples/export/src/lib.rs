@@ -4,7 +4,7 @@ pub fn main() -> Result<(), serde_json::Error> {
     const IN: usize = 2;
     const OUT: usize = 3;
 
-    let ai = NeuralNetworkBuilder::default()
+    let ai = NNBuilder::default()
         .input::<IN>()
         .layer(6, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .relu()
