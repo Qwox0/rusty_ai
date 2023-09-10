@@ -27,6 +27,10 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
         Self { network, gradient, loss_function, retain_gradient, optimizer, clip_gradient_norm }
     }
 
+    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> {
+        &self.network
+    }
+
     #[inline]
     pub fn propagate(&self, input: &Input<IN>) -> [f64; OUT] {
         self.network.propagate(input)
