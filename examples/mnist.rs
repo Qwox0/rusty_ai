@@ -1,11 +1,10 @@
 #![feature(int_roundings)]
 #![feature(iter_array_chunks)]
-#![feature(array_chunks)]
 #![feature(test)]
 
-use mnist_nllloss_example::{get_data, image_to_string};
+use mnist_util::{get_mnist, image_to_string, Mnist};
 use rusty_ai::prelude::*;
-use std::{iter::once, ops::Range, time::Instant};
+use std::{ops::Range, time::Instant};
 
 const IMAGE_SIDE: usize = 28;
 const IMAGE_SIZE: usize = IMAGE_SIDE * IMAGE_SIDE;
@@ -45,7 +44,7 @@ fn setup_ai() -> NNTrainer<IMAGE_SIZE, OUTPUTS, SquaredError, SGD_> {
 }
 
 pub fn main() {
-    let load_mnist::Mnist { trn_img, trn_lbl, tst_img, tst_lbl, .. } = get_data();
+    let Mnist { trn_img, trn_lbl, tst_img, tst_lbl, .. } = get_mnist();
 
     let mut training_data = transform(trn_img, trn_lbl);
     let test_data = transform(tst_img, tst_lbl);
@@ -101,9 +100,14 @@ pub fn main() {
 }
 
 pub fn print_image(pair: &Pair<IMAGE_SIZE, [f64; 10]>, val_range: Range<f64>) {
-    println!("{} label: {:?}", image_to_string(&pair.0, val_range), pair.1);
+    println!(
+        "{} label: {:?}",
+        image_to_string::<IMAGE_SIDE, IMAGE_SIZE>(pair.0.as_ref(), val_range),
+        pair.1
+    );
 }
 
+#[cfg(test)]
 pub mod tests {
     extern crate test;
     use super::*;

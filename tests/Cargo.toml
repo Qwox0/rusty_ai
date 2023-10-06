@@ -1,25 +1,16 @@
 [package]
 name = "tests"
-edition.workspace = true
 version.workspace = true
+edition.workspace = true
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+[dev-dependencies]
 rusty_ai = { path = "../rusty_ai" }
 
 [[test]]
-name = "pytorch"
-path = "./tests/pytorch/mod.rs"
+name = "pytorch_sine"
+path = "./pytorch_sine.rs"
 
-# [[test]]
-# name = "pytorch_sine"
-# path = "./tests/pytorch/sine.rs"
-#
-# [[test]]
-# name = "pytorch_sine2"
-# path = "./tests/pytorch_sine2.rs"
-#
-# [[test]]
-# name = "pytorch_xor"
-# path = "./tests/pytorch/xor.rs"
+[[test]]
+name = "pytorch_xor"
+path = "./pytorch_xor.rs"

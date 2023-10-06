@@ -1,9 +1,12 @@
 #![feature(test)]
 
 use rusty_ai::prelude::*;
-use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
+use std::{fmt::Display, fs::File, io::Write, ops::Range, path::{Path, PathBuf}};
 
 fn get_out_js_path() -> &'static str {
+    let a = env!("CARGO_MANIFEST_DIR");
+    println!("{:?}", PathBuf::from(a));
+    println!("{:?}", Path::new(".").canonicalize());
     if Path::new("./index.js").exists() {
         "./out.js"
     } else if Path::new("./examples/sine/index.js").exists() {

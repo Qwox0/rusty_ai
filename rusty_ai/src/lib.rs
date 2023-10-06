@@ -8,6 +8,8 @@
 #![feature(int_roundings)]
 #![feature(portable_simd)]
 #![feature(anonymous_lifetime_in_impl_trait)]
+#![doc = include_str!("../../README.md")]
+#![forbid(unsafe_code)]
 
 pub mod activation_function;
 pub mod clip_gradient_norm;

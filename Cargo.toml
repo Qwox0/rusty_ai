@@ -3,9 +3,9 @@ resolver = "2"
 members = [
     "rusty_ai",
 
-    #"benches",
-    "examples/*",
+    "examples",
     "tests",
+    "benches",
 ]
 exclude = []
 

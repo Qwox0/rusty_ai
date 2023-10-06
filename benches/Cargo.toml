@@ -1,10 +1,12 @@
 [package]
 name = "benches"
-edition.workspace = true
 version.workspace = true
+edition.workspace = true
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+[dev-dependencies]
 rusty_ai = { path = "../rusty_ai" }
-rand = "0.8.5"
+
+[[bench]]
+name = "example_bench"
+path = "./example_bench.rs"

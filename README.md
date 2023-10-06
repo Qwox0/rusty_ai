@@ -42,3 +42,17 @@ List available examples:
 ```bash
 cargo run --example
 ```
+
+## Tests
+
+Run a test:
+
+```bash
+cargo test --test [<NAME>] -- --nocapture
+```
+
+List available tests:
+
+```bash
+cargo test --test
+```

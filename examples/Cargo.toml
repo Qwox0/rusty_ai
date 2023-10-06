@@ -1,0 +1,26 @@
+[package]
+name = "examples"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+rusty_ai = { path = "../rusty_ai" }
+mnist_util = { path = "./mnist_util" }
+serde_json = "1.0"
+
+[[example]]
+name = "sine"
+path = "./sine/main.rs"
+
+[[example]]
+name = "mnist"
+path = "./mnist.rs"
+
+[[example]]
+name = "mnist_nllloss"
+path = "./mnist_nllloss.rs"
+
+[[example]]
+name = "export"
+path = "./export.rs"

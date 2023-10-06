@@ -1,6 +1,6 @@
 use rusty_ai::prelude::*;
 
-pub fn main() -> Result<(), serde_json::Error> {
+fn main() -> Result<(), serde_json::Error> {
     const IN: usize = 2;
     const OUT: usize = 3;
 
