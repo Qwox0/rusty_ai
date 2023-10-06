@@ -1,6 +1,5 @@
 use crate::input::Input;
-use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
-use std::vec;
+use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 
 pub type Pair<const IN: usize, EO> = (Input<IN>, EO);
 
@@ -13,7 +12,7 @@ pub type Pair<const IN: usize, EO> = (Input<IN>, EO);
     derive_more::IntoIterator,
     derive_more::Index,
 )]
-pub struct PairList<const IN: usize, EO>(#[into_iterator(owned, ref)] pub Vec<Pair<IN, EO>>);
+pub struct PairList<const IN: usize, EO>(pub Vec<Pair<IN, EO>>);
 
 impl<const IN: usize, I, EO> FromIterator<(I, EO)> for PairList<IN, EO>
 where I: Into<Input<IN>>
@@ -72,6 +71,15 @@ impl<const IN: usize, EO> PairList<IN, EO> {
 
     pub fn as_slice(&self) -> &[(Input<IN>, EO)] {
         self.0.as_slice()
+    }
+}
+
+impl<'a, const IN: usize, EO> IntoIterator for &'a PairList<IN, EO> {
+    type IntoIter = std::slice::Iter<'a, (Input<IN>, EO)>;
+    type Item = &'a (Input<IN>, EO);
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 

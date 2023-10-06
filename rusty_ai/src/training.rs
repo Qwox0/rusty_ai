@@ -56,7 +56,6 @@ where
 pub struct TrainingOutputs<'a, const IN: usize, const OUT: usize, L, O, I: Iterator> {
     nn: &'a mut NNTrainer<IN, OUT, L, O>,
     iter: Peekable<I>,
-    while_grad: bool,
 }
 
 impl<'a, const IN: usize, const OUT: usize, L, O, I: Iterator>
@@ -64,17 +63,16 @@ impl<'a, const IN: usize, const OUT: usize, L, O, I: Iterator>
 {
     fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
-        TrainingOutputs { nn, iter: iter.peekable(), while_grad: false }
+        TrainingOutputs { nn, iter: iter.peekable() }
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Iterator
+impl<'a, const IN: usize, const OUT: usize, L, O, I> Iterator
     for TrainingOutputs<'a, IN, OUT, L, O, I>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO>,
+    L: LossFunction<OUT>,
     O: Optimizer,
-    I: Iterator<Item = &'a (Input<IN>, EO)>,
-    EO: 'a,
+    I: Iterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
 {
     type Item = [f64; OUT];
 
@@ -97,7 +95,6 @@ where
 pub struct TrainingLosses<'a, const IN: usize, const OUT: usize, L, O, I: Iterator> {
     nn: &'a mut NNTrainer<IN, OUT, L, O>,
     iter: Peekable<I>,
-    while_grad: bool,
 }
 
 impl<'a, const IN: usize, const OUT: usize, L, O, I: Iterator>
@@ -105,17 +102,16 @@ impl<'a, const IN: usize, const OUT: usize, L, O, I: Iterator>
 {
     fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
-        TrainingLosses { nn, iter: iter.peekable(), while_grad: false }
+        TrainingLosses { nn, iter: iter.peekable() }
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Iterator
+impl<'a, const IN: usize, const OUT: usize, L, O, I> Iterator
     for TrainingLosses<'a, IN, OUT, L, O, I>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO>,
+    L: LossFunction<OUT>,
     O: Optimizer,
-    I: Iterator<Item = &'a (Input<IN>, EO)>,
-    EO: 'a,
+    I: Iterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
 {
     type Item = ([f64; OUT], f64);
 

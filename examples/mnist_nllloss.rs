@@ -5,7 +5,7 @@
 
 use mnist_util::{get_mnist, image_to_string, Mnist};
 use rusty_ai::prelude::*;
-use std::{cmp::Ordering, ops::Range, path::PathBuf, time::Instant};
+use std::{ops::Range, time::Instant};
 
 const IMAGE_SIDE: usize = 28;
 const IMAGE_SIZE: usize = IMAGE_SIDE * IMAGE_SIDE;

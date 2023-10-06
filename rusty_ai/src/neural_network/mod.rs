@@ -2,10 +2,7 @@ pub mod builder;
 
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    iter::{Flatten, Map},
-    slice::{Iter, IterMut},
-};
+use std::{borrow::Cow, iter::Map};
 
 /// layers contains all Hidden Layers and the Output Layers
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,10 +32,11 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     }
 
     pub fn propagate(&self, input: &Input<IN>) -> [f64; OUT] {
-        // TODO: remove clone (`input.to_vec()`)
+        let input = Cow::from(input.as_slice());
         self.layers
             .iter()
-            .fold(input.to_vec(), |acc, layer| layer.propagate(&acc))
+            .fold(input, |acc, layer| layer.propagate(&acc).into())
+            .into_owned()
             .try_into()
             .expect("last layer should have `OUT` neurons")
     }
@@ -52,11 +50,11 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     pub fn propagate_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a Input<IN>) -> [f64; OUT]>
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> [f64; OUT] + 'a>
     where
         B: IntoIterator<Item = &'a Input<IN>>,
     {
-        batch.into_iter().map(|input| self.propagate(input))
+        batch.into_iter().map(|i| self.propagate(i))
     }
 
     /// like `propagate` but returns the output of every layer ([`VerbosePropagation`]).
@@ -116,7 +114,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         &'a self,
         batch: B,
         loss_fn: &'a L,
-    ) -> Map<B::IntoIter, impl FnMut((&'a Input<IN>, &'a EO)) -> ([f64; OUT], f64)>
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> ([f64; OUT], f64) + 'a>
     where
         B: IntoIterator<Item = (&'a Input<IN>, &'a EO)>,
         L: LossFunction<OUT, ExpectedOutput = EO>,

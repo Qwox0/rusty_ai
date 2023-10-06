@@ -129,7 +129,7 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     ///               = (o_L_i - e_i) *     f'(z_i)
     pub fn backpropagate(&mut self, verbose_prop: &VerbosePropagation<OUT>, expected_output: &EO) {
         // gradient of the cost function with respect to the neuron output of the last layer.
-        let mut output_gradient = self
+        let output_gradient = self
             .loss_function
             .backpropagate(verbose_prop, expected_output);
 

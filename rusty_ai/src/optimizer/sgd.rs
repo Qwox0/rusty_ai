@@ -1,6 +1,7 @@
 use super::OptimizerValues;
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 /// configuration values for the stochastic gradient descent optimizer.
 ///
@@ -56,5 +57,16 @@ impl Optimizer for SGD_ {
             *change = momentum * *change - learning_rate * dx;
             *x += *change;
         }
+    }
+}
+
+impl Display for SGD_ {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let SGD { learning_rate, momentum } = self.val;
+        write!(f, "SGD {{ learning_rate: {learning_rate}")?;
+        if momentum != 0.0 {
+            write!(f, ", momentum: {momentum}")?;
+        }
+        write!(f, " }}")
     }
 }

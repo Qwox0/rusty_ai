@@ -250,6 +250,7 @@ impl<const OUT: usize> VerbosePropagation<OUT> {
         self.0.array_windows()
     }
 
+    /// TODO?: HeapArray output?
     pub fn get_nn_output(&self) -> [f64; OUT] {
         self.0.last().unwrap().as_slice().try_into().unwrap()
     }

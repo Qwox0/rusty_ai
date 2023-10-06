@@ -3,10 +3,6 @@ pub mod layer;
 
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    iter::{Flatten, Map},
-    slice::{Iter, IterMut},
-};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, derive_more::From)]
 pub struct Gradient {
@@ -19,10 +15,6 @@ impl Gradient {
             l.bias_gradient.fill(0.0);
             l.weight_gradient.iter_mut().for_each(|x| *x = 0.0);
         }
-    }
-
-    fn iter_<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64> {
-        self.layers.iter().map(GradientLayer::iter).flatten()
     }
 }
 
@@ -38,10 +30,12 @@ impl ParamsIter for Gradient {
     }
 
     fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64> {
-        self.layers.iter_mut().map(GradientLayer::iter_mut).flatten()
+        self.layers
+            .iter_mut()
+            .map(GradientLayer::iter_mut)
+            .flatten()
     }
 }
-
 
 impl std::fmt::Display for Gradient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

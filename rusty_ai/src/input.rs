@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Context};
-use std::{any, ops::Deref};
+use anyhow::anyhow;
+use std::ops::Deref;
 
 /*
 pub trait AsInput<const IN: usize> {
@@ -59,12 +59,14 @@ impl<'a, const N: usize> Input<N> {
         Self::try_from(vec).unwrap()
     }
 
-    pub fn as_ref(&self) -> &[f64; N] {
-        self.0.as_ref()
+    pub fn as_slice(&self) -> &[f64] {
+        self
     }
+}
 
-    pub fn as_mut(&mut self) -> &mut [f64; N] {
-        self.0.as_mut()
+impl<const N: usize> AsRef<[f64; N]> for Input<N> {
+    fn as_ref(&self) -> &[f64; N] {
+        &self.0
     }
 }
 

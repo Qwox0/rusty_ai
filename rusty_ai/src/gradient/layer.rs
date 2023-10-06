@@ -1,12 +1,6 @@
-use crate::{
-    matrix::{MatrixIter, MatrixIterMut},
-    prelude::*,
-};
+use crate::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    iter::{once, Chain},
-    slice::{Iter, IterMut},
-};
+use std::iter::once;
 
 /// Contains the estimated Gradient of the Costfunction with respect to the
 /// weights and the bias of a layer in
@@ -64,9 +58,8 @@ impl std::fmt::Display for GradientLayer {
 #[cfg(test)]
 mod tests {
     use crate::{
-        activation_function::{ActivationFn, ActivationFunction},
         neural_network::builder::{BuildLayer, NNBuilder},
-        prelude::{Initializer, Layer},
+        prelude::Initializer,
     };
 
     #[test]
