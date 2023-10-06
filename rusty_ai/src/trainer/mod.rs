@@ -70,18 +70,10 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
         }
     }
 
-    #[inline]
-    pub fn clip_gradient(&mut self, clip_gradient_norm: ClipGradientNorm) {
-        clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);
-        //clip_gradient_norm.clip_gradient_pytorch_device(&mut self.gradient);
-    }
-
-    pub fn maybe_clip_gradient(&mut self) {
+    pub fn clip_gradient(&mut self) {
         if let Some(clip_gradient_norm) = self.clip_gradient_norm {
-            self.clip_gradient(clip_gradient_norm);
-        } else {
-            #[cfg(debug_assertions)]
-            eprintln!("WARN: It is recommended to clip the gradient")
+            clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);
+            //clip_gradient_norm.clip_gradient_pytorch_device(&mut self.gradient);
         }
     }
 }

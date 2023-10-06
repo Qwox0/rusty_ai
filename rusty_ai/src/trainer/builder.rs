@@ -67,6 +67,12 @@ where
             clip_gradient_norm,
         } = self;
         let optimizer = optimizer.init_with_layers(network.get_layers()).into();
+
+        if None == clip_gradient_norm {
+            #[cfg(debug_assertions)]
+            eprintln!("WARN: It is recommended to clip the gradient")
+        }
+
         NNTrainer::new(network, loss_function, optimizer, retain_gradient, clip_gradient_norm)
     }
 }

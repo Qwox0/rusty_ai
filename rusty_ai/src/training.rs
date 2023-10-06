@@ -30,7 +30,7 @@ where
             let out = self.nn.verbose_propagate(input);
             self.nn.backpropagate(&out, eo)
         }
-        self.nn.maybe_clip_gradient();
+        self.nn.clip_gradient();
         self.nn.optimize_trainee();
     }
 
@@ -85,7 +85,7 @@ where
 
         let is_last_iter = self.iter.peek().is_none();
         if is_last_iter {
-            self.nn.maybe_clip_gradient();
+            self.nn.clip_gradient();
             self.nn.optimize_trainee();
         }
 
@@ -128,7 +128,7 @@ where
 
         let is_last_iter = self.iter.peek().is_none();
         if is_last_iter {
-            self.nn.maybe_clip_gradient();
+            self.nn.clip_gradient();
             self.nn.optimize_trainee();
         }
 
