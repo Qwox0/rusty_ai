@@ -1,4 +1,5 @@
-use crate::{layer::LayerBias, matrix::Matrix};
+use crate::layer::LayerBias;
+use matrix::Matrix;
 
 //    L-1                   L
 // o_(L-1)_0
@@ -49,4 +50,3 @@ pub(crate) type WeightGradient = Matrix<f64>;
 pub(crate) type InputGradient = Vec<f64>;
 /// derivatives of the total cost with respect to the bias/biases
 pub(crate) type BiasGradient = LayerBias;
-

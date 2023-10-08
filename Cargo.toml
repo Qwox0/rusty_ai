@@ -2,7 +2,9 @@
 resolver = "2"
 members = [
     "rusty_ai",
+    "matrix",
 
+    # ---
     "examples",
     "tests",
     "benches",
@@ -14,12 +16,14 @@ edition = "2021"
 version = "0.1.0"
 
 [workspace.dependencies]
+rusty_ai = { path = "./rusty_ai" }
+matrix = { path = "./matrix" }
+
 anyhow = "1.0.9"
 derive_more = "0.99"
 enum_dispatch = "0.3.11"
 itertools = "0.11.0"
 rand = "0.8.5"
 rand_distr = "0.4.3"
-rusty_ai = { path = "./rusty_ai" }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0.44"

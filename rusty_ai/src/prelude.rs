@@ -7,7 +7,6 @@ pub use crate::{
     input::Input,
     layer::{Layer, LayerBias},
     loss_function::*,
-    matrix::Matrix,
     neural_network::{builder::*, NeuralNetwork},
     optimizer::{
         adam::{Adam, Adam_},
@@ -21,3 +20,4 @@ pub use crate::{
     util::Norm,
 };
 pub(crate) use crate::{gradient::aliases::*, util::*};
+pub use matrix::*;

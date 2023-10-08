@@ -1,31 +1,23 @@
-use crate::prelude::*;
+#![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(int_roundings)]
+
 use itertools::Itertools;
-use rand::{distributions::DistIter, prelude::Distribution};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display, Write},
     iter::{Flatten, Map},
-    ops::{Add, Index, IndexMut, Mul},
+    ops::{Index, IndexMut},
     slice::{Iter, IterMut},
     vec::IntoIter,
 };
 
-pub trait Ring: Sized + Add<Self, Output = Self> + Mul<Self, Output = Self> {
-    const ZERO: Self;
-    const ONE: Self;
-}
-
-macro_rules! impl_ring {
-    ( $( $type:ty )+ : $zero:literal $one:literal ) => { $(
-        impl Ring for $type {
-            const ZERO: Self = $zero;
-            const ONE: Self = $one;
-        }
-    )+ };
-}
-impl_ring! { i8 i16 i32 i64 i128: 0 1 }
-impl_ring! { u8 u16 u32 u64 u128: 0 1 }
-impl_ring! { f32 f64: 0.0 1.0 }
+mod number;
+mod ring;
+mod util;
+pub use number::*;
+pub use ring::*;
+use util::*;
 
 #[derive(Debug, Clone, Default, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub struct Matrix<T: Sized> {
@@ -35,11 +27,17 @@ pub struct Matrix<T: Sized> {
 }
 
 impl<T> Matrix<T> {
-    constructor! { new -> width: usize, height: usize, elements: Vec<Vec<T>> }
+    pub fn new_unchecked(width: usize, height: usize, elements: Vec<Vec<T>>) -> Self {
+        Self { width, height, elements }
+    }
 
-    impl_getter! { pub get_elements -> elements: &Vec<Vec<T>> }
+    pub fn get_elements(&self) -> &Vec<Vec<T>> {
+        &self.elements
+    }
 
-    impl_getter! { pub get_elements_mut -> elements: &mut Vec<Vec<T>> }
+    pub fn get_elements_mut(&mut self) -> &mut Vec<Vec<T>> {
+        &mut self.elements
+    }
 
     #[doc(alias = "get_input_count")]
     #[inline]
@@ -64,7 +62,7 @@ impl<T> Matrix<T> {
             .collect();
         assert_eq!(elements.len(), height);
         assert_eq!(elements.last().map(Vec::len), Some(width));
-        Matrix::new(width, height, elements)
+        Matrix::new_unchecked(width, height, elements)
     }
 
     /// Create a [`Matrix`] from a [`Vec`] of Rows.
@@ -84,7 +82,7 @@ impl<T> Matrix<T> {
         let height = elements.len();
         let width = elements.first().map(Vec::len).unwrap_or(0);
         assert!(elements.iter().map(Vec::len).all(|len| len == width));
-        Matrix::new(width, height, elements)
+        Matrix::new_unchecked(width, height, elements)
     }
 
     #[inline]
@@ -188,10 +186,11 @@ impl<T: Clone> Matrix<T> {
     }
 
     pub fn with_default(width: usize, height: usize, default: T) -> Matrix<T> {
-        Matrix::new(width, height, vec![vec![default; width]; height])
+        Matrix::new_unchecked(width, height, vec![vec![default; width]; height])
     }
 }
 
+/*
 impl Matrix<f64> {
     pub fn new_random(
         width: usize,
@@ -210,6 +209,7 @@ impl Matrix<f64> {
         }
     }
 }
+*/
 
 impl<T> std::ops::Mul<&[T]> for &Matrix<T>
 where T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>

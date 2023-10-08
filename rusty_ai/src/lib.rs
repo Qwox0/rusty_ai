@@ -1,11 +1,8 @@
 #![feature(array_windows)]
 #![feature(return_position_impl_trait_in_trait)]
-#![feature(type_alias_impl_trait)]
-#![feature(impl_trait_in_assoc_type)]
 #![feature(test)]
 #![feature(type_changing_struct_update)]
 #![feature(iter_array_chunks)]
-#![feature(int_roundings)]
 #![feature(portable_simd)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![doc = include_str!("../../README.md")]
@@ -19,7 +16,6 @@ pub mod initializer;
 pub mod input;
 pub mod layer;
 pub mod loss_function;
-pub mod matrix;
 pub mod neural_network;
 pub mod optimizer;
 pub mod prelude;
