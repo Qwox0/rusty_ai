@@ -36,7 +36,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     }
 
     #[inline]
-    pub fn get_layers(&self) -> &Vec<Layer> {
+    pub fn get_layers(&self) -> &[Layer] {
         &self.layers
     }
 

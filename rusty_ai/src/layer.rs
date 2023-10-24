@@ -54,7 +54,7 @@ impl Layer {
     }
 
     fn weighted_sums(&self, inputs: &[f64]) -> Vec<f64> {
-        (&self.weights * inputs).add_entries(self.bias.get_vec())
+        (&self.weights * inputs).add_entries(&self.bias)
     }
 
     /// An Input layer doesn't change the input, but still multiplies by the

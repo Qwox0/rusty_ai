@@ -82,8 +82,8 @@ impl<T> Matrix<T> {
     }
 
     #[inline]
-    pub fn get_row(&self, y: usize) -> Option<&Vec<T>> {
-        self.elements.get(y)
+    pub fn get_row(&self, y: usize) -> Option<&[T]> {
+        self.elements.get(y).map(Vec::as_slice)
     }
 
     pub fn get(&self, y: usize, x: usize) -> Option<&T> {

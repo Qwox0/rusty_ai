@@ -37,7 +37,7 @@ pub trait LossFunction<const OUT: usize>: Display {
         self.backpropagate_arr(&output.get_nn_output(), expected_output)
     }
 
-    fn check_layers(_layer: &Vec<Layer>) -> anyhow::Result<()> {
+    fn check_layers(_layer: &[Layer]) -> anyhow::Result<()> {
         anyhow::Ok(())
     }
 }
@@ -145,7 +145,7 @@ impl<const OUT: usize> LossFunction<OUT> for NLLLoss {
         gradient.to_vec()
     }
 
-    fn check_layers(layer: &Vec<Layer>) -> Result<(), anyhow::Error> {
+    fn check_layers(layer: &[Layer]) -> Result<(), anyhow::Error> {
         let a = layer
             .last()
             .context("NLLLoss requires at least one layer")?

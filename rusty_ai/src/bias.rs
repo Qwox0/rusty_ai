@@ -2,6 +2,7 @@
 
 use crate::traits::ParamsIter;
 use serde::{Deserialize, Serialize};
+use std::ops::Deref;
 
 #[derive(
     Debug, Clone, derive_more::From, PartialEq, Serialize, Deserialize, derive_more::IntoIterator,
@@ -25,10 +26,6 @@ impl LayerBias {
         LayerBias(vec![0.0; self.0.len()])
     }
 
-    pub fn get_vec(&self) -> &Vec<f64> {
-        &self.0
-    }
-
     pub fn get_neuron_count(&self) -> usize {
         self.0.len()
     }
@@ -41,6 +38,14 @@ impl LayerBias {
     pub fn sqrt_entries_mut(&mut self) -> &mut LayerBias {
         self.0.iter_mut().for_each(|x| *x = x.sqrt());
         self
+    }
+}
+
+impl Deref for LayerBias {
+    type Target = [f64];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
