@@ -9,6 +9,7 @@ members = [
     "tests",
     "benches",
 ]
+default-members = ["rusty_ai"] # for `cargo doc --open`
 exclude = []
 
 [workspace.package]

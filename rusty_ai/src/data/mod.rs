@@ -1,3 +1,5 @@
+//! # Data module
+
 mod builder;
 mod pair;
 mod pair_list;

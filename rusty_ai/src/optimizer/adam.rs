@@ -42,7 +42,7 @@ pub struct Adam_ {
 }
 
 impl Optimizer for Adam_ {
-    fn optimize_weights<'a, const IN: usize, const OUT: usize>(
+    fn optimize<'a, const IN: usize, const OUT: usize>(
         &mut self,
         nn: &mut NeuralNetwork<IN, OUT>,
         gradient: &Gradient,

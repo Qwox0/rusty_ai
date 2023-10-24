@@ -12,9 +12,11 @@ use trainer::NNTrainerBuilder;
 
 /// Markers uses by [`NNBuilder`].
 pub mod markers {
+    #[allow(unused_imports)]
+    use crate::layer::Layer;
     use crate::{bias::LayerBias, matrix::Matrix};
 
-    /// Dimension not defined.
+    /// Marker for an undefined Dimension.
     pub struct NoDim;
     /// Inputs dimension == `IN`
     pub struct In<const IN: usize>;
@@ -87,10 +89,12 @@ impl<const IN: usize, LP, RNG> NNBuilder<In<IN>, LP, RNG> {
     }
 }
 
-type BuilderNoParts<const IN: usize> = NNBuilder<In<IN>, NoLayerParts, RngWrapper>;
-type BuilderWithParts<const IN: usize> = NNBuilder<In<IN>, LayerParts, RngWrapper>;
+/// Alias for a [`NNBuilder`] without [`LayerParts`].
+pub type BuilderNoParts<const IN: usize> = NNBuilder<In<IN>, NoLayerParts, RngWrapper>;
+/// Alias for a [`NNBuilder`] with [`LayerParts`].
+pub type BuilderWithParts<const IN: usize> = NNBuilder<In<IN>, LayerParts, RngWrapper>;
 
-/// This ensures a consistent interface between [`BuilderWithoutParts`] and [`BuilderWithParts`].
+/// This ensures a consistent interface between [`BuilderNoParts`] and [`BuilderWithParts`].
 pub trait BuildLayer<const IN: usize>: Sized {
     fn _layer(self, layer: Layer) -> BuilderNoParts<IN>;
 

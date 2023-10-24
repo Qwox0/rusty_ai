@@ -1,3 +1,5 @@
+//! # Layer module
+
 use crate::{
     bias::LayerBias,
     gradient::aliases::{InputGradient, OutputGradient},

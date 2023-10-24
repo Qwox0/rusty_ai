@@ -3,20 +3,34 @@
 pub mod adam;
 pub mod sgd;
 
-use crate::{layer::Layer, *};
+#[allow(unused_imports)]
+use crate::trainer::{NNTrainer, NNTrainerBuilder};
+use crate::{layer::Layer, Gradient, NeuralNetwork};
 
+/// Default learning rate used by [`Optimizer`]s in `rusty_ai::optimizer::*`.
 pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 
+/// Optimizes the parameters of a [`NeuralNetwork`] based on a [`Gradient`].
+///
+/// This is only used by [`NNTrainer`]. Thus the dimensions of `nn` and `gradient` will always
+/// match.
 pub trait Optimizer {
-    fn optimize_weights<const IN: usize, const OUT: usize>(
+    /// Optimize the parameters of a [`NeuralNetwork`] based on a [`Gradient`].
+    fn optimize<const IN: usize, const OUT: usize>(
         &mut self,
         nn: &mut NeuralNetwork<IN, OUT>,
         gradient: &Gradient,
     );
 }
 
+/// Represents the constants/configuration of an [`Optimizer`].
+///
+/// Used by [`NNTrainerBuilder`] to create an [`Optimizer`] of type `Self::Optimizer`.
 pub trait OptimizerValues {
+    /// Target [`Optimizer`] type
     type Optimizer: Optimizer;
 
+    /// Creates an [`Optimizer`] based on the configuration in `self` and the [`NeuralNetwork`]
+    /// [`Layer`]s in `layers`.
     fn init_with_layers(self, layers: &[Layer]) -> Self::Optimizer;
 }

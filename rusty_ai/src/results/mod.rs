@@ -1,3 +1,5 @@
+//! # Results module
+
 use crate::propagation::PropagationResult;
 
 #[derive(Debug)]

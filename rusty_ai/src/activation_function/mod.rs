@@ -28,6 +28,7 @@ pub enum ActivationFn {
     ///
     /// LeakyReLU'(0) := 0
     /// see [Numerical influence of ReLU'(0) on backpropagation](https://hal.science/hal-03265059/file/Impact_of_ReLU_prime.pdf)
+    #[allow(missing_docs)]
     LeakyReLU { leak_rate: f64 },
 
     /// Sigmoid(x) = 1/(1 + exp(-x)) = exp(x)/(exp(x) + 1)

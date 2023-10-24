@@ -6,6 +6,7 @@
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![doc = include_str!("../../README.md")]
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 mod activation_function;
 pub mod bias;
@@ -14,7 +15,7 @@ pub mod data;
 pub mod gradient;
 mod initializer;
 mod input;
-mod layer;
+pub mod layer;
 pub mod loss_function;
 pub mod neural_network;
 mod norm;
@@ -45,7 +46,7 @@ pub mod prelude {
         gradient::aliases::*,
         loss_function::*,
         matrix::*,
-        neural_network::builder::{BuildLayer, NNBuilder},
+        neural_network::builder::{markers::*, BuilderNoParts, BuilderWithParts},
         optimizer::{adam::*, sgd::*, *},
         results::*,
         trainer::{markers::*, *},

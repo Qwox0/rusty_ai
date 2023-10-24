@@ -41,7 +41,7 @@ pub struct SGD_ {
 }
 
 impl Optimizer for SGD_ {
-    fn optimize_weights<'a, const IN: usize, const OUT: usize>(
+    fn optimize<'a, const IN: usize, const OUT: usize>(
         &mut self,
         nn: &mut NeuralNetwork<IN, OUT>,
         gradient: &Gradient,

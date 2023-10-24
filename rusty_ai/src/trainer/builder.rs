@@ -7,7 +7,13 @@ use markers::*;
 
 /// Markers uses by [`NNTrainerBuilder`].
 pub mod markers {
+    #[allow(unused_imports)]
+    use crate::{loss_function::LossFunction, optimizer::Optimizer};
+
+    /// Marker for an undefined [`LossFunction`].
     pub struct NoLossFunction;
+
+    /// Marker for an undefined [`Optimizer`].
     pub struct NoOptimizer;
 }
 
@@ -20,8 +26,9 @@ pub struct NNTrainerBuilder<const IN: usize, const OUT: usize, L, O> {
 }
 
 impl<const IN: usize, const OUT: usize> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
+    /// # Defaults
+    ///
     /// `retain_gradient`: `false`
-    /// `optimizer`: Default [`SGD`]
     /// `clip_gradient_norm`: [`None`]
     pub fn new(network: NeuralNetwork<IN, OUT>) -> Self {
         NNTrainerBuilder {

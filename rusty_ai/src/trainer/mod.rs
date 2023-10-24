@@ -166,7 +166,7 @@ where O: Optimizer
 {
     #[inline]
     pub fn optimize_trainee(&mut self) {
-        self.optimizer.optimize_weights(&mut self.network, &self.gradient);
+        self.optimizer.optimize(&mut self.network, &self.gradient);
     }
 }
 

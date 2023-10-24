@@ -18,10 +18,12 @@ impl LayerBias {
         LayerBias(vec)
     }
 
+    /// Fill every bias element in `self` with `value`.
     pub fn fill(&mut self, value: f64) {
         self.0.fill(value);
     }
 
+    /// Creates a [`LayerBias`] that matches the dimensions of `self`, but contains only zeros.
     pub fn clone_with_zeros(&self) -> LayerBias {
         LayerBias(vec![0.0; self.0.len()])
     }
@@ -50,10 +52,12 @@ impl Deref for LayerBias {
 }
 
 impl ParamsIter for LayerBias {
+    #[allow(refining_impl_trait)]
     fn iter<'a>(&'a self) -> std::slice::Iter<'_, f64> {
         self.into_iter()
     }
 
+    #[allow(refining_impl_trait)]
     fn iter_mut<'a>(&'a mut self) -> std::slice::IterMut<'a, f64> {
         self.into_iter()
     }

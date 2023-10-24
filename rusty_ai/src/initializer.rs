@@ -1,23 +1,22 @@
-use crate::{bias::LayerBias, matrix::Matrix, util::RngWrapper, *};
+use crate::{bias::LayerBias, matrix::Matrix, util::RngWrapper};
 use rand::Rng;
 
 /// see [tensorflow docs](https://www.tensorflow.org/api_docs/python/tf/keras/initializers)
 /// or [pytorch docs](https://pytorch.org/docs/stable/nn.init.html)
 #[derive(Debug, Clone)]
 pub enum Initializer<T> {
+    /// Fixed value
     Initialized(T),
 
-    /// Initializes all values to the fixed value `self.0`
+    /// Initializes all values with the fixed value `self.0`
     Constant(f64),
 
     /// Uniform from start (`self.0`; inclusive) to end (`self.1`; exclusive)
     Uniform(f64, f64),
 
     /// `𝓝 (self.mean, self.std_dev^2)`
-    Normal {
-        mean: f64,
-        std_dev: f64,
-    },
+    #[allow(missing_docs)]
+    Normal { mean: f64, std_dev: f64 },
 
     /// `𝓝 (0, 1)`
     ///
@@ -40,11 +39,13 @@ pub enum Initializer<T> {
 // pub type DataInitializer<const DIM: usize> = Initializer<[f64; DIM]>;
 
 impl<T> Initializer<T> {
+    /// Initializes all values with the fixed value `1`.
     #[allow(non_snake_case)]
     pub const fn Ones() -> Self {
         Initializer::Constant(1.0)
     }
 
+    /// Initializes all values with the fixed value `0`.
     #[allow(non_snake_case)]
     pub const fn Zeros() -> Self {
         Initializer::Constant(0.0)
