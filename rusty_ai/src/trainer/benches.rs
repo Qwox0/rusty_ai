@@ -1,12 +1,10 @@
-#![allow(unused)]
-
+/*
 extern crate test;
 
-use crate::prelude::*;
+use crate::*;
 use rayon::prelude::*;
 use std::{sync::Mutex, thread::ScopedJoinHandle};
 use test::black_box;
-/*
 
 fn calc_grad<L, O>(nn: &mut NNTrainer<1, 1, L, O>, data: &[Pair<1, f64>])
 where
@@ -181,7 +179,6 @@ impl BackpropBenches for TrainableNeuralNetwork<1, f64> {
         self.optimize();
     }
 }
-*/
 
 impl<'a> IntoParallelIterator for &'a PairList<1, f64> {
     type Item = &'a (Input<1>, f64);
@@ -257,4 +254,6 @@ make_bench! { single_thread2 }
 //make_bench! { mpsc_out }
 make_bench! { spmc_in }
 make_bench! { rayon_iter }
+*/
+
 */

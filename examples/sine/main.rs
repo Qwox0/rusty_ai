@@ -1,7 +1,13 @@
 #![feature(test)]
 
-use rusty_ai::prelude::*;
-use std::{fmt::Display, fs::File, io::Write, ops::Range, path::{Path, PathBuf}};
+use rusty_ai::{data::DataBuilder, loss_function::SquaredError, optimizer::sgd::SGD, *};
+use std::{
+    fmt::Display,
+    fs::File,
+    io::Write,
+    ops::Range,
+    path::{Path, PathBuf},
+};
 
 fn get_out_js_path() -> &'static str {
     let a = env!("CARGO_MANIFEST_DIR");
@@ -45,12 +51,9 @@ pub fn main() {
     const EPOCHS: usize = 1000;
     const DATA_RANGE: Range<f64> = -10.0..10.0;
 
-    let training_data = DataBuilder::uniform(DATA_RANGE)
-        .build::<1>(1000)
-        .gen_pairs(|[x]| [x.sin()]);
-    let test_data = DataBuilder::uniform(DATA_RANGE)
-        .build::<1>(30)
-        .gen_pairs(|[x]| [x.sin()]);
+    let training_data =
+        DataBuilder::uniform(DATA_RANGE).build::<1>(1000).gen_pairs(|[x]| [x.sin()]);
+    let test_data = DataBuilder::uniform(DATA_RANGE).build::<1>(30).gen_pairs(|[x]| [x.sin()]);
     let (x, y): (Vec<_>, Vec<_>) = test_data
         .iter()
         .map(|(input, expected_output)| (input[0], expected_output[0]))

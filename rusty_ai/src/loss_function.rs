@@ -1,4 +1,6 @@
-use crate::prelude::*;
+//! # Loss function module
+
+use crate::{gradient::aliases::OutputGradient, layer::Layer, *};
 use anyhow::Context;
 use derive_more::Display;
 use std::fmt::Display;
@@ -91,7 +93,9 @@ impl<const N: usize> LossFunction<N> for MeanSquaredError {
     }
 
     fn backpropagate_arr(&self, output: &[f64; N], expected_output: &[f64; N]) -> OutputGradient {
-        differences(output, expected_output).map(|x| x * 2.0 / output.len() as f64).collect()
+        differences(output, expected_output)
+            .map(|x| x * 2.0 / output.len() as f64)
+            .collect()
     }
 }
 
@@ -142,8 +146,10 @@ impl<const OUT: usize> LossFunction<OUT> for NLLLoss {
     }
 
     fn check_layers(layer: &Vec<Layer>) -> Result<(), anyhow::Error> {
-        let a =
-            layer.last().context("NLLLoss requires at least one layer")?.get_activation_function();
+        let a = layer
+            .last()
+            .context("NLLLoss requires at least one layer")?
+            .get_activation_function();
 
         if *a != ActivationFn::LogSoftmax {
             anyhow::bail!(

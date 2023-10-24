@@ -1,19 +1,35 @@
-use crate::prelude::*;
+use crate::{
+    bias::LayerBias,
+    layer::Layer,
+    matrix::Matrix,
+    trainer::markers::{NoLossFunction, NoOptimizer},
+    util::RngWrapper,
+    *,
+};
+use markers::*;
 use std::marker::PhantomData;
+use trainer::NNTrainerBuilder;
 
-// Dimension Markers
-pub struct NoDim;
-pub struct In<const IN: usize>;
+/// Markers uses by [`NNBuilder`].
+pub mod markers {
+    use crate::{bias::LayerBias, matrix::Matrix};
 
-// Layer parts Markers
-pub struct NoLayerParts;
-pub struct LayerParts {
-    weights: Matrix<f64>,
-    bias: LayerBias,
+    /// Dimension not defined.
+    pub struct NoDim;
+    /// Inputs dimension == `IN`
+    pub struct In<const IN: usize>;
+
+    /// Builder doesn't contain an unfinished [`Layer`].
+    pub struct NoLayerParts;
+    /// Builder contains an unfinished [`Layer`].
+    pub struct LayerParts {
+        pub(super) weights: Matrix<f64>,
+        pub(super) bias: LayerBias,
+    }
+
+    /// Seed used for RNG.
+    pub struct Seed(pub(super) Option<u64>);
 }
-
-// Rng Markers
-pub struct Seed(Option<u64>);
 
 /// Builder
 ///
@@ -67,10 +83,7 @@ impl<IN, LP, RNG> NNBuilder<IN, LP, RNG> {
 
 impl<const IN: usize, LP, RNG> NNBuilder<In<IN>, LP, RNG> {
     fn last_neuron_count(&self) -> usize {
-        self.layers
-            .last()
-            .map(Layer::get_neuron_count)
-            .unwrap_or(IN)
+        self.layers.last().map(Layer::get_neuron_count).unwrap_or(IN)
     }
 }
 
@@ -153,13 +166,11 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithoutParts<IN> {
         bias_init: Initializer<LayerBias>,
         activation_function: ActivationFn,
     ) -> BuilderWithoutParts<IN> {
-        neurons
-            .into_iter()
-            .fold(self, |builder: Self, neurons: &usize| {
-                builder
-                    .layer(*neurons, weights_init.clone(), bias_init.clone())
-                    .activation_function(activation_function)
-            })
+        neurons.into_iter().fold(self, |builder: Self, neurons: &usize| {
+            builder
+                .layer(*neurons, weights_init.clone(), bias_init.clone())
+                .activation_function(activation_function)
+        })
     }
 
     /// similar to `layers` but uses the default activation function for every layer.
@@ -249,8 +260,7 @@ impl<const IN: usize> BuildLayer<IN> for BuilderWithParts<IN> {
         weights_init: Initializer<Matrix<f64>>,
         bias_init: Initializer<LayerBias>,
     ) -> Self {
-        self.use_default_activation_function()
-            .layer(neurons, weights_init, bias_init)
+        self.use_default_activation_function().layer(neurons, weights_init, bias_init)
     }
 
     /// Use the same [`Initializer`] to add multiple new [`Layer`]s to the NeuralNetwork.

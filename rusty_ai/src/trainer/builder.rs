@@ -1,7 +1,15 @@
-use crate::prelude::*;
+use super::NNTrainer;
+use crate::{
+    clip_gradient_norm::ClipGradientNorm, loss_function::LossFunction, NeuralNetwork, Norm,
+    OptimizerValues,
+};
+use markers::*;
 
-pub struct NoLossFunction;
-pub struct NoOptimizer;
+/// Markers uses by [`NNTrainerBuilder`].
+pub mod markers {
+    pub struct NoLossFunction;
+    pub struct NoOptimizer;
+}
 
 pub struct NNTrainerBuilder<const IN: usize, const OUT: usize, L, O> {
     network: NeuralNetwork<IN, OUT>,
@@ -13,7 +21,7 @@ pub struct NNTrainerBuilder<const IN: usize, const OUT: usize, L, O> {
 
 impl<const IN: usize, const OUT: usize> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
     /// `retain_gradient`: `false`
-    /// `optimizer`: Default [`GradientDescent`]
+    /// `optimizer`: Default [`SGD`]
     /// `clip_gradient_norm`: [`None`]
     pub fn new(network: NeuralNetwork<IN, OUT>) -> Self {
         NNTrainerBuilder {

@@ -1,9 +1,12 @@
-mod builder;
+//! Trainer module.
 
-use crate::{prelude::*, training::Training};
-pub use builder::*;
+use crate::{clip_gradient_norm::ClipGradientNorm, training::Training, *};
+use loss_function::LossFunction;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, iter::Map};
+
+mod builder;
+pub use builder::{markers, NNTrainerBuilder};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NNTrainer<const IN: usize, const OUT: usize, L, O> {
@@ -129,19 +132,15 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     ///               = (o_L_i - e_i) *     f'(z_i)
     pub fn backpropagate(&mut self, verbose_prop: &VerbosePropagation<OUT>, expected_output: &EO) {
         // gradient of the cost function with respect to the neuron output of the last layer.
-        let output_gradient = self
-            .loss_function
-            .backpropagate(verbose_prop, expected_output);
+        let output_gradient = self.loss_function.backpropagate(verbose_prop, expected_output);
 
-        self.network
-            .backpropagate(verbose_prop, output_gradient, &mut self.gradient);
+        self.network.backpropagate(verbose_prop, output_gradient, &mut self.gradient);
     }
 
     /// To test a batch of multiple pairs use `test_batch`.
     #[inline]
     pub fn test(&self, input: &Input<IN>, expected_output: &EO) -> ([f64; OUT], f64) {
-        self.network
-            .test(input, expected_output, &self.loss_function)
+        self.network.test(input, expected_output, &self.loss_function)
     }
 
     /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
@@ -167,8 +166,7 @@ where O: Optimizer
 {
     #[inline]
     pub fn optimize_trainee(&mut self) {
-        self.optimizer
-            .optimize_weights(&mut self.network, &self.gradient);
+        self.optimizer.optimize_weights(&mut self.network, &self.gradient);
     }
 }
 

@@ -1,4 +1,13 @@
-use rusty_ai::prelude::*;
+use rusty_ai::{
+    bias::LayerBias,
+    data::PairList,
+    loss_function::{LossFunction, SquaredError},
+    matrix::Matrix,
+    neural_network::NNBuilder,
+    optimizer::sgd::SGD,
+    trainer::NNTrainer,
+    ActivationFn, BuildLayer, Input, Norm, Optimizer,
+};
 
 struct Args<'a, F, L, O>
 where
@@ -21,10 +30,7 @@ where
 {
     let Args { mut ai, data, losses, epochs, test_condition } = args;
     let test = |epoch: usize, ai: &NNTrainer<1, 1, L, O>, expected_loss: f64| {
-        let error = ai
-            .test_batch(data.iter())
-            .map(|(_, loss)| loss)
-            .sum::<f64>();
+        let error = ai.test_batch(data.iter()).map(|(_, loss)| loss).sum::<f64>();
 
         println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, error, error.to_bits());
         println!("    expected_loss: {:<20} {:064b}", expected_loss, expected_loss.to_bits());

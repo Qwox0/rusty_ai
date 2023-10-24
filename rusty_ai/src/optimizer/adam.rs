@@ -1,4 +1,7 @@
-use crate::prelude::*;
+//! Module containing the [`Adam_`] [`Optimizer`].
+
+use super::DEFAULT_LEARNING_RATE;
+use crate::{layer::Layer, util::Lerp, *};
 use serde::{Deserialize, Serialize};
 
 /// configuration values for the stochastic gradient descent optimizer.
@@ -20,11 +23,7 @@ impl OptimizerValues for Adam {
     type Optimizer = Adam_;
 
     fn init_with_layers(self, layers: &[Layer]) -> Self::Optimizer {
-        let v: Gradient = layers
-            .iter()
-            .map(Layer::init_zero_gradient)
-            .collect::<Vec<_>>()
-            .into();
+        let v: Gradient = layers.iter().map(Layer::init_zero_gradient).collect::<Vec<_>>().into();
         Adam_ { val: self, generation: 0, m: v.clone(), v }
     }
 }

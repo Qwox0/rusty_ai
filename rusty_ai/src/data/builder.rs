@@ -1,8 +1,7 @@
-use crate::prelude::*;
+use super::value_list::ValueList;
+use crate::util::RngWrapper;
 use rand::{distributions::Uniform, prelude::Distribution, Rng};
 use std::ops::Range;
-
-use super::value_list::ValueList;
 
 pub struct DataBuilder<D: Distribution<f64>> {
     distr: D,

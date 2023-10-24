@@ -54,12 +54,8 @@ impl<T> Matrix<T> {
     /// # Panics
     /// Panics if the iterator is too small.
     pub fn from_iter(width: usize, height: usize, iter: impl Iterator<Item = T>) -> Matrix<T> {
-        let elements: Vec<_> = iter
-            .chunks(width)
-            .into_iter()
-            .take(height)
-            .map(Iterator::collect)
-            .collect();
+        let elements: Vec<_> =
+            iter.chunks(width).into_iter().take(height).map(Iterator::collect).collect();
         assert_eq!(elements.len(), height);
         assert_eq!(elements.last().map(Vec::len), Some(width));
         Matrix::new_unchecked(width, height, elements)
@@ -67,7 +63,7 @@ impl<T> Matrix<T> {
 
     /// Create a [`Matrix`] from a [`Vec`] of Rows.
     /// ```rust
-    /// # use rusty_ai::prelude::Matrix;
+    /// # use rusty_ai::Matrix;
     /// Matrix::from_rows(vec![vec![1, 0], vec![0, 1]]);
     /// ```
     ///
@@ -75,7 +71,7 @@ impl<T> Matrix<T> {
     ///
     /// Panics if the rows don't have the same length:
     /// ```rust, should_panic
-    /// # use rusty_ai::prelude::Matrix;
+    /// # use rusty_ai::Matrix;
     /// Matrix::from_rows(vec![vec![1, 0], vec![0]]); // -> Panics
     /// ```
     pub fn from_rows(elements: Vec<Vec<T>>) -> Matrix<T> {
@@ -146,10 +142,7 @@ impl<'a, T> IntoIterator for &'a mut Matrix<T> {
     type Item = &'a mut T;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.elements
-            .iter_mut()
-            .map(IntoIterator::into_iter)
-            .flatten()
+        self.elements.iter_mut().map(IntoIterator::into_iter).flatten()
     }
 }
 
@@ -160,12 +153,10 @@ impl<T: Ring + Clone> Matrix<T> {
 
     /// Creates the `n` by `n` identity Matrix.
     pub fn identity(n: usize) -> Matrix<T> {
-        (0..n)
-            .into_iter()
-            .fold(Matrix::with_zeros(n, n), |mut acc, i| {
-                acc.elements[i][i] = T::ONE;
-                acc
-            })
+        (0..n).into_iter().fold(Matrix::with_zeros(n, n), |mut acc, i| {
+            acc.elements[i][i] = T::ONE;
+            acc
+        })
     }
 }
 
@@ -178,10 +169,7 @@ impl<T: Clone> Matrix<T> {
         Matrix {
             width,
             height,
-            elements: rows
-                .into_iter()
-                .map(|row| row.set_length(width, default.clone()))
-                .collect(),
+            elements: rows.into_iter().map(|row| row.set_length(width, default.clone())).collect(),
         }
     }
 
@@ -218,10 +206,7 @@ where T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Out
 
     fn mul(self, rhs: &[T]) -> Self::Output {
         assert_eq!(self.width, rhs.len(), "Vector has incompatible dimensions",);
-        self.elements
-            .iter()
-            .map(|row| dot_product(&row, &rhs))
-            .collect::<Vec<T>>()
+        self.elements.iter().map(|row| dot_product(&row, &rhs)).collect::<Vec<T>>()
     }
 }
 
@@ -266,10 +251,7 @@ impl<T: Display> Matrix<T> {
         let mut title = title.trim();
 
         let column_widths = self.elements.iter().fold(vec![0; self.width], |acc, row| {
-            row.iter()
-                .zip(acc)
-                .map(|(e, max)| e.to_string().len().max(max))
-                .collect()
+            row.iter().zip(acc).map(|(e, max)| e.to_string().len().max(max)).collect()
         });
 
         let content_width = column_widths.len() + column_widths.iter().sum::<usize>() - 1;

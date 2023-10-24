@@ -1,4 +1,6 @@
-use crate::prelude::*;
+//! # Clip gradient norm module
+
+use crate::{util::constructor, Gradient, Norm, ParamsIter};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -20,19 +22,19 @@ impl ClipGradientNorm {
         }
     }
 
-    /// [https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_]
+    /// <https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_>
     pub fn clip_gradient_pytorch(&self, gradient: &mut Gradient) {
         let iter = gradient.iter().copied();
         let norm = self.norm_type.calculate(iter);
         let clip_factor = self.max_norm / (norm + 1e-6);
         if clip_factor >= 1.0 {
             // == self.max_norm >= norm + 1e-6
-            return
+            return;
         }
         gradient.iter_mut().for_each(|x| *x *= clip_factor);
     }
 
-    /// [https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_]
+    /// <https://pytorch.org/docs/stable/_modules/torch/nn/utils/clip_grad.html#clip_grad_norm_>
     pub fn clip_gradient_pytorch_device(&self, gradient: &mut Gradient) {
         let iter = gradient.iter().copied();
         let norm = self.norm_type.calculate(iter);

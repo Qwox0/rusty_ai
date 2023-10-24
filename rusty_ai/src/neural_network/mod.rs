@@ -1,8 +1,21 @@
-pub mod builder;
+//! # NN module
 
-use crate::prelude::*;
+use crate::{
+    gradient::aliases::OutputGradient,
+    layer::Layer,
+    matrix::Matrix,
+    prelude::LossFunction,
+    trainer::{
+        markers::{NoLossFunction, NoOptimizer},
+        NNTrainerBuilder,
+    },
+    Gradient, Input, ParamsIter, VerbosePropagation,
+};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, iter::Map};
+
+pub mod builder;
+pub use builder::{BuildLayer, NNBuilder};
 
 /// layers contains all Hidden Layers and the Output Layers
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -119,9 +132,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         B: IntoIterator<Item = (&'a Input<IN>, &'a EO)>,
         L: LossFunction<OUT, ExpectedOutput = EO>,
     {
-        batch
-            .into_iter()
-            .map(|(input, eo)| self.test(input, eo, loss_fn))
+        batch.into_iter().map(|(input, eo)| self.test(input, eo, loss_fn))
     }
 }
 
@@ -156,12 +167,8 @@ impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, 
             get_plural_s(IN),
             get_plural_s(OUT),
         )?;
-        let layers_text = self
-            .layers
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>()
-            .join("\n");
+        let layers_text =
+            self.layers.iter().map(ToString::to_string).collect::<Vec<String>>().join("\n");
         write!(f, "{}", layers_text)
     }
 }

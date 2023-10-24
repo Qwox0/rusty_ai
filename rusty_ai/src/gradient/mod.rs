@@ -1,8 +1,13 @@
-pub mod aliases;
-pub mod layer;
+//! # Gradient module
+//!
+//! This module contains type definitions for documentation purposes.
 
-use crate::prelude::*;
+use crate::*;
 use serde::{Deserialize, Serialize};
+
+pub mod aliases;
+mod layer;
+pub use self::layer::GradientLayer;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, derive_more::From)]
 pub struct Gradient {
@@ -30,21 +35,13 @@ impl ParamsIter for Gradient {
     }
 
     fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64> {
-        self.layers
-            .iter_mut()
-            .map(GradientLayer::iter_mut)
-            .flatten()
+        self.layers.iter_mut().map(GradientLayer::iter_mut).flatten()
     }
 }
 
 impl std::fmt::Display for Gradient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = self
-            .layers
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>()
-            .join("\n");
+        let text = self.layers.iter().map(ToString::to_string).collect::<Vec<String>>().join("\n");
         write!(f, "{}", text)
     }
 }

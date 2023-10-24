@@ -1,8 +1,6 @@
-use crate::{
-    input::Input,
-    optimizer::Optimizer,
-    prelude::{LossFunction, NNTrainer},
-};
+//! # Training helper module
+
+use crate::{input::Input, optimizer::Optimizer, trainer::NNTrainer, loss_function::LossFunction};
 use std::iter::Peekable;
 
 #[must_use = "`Training` must be consumed to do work."]

@@ -87,12 +87,7 @@ pub fn main() {
         let (out, loss) = ai.test(input, expected_output);
         println!("output: {:?}", out);
         let propab = out.iter().copied().map(f64::exp).collect::<Vec<_>>();
-        let guess = propab
-            .iter()
-            .enumerate()
-            .max_by(|x, y| x.1.total_cmp(y.1))
-            .unwrap()
-            .0;
+        let guess = propab.iter().enumerate().max_by(|x, y| x.1.total_cmp(y.1)).unwrap().0;
         println!("propab: {:?}; guess: {}", propab, guess);
         println!("error: {}", loss);
         assert!(loss < 0.2);

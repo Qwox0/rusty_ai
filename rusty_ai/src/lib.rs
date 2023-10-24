@@ -1,5 +1,4 @@
 #![feature(array_windows)]
-#![feature(return_position_impl_trait_in_trait)]
 #![feature(test)]
 #![feature(type_changing_struct_update)]
 #![feature(iter_array_chunks)]
@@ -8,24 +7,43 @@
 #![doc = include_str!("../../README.md")]
 #![forbid(unsafe_code)]
 
-pub mod activation_function;
+mod activation_function;
+pub mod bias;
 pub mod clip_gradient_norm;
 pub mod data;
 pub mod gradient;
-pub mod initializer;
-pub mod input;
-pub mod layer;
+mod initializer;
+mod input;
+mod layer;
 pub mod loss_function;
 pub mod neural_network;
+mod norm;
 pub mod optimizer;
-pub mod prelude;
-pub mod propagation;
-pub mod propagator;
+mod propagation;
 pub mod results;
 pub mod trainer;
 pub mod training;
-pub mod traits;
-pub mod util;
+mod traits;
+mod util;
+
+pub use activation_function::{ActivationFn, ActivationFunction};
+pub use gradient::{Gradient, GradientLayer};
+pub use initializer::Initializer;
+pub use input::Input;
+pub use matrix;
+pub use neural_network::{BuildLayer, NNBuilder, NeuralNetwork};
+pub use norm::Norm;
+pub use optimizer::{Optimizer, OptimizerValues};
+pub use propagation::{PropagationResult, VerbosePropagation};
+pub use traits::ParamsIter;
+
+/// includes everything
+pub mod prelude {
+    pub use crate::{
+        bias::*, data::*, gradient::*, loss_function::*, matrix::*, neural_network::*,
+        optimizer::*, results::*, trainer::*, training::*, *,
+    };
+}
 
 // Ai Training steps
 // n: number of data points

@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{bias::LayerBias, matrix::Matrix, util::RngWrapper, *};
 use rand::Rng;
 
 /// see [tensorflow docs](https://www.tensorflow.org/api_docs/python/tf/keras/initializers)
@@ -37,8 +37,6 @@ pub enum Initializer<T> {
     PytorchDefault,
 }
 
-pub type WeightsInitializer = Initializer<Matrix<f64>>;
-pub type BiasInitializer = Initializer<LayerBias>;
 // pub type DataInitializer<const DIM: usize> = Initializer<[f64; DIM]>;
 
 impl<T> Initializer<T> {
@@ -53,7 +51,8 @@ impl<T> Initializer<T> {
     }
 }
 
-impl WeightsInitializer {
+impl Initializer<Matrix<f64>> {
+    /// Uses `self` to create a weights [`Matrix`].
     pub fn init_weights(self, rng: &mut RngWrapper, inputs: usize, outputs: usize) -> Matrix<f64> {
         macro_rules! mat {
             ($iter:expr) => {
@@ -74,7 +73,8 @@ impl WeightsInitializer {
     }
 }
 
-impl BiasInitializer {
+impl Initializer<LayerBias> {
+    /// Uses `self` to create a weights [`LayerBias`].
     pub fn init_bias(self, rng: &mut RngWrapper, inputs: usize, outputs: usize) -> LayerBias {
         macro_rules! bias {
             ($iter:expr) => {
@@ -96,25 +96,21 @@ impl BiasInitializer {
     }
 }
 
-pub fn uniform<'a>(rng: &'a mut RngWrapper, low: f64, high: f64) -> impl Iterator<Item = f64> + 'a {
+fn uniform<'a>(rng: &'a mut RngWrapper, low: f64, high: f64) -> impl Iterator<Item = f64> + 'a {
     rng.sample_iter(rand_distr::Uniform::new(low, high))
 }
 
 /// # Panics
 /// Panics if `std_dev` is not finite.
-pub fn normal<'a>(
-    rng: &'a mut RngWrapper,
-    mean: f64,
-    std_dev: f64,
-) -> impl Iterator<Item = f64> + 'a {
+fn normal<'a>(rng: &'a mut RngWrapper, mean: f64, std_dev: f64) -> impl Iterator<Item = f64> + 'a {
     rng.sample_iter(rand_distr::Normal::new(mean, std_dev).expect("standard deviation is finite"))
 }
 
-pub fn std_normal<'a>(rng: &'a mut RngWrapper) -> impl Iterator<Item = f64> + 'a {
+fn std_normal<'a>(rng: &'a mut RngWrapper) -> impl Iterator<Item = f64> + 'a {
     rng.sample_iter(rand_distr::StandardNormal)
 }
 
-pub fn glorot_uniform<'a>(
+fn glorot_uniform<'a>(
     rng: &'a mut RngWrapper,
     inputs: usize,
     outputs: usize,
@@ -123,7 +119,7 @@ pub fn glorot_uniform<'a>(
     uniform(rng, -x, x)
 }
 
-pub fn glorot_normal<'a>(
+fn glorot_normal<'a>(
     rng: &'a mut RngWrapper,
     inputs: usize,
     outputs: usize,
@@ -132,10 +128,7 @@ pub fn glorot_normal<'a>(
     normal(rng, 0.0, std_dev)
 }
 
-pub fn pytorch_default<'a>(
-    rng: &'a mut RngWrapper,
-    inputs: usize,
-) -> impl Iterator<Item = f64> + 'a {
+fn pytorch_default<'a>(rng: &'a mut RngWrapper, inputs: usize) -> impl Iterator<Item = f64> + 'a {
     let x = (inputs as f64).recip().sqrt();
     uniform(rng, -x, x)
 }

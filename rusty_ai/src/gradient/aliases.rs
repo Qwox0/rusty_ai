@@ -1,4 +1,4 @@
-use crate::layer::LayerBias;
+use crate::bias::LayerBias;
 use matrix::Matrix;
 
 //    L-1                   L
@@ -39,14 +39,15 @@ use matrix::Matrix;
 //               = (o_L_i - e_i) *     f'(z_i)
 
 /// derivatives of the total cost with respect to the neuron activations
-pub(crate) type OutputGradient = Vec<f64>;
+pub type OutputGradient = Vec<f64>;
 
 /// derivatives of the total cost with respect to the weighted sums
-pub(crate) type WeightedSumGradient = Vec<f64>;
+pub type WeightedSumGradient = Vec<f64>;
 
 /// derivatives of the total cost with respect to the incoming weights
-pub(crate) type WeightGradient = Matrix<f64>;
-/// derivatives of the total cost with respect to the previous neuron activations
-pub(crate) type InputGradient = Vec<f64>;
+pub type WeightGradient = Matrix<f64>;
+/// derivatives of the total cost with respect to the previous neuron
+/// activations
+pub type InputGradient = Vec<f64>;
 /// derivatives of the total cost with respect to the bias/biases
-pub(crate) type BiasGradient = LayerBias;
+pub type BiasGradient = LayerBias;

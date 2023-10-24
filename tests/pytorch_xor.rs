@@ -1,4 +1,13 @@
-use rusty_ai::prelude::*;
+use rusty_ai::{
+    bias::LayerBias,
+    data::PairList,
+    loss_function::SquaredError,
+    matrix::Matrix,
+    neural_network::NNBuilder,
+    optimizer::sgd::{SGD, SGD_},
+    trainer::NNTrainer,
+    ActivationFn, BuildLayer, Input,
+};
 
 fn test_ai<const IN: usize, const OUT: usize>(
     ai: &NNTrainer<IN, OUT, SquaredError, SGD_>,

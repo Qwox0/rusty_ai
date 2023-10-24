@@ -2,11 +2,11 @@ mod relu;
 mod sigmoid;
 mod softmax;
 
-use crate::prelude::*;
+use crate::gradient::aliases::{OutputGradient, WeightedSumGradient};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
-/// see the specific struct for documentation.
+/// see the specific variant for documentation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Display)]
 pub enum ActivationFn {
     /// Identity(x) = x

@@ -4,7 +4,13 @@
 #![feature(test)]
 
 use mnist_util::{get_mnist, image_to_string, Mnist};
-use rusty_ai::prelude::*;
+use rusty_ai::{
+    data::{Pair, PairList},
+    loss_function::NLLLoss,
+    neural_network::NNBuilder,
+    optimizer::sgd::SGD,
+    ActivationFn, BuildLayer, Initializer, Norm,
+};
 use std::{ops::Range, time::Instant};
 
 const IMAGE_SIDE: usize = 28;
@@ -22,8 +28,19 @@ fn transform(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<IMAGE_SIZE, usize> 
         .collect()
 }
 
-fn setup_ai() -> NNTrainer<IMAGE_SIZE, OUTPUTS, NLLLoss, SGD_> {
-    NNBuilder::default()
+pub fn main() {
+    let Mnist { trn_img, trn_lbl, tst_img, tst_lbl, .. } = get_mnist();
+
+    let mut training_data = transform(trn_img, trn_lbl);
+    let test_data = transform(tst_img, tst_lbl);
+
+    assert_eq!(training_data.len(), 60_000);
+    assert_eq!(test_data.len(), 10_000);
+
+    println!("Example Image:");
+    print_image(&training_data[50], -1.0..1.0);
+
+    let mut ai = NNBuilder::default()
         .input::<IMAGE_SIZE>()
         .layer(128, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .activation_function(ActivationFn::ReLU)
@@ -37,22 +54,7 @@ fn setup_ai() -> NNTrainer<IMAGE_SIZE, OUTPUTS, NLLLoss, SGD_> {
         .optimizer(SGD { learning_rate: 0.003, momentum: 0.9 })
         .retain_gradient(false)
         .new_clip_gradient_norm(5.0, Norm::Two)
-        .build()
-}
-
-pub fn main() {
-    let Mnist { trn_img, trn_lbl, tst_img, tst_lbl, .. } = get_mnist();
-
-    let mut training_data = transform(trn_img, trn_lbl);
-    let test_data = transform(tst_img, tst_lbl);
-
-    assert_eq!(training_data.len(), 60_000);
-    assert_eq!(test_data.len(), 10_000);
-
-    println!("Example Image:");
-    print_image(&training_data[50], -1.0..1.0);
-
-    let mut ai = setup_ai();
+        .build();
 
     const EPOCHS: usize = 15;
     const BATCH_SIZE: usize = 64;
@@ -84,12 +86,7 @@ pub fn main() {
         let (out, loss) = ai.test(input, expected_output);
         println!("output: {:?}", out);
         let propab = out.iter().copied().map(f64::exp).collect::<Vec<_>>();
-        let guess = propab
-            .iter()
-            .enumerate()
-            .max_by(|x, y| x.1.total_cmp(y.1))
-            .unwrap()
-            .0;
+        let guess = propab.iter().enumerate().max_by(|x, y| x.1.total_cmp(y.1)).unwrap().0;
         println!("propab: {:?}; guess: {}", propab, guess);
         println!("error: {}", loss);
         assert!(loss < 0.2);

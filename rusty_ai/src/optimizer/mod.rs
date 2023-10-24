@@ -1,7 +1,9 @@
+//! # Optimizer module
+
 pub mod adam;
 pub mod sgd;
 
-use crate::prelude::*;
+use crate::{layer::Layer, *};
 
 pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 

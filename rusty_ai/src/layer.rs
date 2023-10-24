@@ -1,7 +1,11 @@
-mod bias;
-
-use crate::prelude::*;
-pub use bias::*;
+use crate::{
+    bias::LayerBias,
+    gradient::aliases::{InputGradient, OutputGradient},
+    traits::default_params_chain,
+    util::EntryAdd,
+    *,
+};
+use matrix::Matrix;
 use serde::{Deserialize, Serialize};
 use std::iter::once;
 
@@ -84,9 +88,7 @@ impl Layer {
 
         let mut inputs_grad = vec![0.0; input_count];
 
-        let weighted_sums_grad = self
-            .activation_function
-            .backpropagate(output_gradient, output);
+        let weighted_sums_grad = self.activation_function.backpropagate(output_gradient, output);
 
         self.iter_neurons()
             .zip(gradient.iter_mut_neurons())

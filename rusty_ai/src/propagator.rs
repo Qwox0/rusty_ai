@@ -1,9 +1,7 @@
 /*
 use crate::{
-    neural_network::NeuralNetwork,
-    optimizer::sgd::SGD_,
-    prelude::{LossFunction, MeanSquaredError, NNTrainer},
-    traits,
+    neural_network::NeuralNetwork, optimizer::sgd::SGD_, traits, LossFunction, MeanSquaredError,
+    NNTrainer,
 };
 use std::iter::{Map, Zip};
 

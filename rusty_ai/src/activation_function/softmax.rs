@@ -1,4 +1,7 @@
-use crate::prelude::*;
+use crate::{
+    gradient::aliases::{OutputGradient, WeightedSumGradient},
+    *,
+};
 use derive_more::Display;
 
 #[derive(Debug, Clone, Copy, Display)]
@@ -110,6 +113,7 @@ impl ActivationFunction for LogSoftmax {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use loss_function::{LossFunction, NLLLoss};
 
     #[test]
     fn log_softmax_backprop() {

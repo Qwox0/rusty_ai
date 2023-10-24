@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// see [https://en.wikipedia.org/wiki/Norm_(mathematics)]
+/// see <https://en.wikipedia.org/wiki/Norm_(mathematics)>
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Norm {
     /// Infinity norm
@@ -33,6 +33,4 @@ impl Norm {
             },
         }
     }
-
-    pub fn calculate_clip_factor(&self) {}
 }

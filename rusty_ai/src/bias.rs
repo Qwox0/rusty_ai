@@ -1,3 +1,5 @@
+//! # Bias module
+
 use crate::traits::ParamsIter;
 use serde::{Deserialize, Serialize};
 

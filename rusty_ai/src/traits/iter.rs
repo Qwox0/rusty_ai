@@ -41,7 +41,7 @@ mod macros {
     /// impl_IterParams! { $ty:ty : $weights:ident , $bias:ident }
     macro_rules! impl_IterParams {
         ($ty:ty : $weights:ident, $bias:ident) => {
-            impl $crate::prelude::ParamsIter for $ty {
+            impl $crate::ParamsIter for $ty {
                 fn iter_weights<'a>(&'a self) -> impl Iterator<Item = &'a f64> {
                     self.$weights.iter()
                 }

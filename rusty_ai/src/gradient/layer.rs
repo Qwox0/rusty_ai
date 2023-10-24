@@ -1,4 +1,11 @@
-use crate::prelude::*;
+use crate::{
+    bias::LayerBias,
+    gradient::aliases::{BiasGradient, WeightGradient},
+    matrix::Matrix,
+    traits::default_params_chain,
+    util::constructor,
+    ParamsIter,
+};
 use serde::{Deserialize, Serialize};
 use std::iter::once;
 
@@ -16,9 +23,7 @@ impl GradientLayer {
     pub fn iter_mut_neurons<'a>(
         &'a mut self,
     ) -> impl Iterator<Item = (&'a mut Vec<f64>, &'a mut f64)> {
-        self.weight_gradient
-            .iter_rows_mut()
-            .zip(&mut self.bias_gradient)
+        self.weight_gradient.iter_rows_mut().zip(&mut self.bias_gradient)
     }
 }
 
@@ -40,12 +45,7 @@ impl std::fmt::Display for GradientLayer {
         // Todo
         let bias_column_width = bias_str_iter.clone().map(|s| s.len()).max().unwrap_or(0);
         let mut bias_lines = bias_str_iter.map(|s| format!("{s:^bias_column_width$}"));
-        for (idx, l) in self
-            .weight_gradient
-            .to_string_with_title("Weights:")?
-            .lines()
-            .enumerate()
-        {
+        for (idx, l) in self.weight_gradient.to_string_with_title("Weights:")?.lines().enumerate() {
             if idx != 0 {
                 write!(f, "\n")?;
             }
@@ -59,7 +59,7 @@ impl std::fmt::Display for GradientLayer {
 mod tests {
     use crate::{
         neural_network::builder::{BuildLayer, NNBuilder},
-        prelude::Initializer,
+        Initializer,
     };
 
     #[test]

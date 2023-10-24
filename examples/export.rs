@@ -1,4 +1,4 @@
-use rusty_ai::prelude::*;
+use rusty_ai::*;
 
 fn main() -> Result<(), serde_json::Error> {
     const IN: usize = 2;
