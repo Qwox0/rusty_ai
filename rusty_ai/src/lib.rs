@@ -40,8 +40,17 @@ pub use traits::ParamsIter;
 /// includes everything
 pub mod prelude {
     pub use crate::{
-        bias::*, data::*, gradient::*, loss_function::*, matrix::*, neural_network::*,
-        optimizer::*, results::*, trainer::*, training::*, *,
+        bias::LayerBias,
+        data::{DataBuilder, Pair, PairList},
+        gradient::aliases::*,
+        loss_function::*,
+        matrix::*,
+        neural_network::builder::{BuildLayer, NNBuilder},
+        optimizer::{adam::*, sgd::*, *},
+        results::*,
+        trainer::{markers::*, *},
+        training::*,
+        *,
     };
 }
 
