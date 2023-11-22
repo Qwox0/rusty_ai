@@ -1,8 +1,13 @@
-//! # Training helper module
+//! # Training iterator module
 
-use crate::{input::Input, optimizer::Optimizer, trainer::NNTrainer, loss_function::LossFunction};
+#[allow(unused_imports)]
+use crate::NeuralNetwork;
+use crate::{input::Input, loss_function::LossFunction, optimizer::Optimizer, trainer::NNTrainer};
 use std::iter::Peekable;
 
+/// Represents a training step of a neural network.
+///
+/// The training is executed lazily, meaning this type must be consumed to perform calculations.
 #[must_use = "`Training` must be consumed to do work."]
 pub struct Training<'a, NN, I> {
     nn: &'a mut NN,
@@ -10,6 +15,7 @@ pub struct Training<'a, NN, I> {
 }
 
 impl<'a, NN, I> Training<'a, NN, I> {
+    #[inline]
     pub(crate) fn new(nn: &'a mut NN, iter: I) -> Self {
         Training { nn, iter }
     }
@@ -22,6 +28,7 @@ where
     I: Iterator<Item = &'a (Input<IN>, EO)>,
     EO: 'a,
 {
+    /// Executes the [`Training`] and optimizes the [`NeuralNetwork`].
     pub fn execute(self) {
         self.nn.maybe_set_zero_gradient();
         for (input, eo) in self.iter {
@@ -32,14 +39,19 @@ where
         self.nn.optimize_trainee();
     }
 
+    /// Consumes `self` and returns an [`Iterator`] over the outputs of the [`NeuralNetwork`]
+    /// calculated during the training.
     pub fn outputs(self) -> TrainingOutputs<'a, IN, OUT, L, O, I> {
         TrainingOutputs::new(self.nn, self.iter)
     }
 
+    /// Consumes `self` and returns an [`Iterator`] over the outputs and losses of the
+    /// [`NeuralNetwork`] calculated during the training.
     pub fn losses(self) -> TrainingLosses<'a, IN, OUT, L, O, I> {
         TrainingLosses::new(self.nn, self.iter)
     }
 
+    /// Executes the [`Training`] and returns the mean of the losses calculated during training.
     pub fn mean_loss(self) -> f64 {
         let mut count = 0;
         let sum = self.losses().fold(0.0, |acc, (_, loss)| {
@@ -50,6 +62,9 @@ where
     }
 }
 
+/// [`Iterator`] over the outputs of a [`NeuralNetwork`] during training.
+///
+/// Created by `Training::outputs`.
 #[must_use = "`Iterators` must be consumed to do work."]
 pub struct TrainingOutputs<'a, const IN: usize, const OUT: usize, L, O, I: Iterator> {
     nn: &'a mut NNTrainer<IN, OUT, L, O>,
@@ -89,6 +104,9 @@ where
     }
 }
 
+/// [`Iterator`] over the outputs and losses of a [`NeuralNetwork`] during training.
+///
+/// Created by `Training::losses`.
 #[must_use = "`Iterators` must be consumed to do work."]
 pub struct TrainingLosses<'a, const IN: usize, const OUT: usize, L, O, I: Iterator> {
     nn: &'a mut NNTrainer<IN, OUT, L, O>,

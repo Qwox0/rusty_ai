@@ -59,6 +59,7 @@ impl<'a, const N: usize> Input<N> {
         Self::try_from(vec).unwrap()
     }
 
+    /// Returns all input elements as a slice.
     pub fn as_slice(&self) -> &[f64] {
         self
     }

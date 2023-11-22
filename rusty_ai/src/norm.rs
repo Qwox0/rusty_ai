@@ -20,16 +20,18 @@ pub enum Norm {
 }
 
 impl Norm {
-    pub fn calculate(&self, elements: impl Iterator<Item = f64>) -> f64 {
+    /// Calculates the Norm of type `self` for the `elements`.
+    pub fn calculate(self, elements: impl IntoIterator<Item = f64>) -> f64 {
+        let elements = elements.into_iter();
         match self {
             Norm::Infinity => elements.map(f64::abs).reduce(f64::max).unwrap_or(0.0),
             Norm::One => elements.map(f64::abs).sum(),
             Norm::Two => elements.map(|x| x * x).sum::<f64>().sqrt(),
             Norm::Integer(i) => {
-                elements.map(f64::abs).map(|x| x.powi(*i)).sum::<f64>().powf(1.0 / *i as f64)
+                elements.map(f64::abs).map(|x| x.powi(i)).sum::<f64>().powf(1.0 / i as f64)
             },
             Norm::Float(f) => {
-                elements.map(f64::abs).map(|x| x.powf(*f)).sum::<f64>().powf(f.recip())
+                elements.map(f64::abs).map(|x| x.powf(f)).sum::<f64>().powf(f.recip())
             },
         }
     }

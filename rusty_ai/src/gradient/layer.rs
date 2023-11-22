@@ -3,23 +3,29 @@ use crate::{
     gradient::aliases::{BiasGradient, WeightGradient},
     matrix::Matrix,
     traits::default_params_chain,
-    util::constructor,
     ParamsIter,
 };
+#[allow(unused_imports)]
+use crate::{layer::Layer, Gradient};
 use serde::{Deserialize, Serialize};
 use std::iter::once;
 
-/// Contains the estimated Gradient of the Costfunction with respect to the
-/// weights and the bias of a layer in
+/// Contains the estimated Gradient of the loss function with respect to the
+/// weights and the bias in a layer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GradientLayer {
-    pub weight_gradient: WeightGradient,
-    pub bias_gradient: BiasGradient,
+    pub(super) weight_gradient: WeightGradient,
+    pub(super) bias_gradient: BiasGradient,
 }
 
 impl GradientLayer {
-    constructor! { pub new -> weight_gradient: Matrix<f64>, bias_gradient: LayerBias }
+    /// Creates part of a [`Gradient`] which represents the derivatives with respect to the
+    /// parameters in a [`Layer`].
+    pub fn new(weight_gradient: Matrix<f64>, bias_gradient: LayerBias) -> Self {
+        Self { weight_gradient, bias_gradient }
+    }
 
+    /// Iterates through the parameters of the layer mutably.
     pub fn iter_mut_neurons<'a>(
         &'a mut self,
     ) -> impl Iterator<Item = (&'a mut Vec<f64>, &'a mut f64)> {

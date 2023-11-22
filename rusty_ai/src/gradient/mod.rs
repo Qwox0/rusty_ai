@@ -2,6 +2,8 @@
 //!
 //! This module contains type definitions for documentation purposes.
 
+#[allow(unused_imports)]
+use crate::NeuralNetwork;
 use crate::*;
 use serde::{Deserialize, Serialize};
 
@@ -9,12 +11,14 @@ pub mod aliases;
 mod layer;
 pub use self::layer::GradientLayer;
 
+/// Contains the derivatives of the total loss with respect to the parameters of a [`NeuralNetwork`]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, derive_more::From)]
 pub struct Gradient {
     pub(crate) layers: Vec<GradientLayer>,
 }
 
 impl Gradient {
+    /// Sets every element of `self` to `0`.
     pub fn set_zero(&mut self) {
         for l in self.layers.iter_mut() {
             l.bias_gradient.fill(0.0);

@@ -4,6 +4,7 @@
 #![feature(iter_array_chunks)]
 #![feature(portable_simd)]
 #![feature(anonymous_lifetime_in_impl_trait)]
+#![feature(associated_type_defaults)]
 #![doc = include_str!("../../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -21,7 +22,6 @@ pub mod neural_network;
 mod norm;
 pub mod optimizer;
 mod propagation;
-pub mod results;
 pub mod trainer;
 pub mod training;
 mod traits;
@@ -35,20 +35,22 @@ pub use matrix;
 pub use neural_network::{BuildLayer, NNBuilder, NeuralNetwork};
 pub use norm::Norm;
 pub use optimizer::{Optimizer, OptimizerValues};
-pub use propagation::{PropagationResult, VerbosePropagation};
+pub use propagation::VerbosePropagation;
 pub use traits::ParamsIter;
 
+/// # `rusty_ai` prelude
+///
 /// includes everything
 pub mod prelude {
     pub use crate::{
         bias::LayerBias,
+        clip_gradient_norm::ClipGradientNorm,
         data::{DataBuilder, Pair, PairList},
         gradient::aliases::*,
         loss_function::*,
         matrix::*,
         neural_network::builder::{markers::*, BuilderNoParts, BuilderWithParts},
         optimizer::{adam::*, sgd::*, *},
-        results::*,
         trainer::{markers::*, *},
         training::*,
         *,

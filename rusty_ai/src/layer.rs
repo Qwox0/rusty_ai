@@ -1,5 +1,7 @@
 //! # Layer module
 
+#[allow(unused_imports)]
+use crate::NeuralNetwork;
 use crate::{
     bias::LayerBias,
     gradient::aliases::{InputGradient, OutputGradient},
@@ -21,6 +23,11 @@ pub struct Layer {
 }
 
 impl Layer {
+    /// Creates a new layer of a [`NeuralNetwork`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the height of `weights` doesn't match the length of `bias`.
     pub fn new(weights: Matrix<f64>, bias: LayerBias, activation_function: ActivationFn) -> Self {
         assert_eq!(
             weights.get_height(),
@@ -30,6 +37,7 @@ impl Layer {
         Self { weights, bias, activation_function }
     }
 
+    /// Returns the [`ActivationFn`] of the Layer.
     pub fn get_activation_function(&self) -> &ActivationFn {
         &self.activation_function
     }
@@ -47,30 +55,30 @@ impl Layer {
         Layer::new(weights, bias, acti_fn)
     }
 
+    /// Returns the number of neurons in the layer which is equal to the number of outputs.
     pub fn get_neuron_count(&self) -> usize {
         self.weights.get_height()
     }
 
+    /// Returns the number of layer inputs.
     pub fn get_input_count(&self) -> usize {
         self.weights.get_width()
     }
 
-    fn weighted_sums(&self, inputs: &[f64]) -> Vec<f64> {
-        (&self.weights * inputs).add_entries(&self.bias)
-    }
-
-    /// An Input layer doesn't change the input, but still multiplies by the
-    /// identity matrix and uses the identity activation function. It might
-    /// be a good idea to skip the Input layer to reduce calculations.
+    /// # Panics
+    ///
+    /// Panics if the length of `inputs` doesn't match the input dimension.
     pub fn propagate(&self, inputs: &[f64]) -> Vec<f64> {
-        let tmp = self.weighted_sums(inputs);
-        self.activation_function.propagate(tmp)
+        let weighted_sums = (&self.weights * inputs).add_entries(&self.bias);
+        self.activation_function.propagate(weighted_sums)
     }
 
+    /// Returns an [`Iterator`] over the inputs and biases of the layer neurons.
     pub fn iter_neurons(&self) -> impl Iterator<Item = (&Vec<f64>, &f64)> {
         self.weights.iter_rows().zip(&self.bias)
     }
 
+    /// Returns an [`Iterator`] over the inputs and biases of the layer neurons.
     pub fn iter_mut_neurons(&mut self) -> impl Iterator<Item = (&mut Vec<f64>, &mut f64)> {
         self.weights.iter_rows_mut().zip(&mut self.bias)
     }
@@ -109,10 +117,12 @@ impl Layer {
         inputs_grad
     }
 
+    /// Creates a [`GradientLayer`] with the same dimensions as `self` and every element
+    /// initialized to `0.0`
     pub fn init_zero_gradient(&self) -> GradientLayer {
         let (width, height) = self.weights.get_dimensions();
-        let bias_change = self.bias.clone_with_zeros();
-        GradientLayer::new(Matrix::with_zeros(width, height), bias_change)
+        let bias_grad = self.bias.clone_with_zeros();
+        GradientLayer::new(Matrix::with_zeros(width, height), bias_grad)
     }
 }
 

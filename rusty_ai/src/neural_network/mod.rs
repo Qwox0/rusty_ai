@@ -1,5 +1,7 @@
 //! # NN module
 
+#[allow(unused_imports)]
+use crate::trainer::NNTrainer;
 use crate::{
     gradient::aliases::OutputGradient,
     layer::Layer,
@@ -30,20 +32,27 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         NeuralNetwork { layers }
     }
 
+    /// Converts `self` to a [`NNTrainerBuilder`] that can be used to create a [`NNTrainer`]
+    ///
+    /// Used to
     #[inline]
     pub fn to_trainer(self) -> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
         NNTrainerBuilder::new(self)
     }
 
+    /// Returns the layers of `self` as a slice.
     #[inline]
     pub fn get_layers(&self) -> &[Layer] {
         &self.layers
     }
 
+    /// Creates a [`Gradient`] with the same dimensions as `self` and every element initialized to
+    /// `0.0`
     pub fn init_zero_gradient(&self) -> Gradient {
         self.layers.iter().map(Layer::init_zero_gradient).collect()
     }
 
+    /// Propagates an [`Input`] through the neural network and returns its output.
     pub fn propagate(&self, input: &Input<IN>) -> [f64; OUT] {
         let input = Cow::from(input.as_slice());
         self.layers
@@ -54,12 +63,14 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
             .expect("last layer should have `OUT` neurons")
     }
 
-    /// Iterates over a `batch` of inputs and returns an [`Iterator`] over the outputs.
+    /// Iterates over a `batch` of inputs, propagates them and returns an [`Iterator`] over the
+    /// outputs.
     ///
     /// This [`Iterator`] must be consumed otherwise no calculations are done.
     ///
     /// If you also want to calculate losses use `test` or `prop_with_test`.
     #[must_use = "`Iterators` must be consumed to do work."]
+    #[inline]
     pub fn propagate_batch<'a, B>(
         &'a self,
         batch: B,
@@ -70,7 +81,12 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         batch.into_iter().map(|i| self.propagate(i))
     }
 
-    /// like `propagate` but returns the output of every layer ([`VerbosePropagation`]).
+    /// Propagates an [`Input`] through the neural network and returns the input and the outputs of
+    /// every layer.
+    ///
+    /// If only the final output is needed, use `propagate` instead.
+    ///
+    /// This is used internally during training.
     pub fn verbose_propagate(&self, input: &Input<IN>) -> VerbosePropagation<OUT> {
         let mut outputs = Vec::with_capacity(self.layers.len() + 1);
         let nn_out = self.layers.iter().fold(input.to_vec(), |input, layer| {
@@ -105,6 +121,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
             });
     }
 
+    /// Tests the neural network.
     pub fn test<L: LossFunction<OUT>>(
         &self,
         input: &Input<IN>,

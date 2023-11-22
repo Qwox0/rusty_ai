@@ -9,7 +9,9 @@ use std::fmt::Display;
 /// use [`OptimizerValues::init_with_layers`] to create the optimizer: [`SGD_`]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SGD {
+    /// The learning rate used by the sgd optimizer.
     pub learning_rate: f64,
+    /// The `momentum` constant used by the sgd optimizer.
     pub momentum: f64,
 }
 

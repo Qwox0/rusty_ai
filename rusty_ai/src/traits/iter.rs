@@ -1,5 +1,8 @@
+/// trait for iterating over the parameters of type [`f64`].
 pub trait ParamsIter {
+    /// creates an [`Iterator`] over references to the parameters of `self`
     fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64>;
+    /// creates an [`Iterator`] over mutable references to the parameters of `self`
     fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64>;
 }
 

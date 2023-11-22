@@ -1,4 +1,8 @@
+//! # Gradient aliases module
+
 use crate::bias::LayerBias;
+#[allow(unused_imports)]
+use crate::layer::Layer;
 use matrix::Matrix;
 
 //    L-1                   L
@@ -38,16 +42,16 @@ use matrix::Matrix;
 // dC/db_L       = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
 //               = (o_L_i - e_i) *     f'(z_i)
 
-/// derivatives of the total cost with respect to the neuron activations
+/// derivatives of the total loss with respect to the neuron activations
 pub type OutputGradient = Vec<f64>;
 
-/// derivatives of the total cost with respect to the weighted sums
+/// derivatives of the total loss with respect to the weighted sums
 pub type WeightedSumGradient = Vec<f64>;
 
-/// derivatives of the total cost with respect to the incoming weights
+/// derivatives of the total loss with respect to the incoming weights
 pub type WeightGradient = Matrix<f64>;
-/// derivatives of the total cost with respect to the previous neuron
+/// derivatives of the total loss with respect to the previous neuron
 /// activations
 pub type InputGradient = Vec<f64>;
-/// derivatives of the total cost with respect to the bias/biases
+/// derivatives of the total loss with respect to the biases of a [`Layer`].
 pub type BiasGradient = LayerBias;

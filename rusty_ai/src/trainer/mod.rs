@@ -8,6 +8,9 @@ use std::{fmt::Display, iter::Map};
 mod builder;
 pub use builder::{markers, NNTrainerBuilder};
 
+/// Trainer for a [`NeuralNetwork`].
+///
+/// Can be constructed using a [`NNTrainerBuilder`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NNTrainer<const IN: usize, const OUT: usize, L, O> {
     network: NeuralNetwork<IN, OUT>,
@@ -19,29 +22,21 @@ pub struct NNTrainer<const IN: usize, const OUT: usize, L, O> {
 }
 
 impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
-    fn new(
-        network: NeuralNetwork<IN, OUT>,
-        loss_function: L,
-        optimizer: O,
-        retain_gradient: bool,
-        clip_gradient_norm: Option<ClipGradientNorm>,
-    ) -> Self {
-        let gradient = network.init_zero_gradient();
-        Self { network, gradient, loss_function, retain_gradient, optimizer, clip_gradient_norm }
-    }
-
+    /// Returns a reference to the underlying [`NeuralNetwork`].
     pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> {
         &self.network
     }
 
+    /// Converts `self` into the underlying [`NeuralNetwork`]. This can be used after the training
+    /// is finished.
+    pub fn into_nn(self) -> NeuralNetwork<IN, OUT> {
+        self.network
+    }
+
+    /// Propagates an [`Input`] through the underlying neural network and returns its output.
     #[inline]
     pub fn propagate(&self, input: &Input<IN>) -> [f64; OUT] {
         self.network.propagate(input)
-    }
-
-    #[inline]
-    pub fn verbose_propagate(&self, input: &Input<IN>) -> VerbosePropagation<OUT> {
-        self.network.verbose_propagate(input)
     }
 
     /// Iterates over a `batch` of inputs and returns an [`Iterator`] over the outputs.
@@ -58,21 +53,39 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
     where
         B: IntoIterator<Item = &'a Input<IN>>,
     {
-        batch.into_iter().map(|input| self.propagate(input))
+        self.network.propagate_batch(batch)
     }
 
+    /// Propagates an [`Input`] through the underlying neural network and returns the input and the
+    /// outputs of every layer.
+    ///
+    /// If only the final output is needed, use `propagate` instead.
+    ///
+    /// This is used internally during training.
+    #[inline]
+    pub fn verbose_propagate(&self, input: &Input<IN>) -> VerbosePropagation<OUT> {
+        self.network.verbose_propagate(input)
+    }
+
+    /// Sets every parameter of the interal [`Gradient`] to `0.0`.
     #[inline]
     pub fn set_zero_gradient(&mut self) {
         self.gradient.set_zero()
     }
 
-    /// this calls `set_zero_gradient` based on the `self.retain_gradient` option.
+    /// Sets every parameter of the interal [`Gradient`] to `0.0` if `self.retain_gradient` is
+    /// `false`, otherwise this does nothing.
+    ///
+    /// If you always want to reset the [`Gradient`] use `set_zero_gradient` instead.
     pub fn maybe_set_zero_gradient(&mut self) {
         if !self.retain_gradient {
             self.set_zero_gradient();
         }
     }
 
+    /// Clips the internal [`Gradient`] based on `self.clip_gradient_norm`.
+    ///
+    /// If `self.clip_gradient_norm` is [`None`], this does nothing.
     pub fn clip_gradient(&mut self) {
         if let Some(clip_gradient_norm) = self.clip_gradient_norm {
             clip_gradient_norm.clip_gradient_pytorch(&mut self.gradient);
@@ -84,6 +97,18 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
 impl<const IN: usize, const OUT: usize, L, EO, O> NNTrainer<IN, OUT, L, O>
 where L: LossFunction<OUT, ExpectedOutput = EO>
 {
+    fn new(
+        network: NeuralNetwork<IN, OUT>,
+        loss_function: L,
+        optimizer: O,
+        retain_gradient: bool,
+        clip_gradient_norm: Option<ClipGradientNorm>,
+    ) -> Self {
+        let gradient = network.init_zero_gradient();
+        Self { network, gradient, loss_function, retain_gradient, optimizer, clip_gradient_norm }
+    }
+
+    /// Gets the [`LossFunction`] used during training.
     #[inline]
     pub fn get_loss_function(&self) -> &L {
         &self.loss_function
@@ -164,6 +189,8 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
 impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O>
 where O: Optimizer
 {
+    /// Uses the internal [`Optimizer`] and [`Gradient`] to optimize the internal
+    /// [`NeuralNetwork`] once.
     #[inline]
     pub fn optimize_trainee(&mut self) {
         self.optimizer.optimize(&mut self.network, &self.gradient);
@@ -175,6 +202,7 @@ where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
 {
+    /// Trains the internal [`NeuralNetwork`] lazily.
     #[inline]
     pub fn train<'a, B>(&'a mut self, batch: B) -> Training<Self, B::IntoIter>
     where
@@ -198,86 +226,7 @@ where
             .optimizer(V::default())
             .build()
     }
-
-    /*
-    #[inline]
-    pub fn propagate_pairs<'a, B>(
-        &'a self,
-        batch: B,
-    ) -> Prop<'a, IN, OUT, L, O, Map<B::IntoIter, impl FnMut(B::Item) -> (Input<'a, IN>, &'a EO)>>
-    where
-        B: IntoIterator + 'a,
-        B::Item: Into<(Input<'a, IN>, &'a EO)>,
-        EO: 'a,
-    {
-        Prop::new(self, batch.into_iter().map(Into::into))
-    }
-
-    #[inline]
-    pub fn backpropagate<'a, B>(
-        &'a mut self,
-        batch: B,
-    ) -> Backprop<'a, IN, OUT, L, O, Map<B::IntoIter, impl FnMut(B::Item) -> (Input<'a, IN>, &'a EO)>>
-    where
-        B: IntoIterator + 'a,
-        B::Item: Into<(Input<'a, IN>, &'a EO)>,
-        EO: 'a,
-    {
-        Backprop::new(self, batch.into_iter().map(Into::into))
-    }
-
-    #[inline]
-    pub fn backpropagate_new_pairs<'a, I, U>(
-        &'a mut self,
-        inputs: impl IntoIterator<IntoIter = I>,
-        expected_outputs: impl IntoIterator<IntoIter = U>,
-    ) -> Backprop<'a, IN, OUT, L, O, Zip<I, U>>
-    where
-        I: Iterator<Item = Input<'a, IN>> + 'a,
-        U: Iterator<Item = &'a EO> + 'a,
-        EO: 'a,
-    {
-        Backprop::new(self, inputs.into_iter().zip(expected_outputs))
-    }
-
-    pub fn calculate_loss(&self, res: &PropagationResult<OUT>, expected_output: &EO) -> f64 {
-        self.calculate_loss_(&res.0, expected_output)
-    }
-
-    pub fn calculate_loss_(&self, out: &[f64; OUT], expected_output: &EO) -> f64 {
-        self.loss_function.propagate(out, expected_output)
-    }
-
-    pub fn calc_gradient<'a>(&mut self, batch: impl IntoIterator<Item = &'a Pair<IN, EO>>)
-    where EO: 'a {
-        for (input, expected_output) in batch.into_iter().map(Into::into) {
-            let out = self.network.verbose_propagate(input);
-            //self.backpropagation(out, expected_output);
-        }
-    }
-
-    /// Trains the neural network for one step/generation. Uses a small data set `data_pairs` to
-    /// find an approximation for the weights gradient. The neural network's Optimizer changes the
-    /// weights by using the calculated gradient.
-    pub fn training_step<'a>(&mut self, data_pairs: impl IntoIterator<Item = &'a Pair<IN, EO>>)
-    where EO: 'a {
-        self.maybe_set_zero_gradient();
-        self.calc_gradient(data_pairs);
-        self.maybe_clip_gradient();
-        self.optimize_trainee();
-    }
-    */
 }
-
-/*
-impl<const IN: usize, const OUT: usize, L, O, EO> Propagator<IN, OUT> for NNTrainer<IN, OUT, L, O>
-where L: LossFunction<OUT, ExpectedOutput = EO>
-{
-    fn propagate_arr(&self, input: Input<IN>) -> [f64; OUT] {
-        self.network.propagate_arr(input)
-    }
-}
-*/
 
 impl<const IN: usize, const OUT: usize, L, EO, O> Display for NNTrainer<IN, OUT, L, O>
 where

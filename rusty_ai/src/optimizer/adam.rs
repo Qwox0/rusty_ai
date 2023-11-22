@@ -4,12 +4,18 @@ use super::DEFAULT_LEARNING_RATE;
 use crate::{layer::Layer, util::Lerp, *};
 use serde::{Deserialize, Serialize};
 
-/// configuration values for the stochastic gradient descent optimizer.
+/// configuration values for the adam optimizer [`Adam_`].
+///
+/// use [`OptimizerValues::init_with_layers`] to create the optimizer: [`Adam_`]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Adam {
+    /// The learning rate used by the adam optimizer.
     pub learning_rate: f64,
+    /// The `beta1` constant used by the adam optimizer.
     pub beta1: f64,
+    /// The `beta2` constant used by the adam optimizer.
     pub beta2: f64,
+    /// The `epsilon` constant used by the adam optimizer.
     pub epsilon: f64,
 }
 

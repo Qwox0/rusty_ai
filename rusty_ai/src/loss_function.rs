@@ -5,10 +5,16 @@ use anyhow::Context;
 use derive_more::Display;
 use std::fmt::Display;
 
+/// A trait for calculating the loss from an output of the neural network and the expected output.
+///
 /// See `rusty_ai::loss_function::*` for some implementations.
 pub trait LossFunction<const OUT: usize>: Display {
-    type ExpectedOutput;
+    /// The type of the expected output used by the loss function.
+    ///
+    /// For a non default example, see [`NLLLoss`].
+    type ExpectedOutput = [f64; OUT];
 
+    /// calculates the loss from an output of the neural network and the expected output.
     fn propagate(&self, output: &[f64; OUT], expected_output: &Self::ExpectedOutput) -> f64;
 
     /*
@@ -22,12 +28,14 @@ pub trait LossFunction<const OUT: usize>: Display {
     }
     */
 
+    /// calculates the gradient of the Loss with respect to the output of the neural network.
     fn backpropagate_arr(
         &self,
         output: &[f64; OUT],
         expected_output: &Self::ExpectedOutput,
     ) -> OutputGradient;
 
+    /// calculates the gradient of the Loss with respect to the output of the neural network.
     #[inline]
     fn backpropagate(
         &self,
@@ -37,6 +45,7 @@ pub trait LossFunction<const OUT: usize>: Display {
         self.backpropagate_arr(&output.get_nn_output(), expected_output)
     }
 
+    /// validates that the neural network and `Self` are compatible.
     fn check_layers(_layer: &[Layer]) -> anyhow::Result<()> {
         anyhow::Ok(())
     }
@@ -48,8 +57,6 @@ pub trait LossFunction<const OUT: usize>: Display {
 pub struct SquaredError;
 
 impl<const N: usize> LossFunction<N> for SquaredError {
-    type ExpectedOutput = [f64; N];
-
     fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
         differences(output, expected_output).map(|err| err * err).sum()
     }
@@ -67,8 +74,6 @@ impl<const N: usize> LossFunction<N> for SquaredError {
 pub struct HalfSquaredError;
 
 impl<const N: usize> LossFunction<N> for HalfSquaredError {
-    type ExpectedOutput = [f64; N];
-
     fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
         SquaredError.propagate(output, expected_output) * 0.5
     }
@@ -86,8 +91,6 @@ impl<const N: usize> LossFunction<N> for HalfSquaredError {
 pub struct MeanSquaredError;
 
 impl<const N: usize> LossFunction<N> for MeanSquaredError {
-    type ExpectedOutput = [f64; N];
-
     fn propagate(&self, output: &[f64; N], expected_output: &[f64; N]) -> f64 {
         SquaredError.propagate(output, expected_output) / N as f64
     }
@@ -162,8 +165,8 @@ impl<const OUT: usize> LossFunction<OUT> for NLLLoss {
     }
 }
 
-// Helper
-
+/// Helper function that returns an [`Iterator`] over the differences of elements in `output` and
+/// `expected_output`.
 #[inline]
 fn differences<'a, const N: usize>(
     output: &'a [f64; N],

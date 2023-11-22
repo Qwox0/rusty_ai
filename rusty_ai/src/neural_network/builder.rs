@@ -1,3 +1,7 @@
+//! # Neural network builder module
+
+#[allow(unused_imports)]
+use crate::trainer::NNTrainer;
 use crate::{
     bias::LayerBias,
     layer::Layer,
@@ -65,11 +69,13 @@ impl Default for NNBuilder<NoDim, NoLayerParts, Seed> {
 }
 
 impl NNBuilder<NoDim, NoLayerParts, Seed> {
+    /// Uses `seed` when generating and initializing new layers with random numbers.
     pub fn rng_seed(mut self, seed: u64) -> Self {
         let _ = self.rng.0.insert(seed);
         self
     }
 
+    /// Sets the number of inputs the neural network has to `N`.
     pub fn input<const N: usize>(self) -> NNBuilder<In<N>, NoLayerParts, RngWrapper> {
         let rng = RngWrapper::new(self.rng.0);
         NNBuilder { input_dim: PhantomData, rng, ..self }
@@ -77,6 +83,8 @@ impl NNBuilder<NoDim, NoLayerParts, Seed> {
 }
 
 impl<IN, LP, RNG> NNBuilder<IN, LP, RNG> {
+    /// Sets the activation function which is used by the Builder by default when creating new
+    /// layers.
     pub fn default_activation_function(mut self, act_func: ActivationFn) -> Self {
         self.default_activation_function = act_func;
         self
@@ -96,8 +104,10 @@ pub type BuilderWithParts<const IN: usize> = NNBuilder<In<IN>, LayerParts, RngWr
 
 /// This ensures a consistent interface between [`BuilderNoParts`] and [`BuilderWithParts`].
 pub trait BuildLayer<const IN: usize>: Sized {
+    /// Add a [`Layer`] to the neural network.
     fn _layer(self, layer: Layer) -> BuilderNoParts<IN>;
 
+    /// Use [`Initializer`] to add a new [`Layer`] to the neural network.
     fn layer(
         self,
         neurons: usize,
@@ -105,6 +115,10 @@ pub trait BuildLayer<const IN: usize>: Sized {
         bias_init: Initializer<LayerBias>,
     ) -> BuilderWithParts<IN>;
 
+    /// Use the same [`Initializer`] to add multiple new [`Layer`]s to the NeuralNetwork.
+    /// Every new layer gets `activation_function`.
+    /// This method calls `clone` on `weights_init` and `bias_init`.
+    /// See `layer` method.
     fn layers(
         self,
         neurons: &[usize],
@@ -113,6 +127,7 @@ pub trait BuildLayer<const IN: usize>: Sized {
         activation_function: ActivationFn,
     ) -> BuilderNoParts<IN>;
 
+    /// similar to `layers` but uses the default activation function for every layer.
     fn layers_default(
         self,
         neurons: &[usize],
@@ -127,14 +142,21 @@ pub trait BuildLayer<const IN: usize>: Sized {
         self.layer(weights.get_height(), Initialized(weights), Initialized(bias))
     }
 
+    /// Consumes `self` to create a new [`NeuralNetwork`].
+    ///
+    /// If you want to create a [`NNTrainer`] to train the [`NeuralNetwork`], use `to_trainer`
+    /// instead.
     fn build<const OUT: usize>(self) -> NeuralNetwork<IN, OUT>;
 
+    /// Consumes `self` to create a [`NNTrainerBuilder`].
+    ///
+    /// This can be used to directly create a [`NNTrainer`] instead of an intermediate
+    /// [`NeuralNetwork`].
     fn to_trainer<const OUT: usize>(self)
     -> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer>;
 }
 
 impl<const IN: usize> BuildLayer<IN> for BuilderNoParts<IN> {
-    /// Add a [`Layer`] to the NeuralNetwork.
     fn _layer(mut self, layer: Layer) -> Self {
         assert_eq!(
             layer.get_input_count(),
@@ -145,7 +167,6 @@ impl<const IN: usize> BuildLayer<IN> for BuilderNoParts<IN> {
         self
     }
 
-    /// Use [`Initializer`] to add a new [`Layer`] to the NeuralNetwork.
     fn layer(
         mut self,
         neurons: usize,
@@ -159,10 +180,6 @@ impl<const IN: usize> BuildLayer<IN> for BuilderNoParts<IN> {
         NNBuilder { layer_parts, ..self }
     }
 
-    /// Use the same [`Initializer`] to add multiple new [`Layer`]s to the NeuralNetwork.
-    /// Every new layer gets `activation_function`.
-    /// This method calls `clone` on `weights_init` and `bias_init`.
-    /// See `layer` method.
     fn layers(
         self,
         neurons: &[usize],
@@ -177,7 +194,6 @@ impl<const IN: usize> BuildLayer<IN> for BuilderNoParts<IN> {
         })
     }
 
-    /// similar to `layers` but uses the default activation function for every layer.
     fn layers_default(
         self,
         neurons: &[usize],
