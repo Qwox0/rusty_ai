@@ -13,6 +13,7 @@ impl<T: Clone> SetLength for Vec<T> {
 }
 
 /// Calculated the dot product of the two vectors.
+#[allow(unused)]
 pub fn dot_product<T>(vec1: &[T], vec2: &[T]) -> T
 where T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T> {
     assert_eq!(vec1.len(), vec2.len());
