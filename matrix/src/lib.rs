@@ -118,9 +118,10 @@ pub type MatrixIter<'a, T: 'a> =
     Flatten<Map<Iter<'a, Vec<T>>, impl FnMut(&'a Vec<T>) -> Iter<'a, T>>>;
 pub type MatrixIterMut<'a, T: 'a> =
     Flatten<Map<IterMut<'a, Vec<T>>, impl FnMut(&'a mut Vec<T>) -> IterMut<'a, T>>>;
+pub type MatrixIntoIter<T> = Flatten<Map<IntoIter<Vec<T>>, impl FnMut(Vec<T>) -> IntoIter<T>>>;
 
 impl<T> IntoIterator for Matrix<T> {
-    type IntoIter = Flatten<Map<IntoIter<Vec<T>>, impl FnMut(Vec<T>) -> IntoIter<T>>>;
+    type IntoIter = MatrixIntoIter<T>;
     type Item = T;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -178,6 +179,21 @@ impl<T: Clone> Matrix<T> {
     }
 }
 
+impl<T> Matrix<T>
+where T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>
+{
+    pub fn mul_vec(&self, vec: &[T]) -> Vec<T> {
+        assert_eq!(
+            self.width,
+            vec.len(),
+            "Vector has incompatible dimensions (expected: {}, got: {})",
+            self.width,
+            vec.len()
+        );
+        self.iter_rows().map(|row| dot_product_unchecked(row, vec)).collect()
+    }
+}
+
 /*
 impl Matrix<f64> {
     pub fn new_random(
@@ -199,37 +215,23 @@ impl Matrix<f64> {
 }
 */
 
-impl<T> std::ops::Mul<&[T]> for &Matrix<T>
-where T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>
-{
-    type Output = Vec<T>;
-
-    fn mul(self, rhs: &[T]) -> Self::Output {
-        assert_eq!(self.width, rhs.len(), "Vector has incompatible dimensions",);
-        self.elements.iter().map(|row| dot_product(&row, &rhs)).collect::<Vec<T>>()
-    }
-}
-
 macro_rules! impl_mul {
-    ( $type:ty : $( $rhs:ty )* ) => { $(
-        impl<T> std::ops::Mul<$rhs> for $type
+    ( $( $matrix: ty )*) => { $(
+        impl<T, V> std::ops::Mul<V> for $matrix
         where
-            T: Debug + Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
+            T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
+            V: AsRef<[T]>,
         {
             type Output = Vec<T>;
 
-            fn mul(self, rhs: $rhs) -> Self::Output {
-                assert_eq!(self.width, rhs.len(), "Vector has incompatible dimensions (expected: {}, got: {})", self.width, rhs.len());
-                self.elements.iter()
-                    .map(|row| dot_product(&row, &rhs))
-                    .collect::<Vec<T>>()
+            fn mul(self, rhs: V) -> Self::Output {
+                self.mul_vec(rhs.as_ref())
             }
         }
     )* };
 }
 
-impl_mul! { Matrix<T>: Vec<T> &Vec<T> }
-impl_mul! { &Matrix<T>: Vec<T> }
+impl_mul! { Matrix<T> &Matrix<T> }
 
 impl<T> Index<(usize, usize)> for Matrix<T> {
     type Output = T;
