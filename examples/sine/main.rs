@@ -1,18 +1,9 @@
 #![feature(test)]
 
 use rusty_ai::{data::DataBuilder, loss_function::SquaredError, optimizer::sgd::SGD, *};
-use std::{
-    fmt::Display,
-    fs::File,
-    io::Write,
-    ops::Range,
-    path::{Path, PathBuf},
-};
+use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
 
 fn get_out_js_path() -> &'static str {
-    let a = env!("CARGO_MANIFEST_DIR");
-    println!("{:?}", PathBuf::from(a));
-    println!("{:?}", Path::new(".").canonicalize());
     if Path::new("./index.js").exists() {
         "./out.js"
     } else if Path::new("./examples/sine/index.js").exists() {
@@ -74,7 +65,7 @@ pub fn main() {
     println!("epoch: {:>4}, loss: {:<20}", 0, error);
     export_res(&mut js_file, &mut js_res_vars, 0, outputs, error);
 
-    for epoch in 0..EPOCHS {
+    for epoch in 1..=EPOCHS {
         ai.train(&training_data).execute();
 
         if epoch % 100 == 0 {
