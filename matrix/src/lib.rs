@@ -63,7 +63,7 @@ impl<T> Matrix<T> {
 
     /// Create a [`Matrix`] from a [`Vec`] of Rows.
     /// ```rust
-    /// # use rusty_ai::Matrix;
+    /// # use matrix::Matrix;
     /// Matrix::from_rows(vec![vec![1, 0], vec![0, 1]]);
     /// ```
     ///
@@ -71,7 +71,7 @@ impl<T> Matrix<T> {
     ///
     /// Panics if the rows don't have the same length:
     /// ```rust, should_panic
-    /// # use rusty_ai::Matrix;
+    /// # use matrix::Matrix;
     /// Matrix::from_rows(vec![vec![1, 0], vec![0]]); // -> Panics
     /// ```
     pub fn from_rows(elements: Vec<Vec<T>>) -> Matrix<T> {

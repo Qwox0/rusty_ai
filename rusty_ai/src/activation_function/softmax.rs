@@ -156,6 +156,7 @@ mod tests {
         let out = log_softmax.propagate(vec![2.0, 0.0, 0.35]);
 
         println!("out: {:?}", out);
+        assert_eq!(&out, &[-0.2832109859173988, -2.283210985917399, -1.9332109859173987]);
 
         let nllloss = NLLLoss;
 
@@ -163,8 +164,7 @@ mod tests {
         let err = nllloss.propagate(&out.unwrap(), &0);
 
         println!("err: {:?}", err);
-
-        panic!()
+        assert_eq!(err, 0.2832109859173988);
     }
 
     #[test]
@@ -175,6 +175,7 @@ mod tests {
         let out = log_softmax.propagate(input.to_vec());
 
         println!("out: {:?}", out);
+        assert_eq!(&out, &[-1.6716350953399186, -0.6826350953399186, -1.1816350953399186]);
 
         let nllloss = NLLLoss;
 
@@ -182,7 +183,6 @@ mod tests {
         let err = nllloss.propagate(&out.unwrap(), &0);
 
         println!("err: {:?}", err);
-
-        panic!()
+        assert_eq!(err, 1.6716350953399186);
     }
 }

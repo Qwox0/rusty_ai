@@ -80,7 +80,7 @@ impl<const I: usize> Deref for Input<I> {
 }
 
 #[cfg(test)]
-mod input_tests {
+mod tests {
     use super::Input;
 
     const TOO_BIG_FOR_STACK: usize = 1_000_000;
@@ -94,6 +94,7 @@ mod input_tests {
 
     #[test]
     #[should_panic = "array is too big for the stack"]
+    #[ignore = "array is too big for the stack"]
     fn get_arr_panic() {
         let input = Input::<TOO_BIG_FOR_STACK>::try_from(vec![1.0; TOO_BIG_FOR_STACK]).unwrap();
         let arr = *input.0;

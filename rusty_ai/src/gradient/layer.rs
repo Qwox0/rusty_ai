@@ -74,7 +74,7 @@ mod tests {
             .input::<3>()
             .layer(3, Initializer::PytorchDefault, Initializer::Ones())
             .build::<3>();
-        let layer = &nn.get_layers()[1];
+        let layer = &nn.get_layers()[0];
         println!("{}", layer);
         let grad = layer.init_zero_gradient();
         println!("{}", grad);
