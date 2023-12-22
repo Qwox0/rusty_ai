@@ -1,6 +1,6 @@
 #![feature(test)]
 
-//! # Results
+//! # Results without optimization
 //!
 //! ```
 //! test alloc_id_f32_0004 ... bench:          86 ns/iter (+/- 5)
@@ -18,6 +18,46 @@
 //! test mul_vec_0256      ... bench:      44,660 ns/iter (+/- 678)
 //! test mul_vec_0512      ... bench:     191,072 ns/iter (+/- 1,862)
 //! test mul_vec_1024      ... bench:     803,260 ns/iter (+/- 16,343)
+//! ```
+//!
+//! # Results with Box<[T]>
+//!
+//! ```
+//! test alloc_id_f32_0004 ... bench:          44 ns/iter (+/- 39)
+//! test alloc_id_f32_0032 ... bench:         138 ns/iter (+/- 24)
+//! test alloc_id_f32_0256 ... bench:       4,749 ns/iter (+/- 1,847)
+//! test alloc_id_f32_0512 ... bench:      26,577 ns/iter (+/- 1,825)
+//! test alloc_id_f32_1024 ... bench:     103,882 ns/iter (+/- 9,373)
+//! test alloc_id_f64_0004 ... bench:          41 ns/iter (+/- 4)
+//! test alloc_id_f64_0032 ... bench:         201 ns/iter (+/- 37)
+//! test alloc_id_f64_0256 ... bench:      12,970 ns/iter (+/- 602)
+//! test alloc_id_f64_0512 ... bench:      37,747 ns/iter (+/- 5,489)
+//! test alloc_id_f64_1024 ... bench:     604,506 ns/iter (+/- 445,550)
+//! test mul_vec_0004      ... bench:          23 ns/iter (+/- 5)
+//! test mul_vec_0032      ... bench:         425 ns/iter (+/- 90)
+//! test mul_vec_0256      ... bench:      50,055 ns/iter (+/- 4,626)
+//! test mul_vec_0512      ... bench:     204,197 ns/iter (+/- 6,917)
+//! test mul_vec_1024      ... bench:     868,463 ns/iter (+/- 37,307)
+//! ```
+//!
+//! # Results with `Box<[T]>` and own [`matrix::iter_rows::IterRows`]
+//!
+//! ```
+//! test alloc_id_f32_0004 ... bench:          20 ns/iter (+/- 0)
+//! test alloc_id_f32_0032 ... bench:         106 ns/iter (+/- 3)
+//! test alloc_id_f32_0256 ... bench:       4,502 ns/iter (+/- 108)
+//! test alloc_id_f32_0512 ... bench:      18,092 ns/iter (+/- 7,139)
+//! test alloc_id_f32_1024 ... bench:      75,477 ns/iter (+/- 13,815)
+//! test alloc_id_f64_0004 ... bench:          38 ns/iter (+/- 3)
+//! test alloc_id_f64_0032 ... bench:         198 ns/iter (+/- 5)
+//! test alloc_id_f64_0256 ... bench:       9,028 ns/iter (+/- 65)
+//! test alloc_id_f64_0512 ... bench:      49,760 ns/iter (+/- 14,681)
+//! test alloc_id_f64_1024 ... bench:     425,785 ns/iter (+/- 111,819)
+//! test mul_vec_0004      ... bench:          28 ns/iter (+/- 0)
+//! test mul_vec_0032      ... bench:         446 ns/iter (+/- 6)
+//! test mul_vec_0256      ... bench:      44,688 ns/iter (+/- 4,253)
+//! test mul_vec_0512      ... bench:     190,551 ns/iter (+/- 13,061)
+//! test mul_vec_1024      ... bench:     803,469 ns/iter (+/- 20,467)
 //! ```
 
 #[cfg(__never_compiled)]

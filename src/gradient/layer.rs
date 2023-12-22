@@ -28,7 +28,7 @@ impl GradientLayer {
     /// Iterates through the parameters of the layer mutably.
     pub fn iter_mut_neurons<'a>(
         &'a mut self,
-    ) -> impl Iterator<Item = (&'a mut Vec<f64>, &'a mut f64)> {
+    ) -> impl Iterator<Item = (&'a mut [f64], &'a mut f64)> {
         self.weight_gradient.iter_rows_mut().zip(&mut self.bias_gradient)
     }
 }

@@ -74,12 +74,12 @@ impl Layer {
     }
 
     /// Returns an [`Iterator`] over the inputs and biases of the layer neurons.
-    pub fn iter_neurons(&self) -> impl Iterator<Item = (&Vec<f64>, &f64)> {
+    pub fn iter_neurons(&self) -> impl Iterator<Item = (&[f64], &f64)> {
         self.weights.iter_rows().zip(&self.bias)
     }
 
     /// Returns an [`Iterator`] over the inputs and biases of the layer neurons.
-    pub fn iter_mut_neurons(&mut self) -> impl Iterator<Item = (&mut Vec<f64>, &mut f64)> {
+    pub fn iter_mut_neurons(&mut self) -> impl Iterator<Item = (&mut [f64], &mut f64)> {
         self.weights.iter_rows_mut().zip(&mut self.bias)
     }
 
