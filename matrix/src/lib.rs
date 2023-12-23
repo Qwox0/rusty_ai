@@ -114,8 +114,10 @@ impl<T> Matrix<T> {
     ///
     /// ```rust
     /// # use matrix::Matrix;
-    /// let m = Matrix::checked_from_iter(2, 2, 1..);
-    /// assert_eq!(m,);
+    /// let m = Matrix::checked_from_iter(2, 2, 1..).expect("could create matrix");
+    /// assert_eq!(m.get_row(0), Some([1, 2].as_slice()));
+    /// assert_eq!(m.get_row(1), Some([3, 4].as_slice()));
+    /// assert_eq!(m.get_row(2), None);
     /// ```
     pub fn checked_from_iter(
         width: usize,

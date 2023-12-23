@@ -2,6 +2,28 @@ use core::slice;
 use std::{fmt::Debug, iter::FusedIterator, marker::PhantomData, ptr::NonNull};
 
 iter_rows_impl! {
+    /// Matrix row slice [`Iterator`].
+    ///
+    /// This implementation is faster than simply using [`std::slice::Chunks`] or
+    /// [`std::slice::ChunksExact`].
+    ///
+    /// implemented similar to [`core::slice::Iter`].
+    ///
+    /// ```rust
+    /// # use matrix::Matrix;
+    /// let m = Matrix::from([[0.3, 1.0], [0.1, 2.0]]);
+    /// let v = &[10.0, 1.0];
+    /// assert_eq!(&m.mul_vec(v), &[4.0, 3.0]);
+    /// ```
+    ///
+    /// ```rust
+    /// # use matrix::Matrix;
+    /// let m = Matrix::from([[0.3, 1.0], [0.1, 2.0]]);
+    /// let mut iter = m.iter_rows();
+    /// assert_eq!(iter.next(), Some([0.3, 1.0].as_slice()));
+    /// assert_eq!(iter.next(), Some([0.1, 2.0].as_slice()));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     struct IterRows:
         slice::from_raw_parts => &'a [T],
         &'a T,
@@ -10,6 +32,7 @@ iter_rows_impl! {
 }
 
 iter_rows_impl! {
+    /// Mutable matrix row slice [`Iterator`].
     struct IterRowsMut:
         slice::from_raw_parts_mut => &'a mut [T],
         &'a mut T,
@@ -18,6 +41,7 @@ iter_rows_impl! {
 
 macro_rules! _iter_rows_impl {
     (
+        $(#[doc = $struct_doc:expr])*
         struct
         $name:ident :
         $make_slice:path =>
@@ -27,25 +51,7 @@ macro_rules! _iter_rows_impl {
         $ptr:ty,
         $($const:tt)? $(,)?
     ) => {
-        /// This implementation is faster than simply using [`std::slice::Chunks`] or
-        /// [`std::slice::ChunksExact`].
-        ///
-        /// implemented similar to [`core::slice::Iter`].
-        ///
-        /// ```rust
-        /// # use matrix::Matrix;
-        /// let m = Matrix::from([[0.3, 1.0], [0.1, 2.0]]);
-        /// let v = &[10.0, 1.0];
-        /// assert_eq!(&m.mul_vec(v), &[4.0, 3.0]);
-        /// ```
-        ///
-        /// ```rust
-        /// # use matrix::Matrix;
-        /// let m = Matrix::from([[0.3, 1.0], [0.1, 2.0]]);
-        /// panic!("{:?}", m.iter_rows().len());
-        /// panic!("{:?}", m.iter_rows());
-        /// panic!("{:?}", m.iter_rows().count());
-        /// ```
+        $(#[doc = $struct_doc])*
         #[derive(Clone)]
         pub struct $name<'a, T: Sized> {
             ptr: NonNull<T>,
