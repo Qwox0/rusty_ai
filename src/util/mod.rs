@@ -1,10 +1,8 @@
 mod entrywise_arithmetic;
 mod lerp;
-mod rng;
 
 pub use entrywise_arithmetic::*;
 pub use lerp::*;
-pub use rng::*;
 
 #[allow(unused)]
 pub fn cpu_count() -> usize {

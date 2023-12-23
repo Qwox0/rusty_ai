@@ -15,7 +15,6 @@ pub enum Initializer<T> {
     Uniform(f64, f64),
 
     /// `𝓝 (self.mean, self.std_dev^2)`
-    #[allow(missing_docs)]
     Normal { mean: f64, std_dev: f64 },
 
     /// `𝓝 (0, 1)`
@@ -40,16 +39,11 @@ pub enum Initializer<T> {
 
 impl<T> Initializer<T> {
     /// Initializes all values with the fixed value `1`.
-    #[allow(non_snake_case)]
-    pub const fn Ones() -> Self {
-        Initializer::Constant(1.0)
-    }
-
+    #[allow(non_upper_case_globals)]
+    pub const Ones: Self = Initializer::Constant(1.0);
     /// Initializes all values with the fixed value `0`.
-    #[allow(non_snake_case)]
-    pub const fn Zeros() -> Self {
-        Initializer::Constant(0.0)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const Zeros: Self = Initializer::Constant(0.0);
 }
 
 impl Initializer<Matrix<f64>> {

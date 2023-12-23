@@ -43,4 +43,7 @@ thiserror.workspace = true
 [dev-dependencies]
 # rayon = "1.7.0"
 spmc = "0.3.0"
-mnist_util.workspace = true # for examples
+
+# for examples
+mnist_util.workspace = true
+serde_json = "1.0"

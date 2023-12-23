@@ -72,7 +72,7 @@ mod tests {
     fn display_gradient_layer() {
         let nn = NNBuilder::default()
             .input::<3>()
-            .layer(3, Initializer::PytorchDefault, Initializer::Ones())
+            .layer(3, Initializer::PytorchDefault, Initializer::Ones)
             .build::<3>();
         let layer = &nn.get_layers()[0];
         println!("{}", layer);
