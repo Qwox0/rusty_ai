@@ -15,7 +15,12 @@ pub enum Initializer<T> {
     Uniform(f64, f64),
 
     /// `𝓝 (self.mean, self.std_dev^2)`
-    Normal { mean: f64, std_dev: f64 },
+    Normal {
+        /// mean of the normal distribution
+        mean: f64,
+        /// standard deviation of the normal distribution
+        std_dev: f64,
+    },
 
     /// `𝓝 (0, 1)`
     ///

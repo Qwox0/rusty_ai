@@ -9,14 +9,7 @@ pub type Pair<const IN: usize, EO> = (Input<IN>, EO);
 /// A list of data [`Pair`]s used for training a [`NeuralNetwork`].
 ///
 /// implements [`Index<usize, Output = Pair<IN, EO>>`].
-#[derive(
-    Debug,
-    Clone,
-    derive_more::From,
-    derive_more::Deref,
-    derive_more::IntoIterator,
-    derive_more::Index,
-)]
+#[derive(Debug, Clone, derive_more::From, derive_more::Deref, derive_more::Index)]
 pub struct PairList<const IN: usize, EO>(pub Vec<Pair<IN, EO>>);
 
 impl<const IN: usize, I, EO> FromIterator<(I, EO)> for PairList<IN, EO>
@@ -79,9 +72,18 @@ impl<const IN: usize, EO> PairList<IN, EO> {
     }
 }
 
+impl<const IN: usize, EO> IntoIterator for PairList<IN, EO> {
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type Item = Pair<IN, EO>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl<'a, const IN: usize, EO> IntoIterator for &'a PairList<IN, EO> {
     type IntoIter = std::slice::Iter<'a, (Input<IN>, EO)>;
-    type Item = &'a (Input<IN>, EO);
+    type Item = &'a Pair<IN, EO>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()

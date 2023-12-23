@@ -166,6 +166,7 @@ pub trait BuildLayer<const IN: usize, RNG: rand::Rng>: Sized {
         weights_init: Initializer<Matrix<f64>>,
         bias_init: Initializer<LayerBias>,
     ) -> BuilderWithParts<IN, RNG> {
+        assert_ne!(neurons, 0, "Cannot create a layer with zero neurons.");
         let mut builder = self._into_without_parts();
         let input_count = builder.last_neuron_count();
         let weights = weights_init.init_weights(&mut builder.rng, input_count, neurons);

@@ -230,7 +230,7 @@ where
 
 impl<const IN: usize, const OUT: usize, L, EO, O> Display for NNTrainer<IN, OUT, L, O>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO>,
+    L: LossFunction<OUT, ExpectedOutput = EO> + Display,
     O: Optimizer + Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -3,12 +3,14 @@
 use crate::{gradient::aliases::OutputGradient, layer::Layer, *};
 use anyhow::Context;
 use derive_more::Display;
-use std::{borrow::Borrow, fmt::Display};
+use std::borrow::Borrow;
 
 /// A trait for calculating the loss from an output of the neural network and the expected output.
 ///
 /// See `rusty_ai::loss_function::*` for some implementations.
-pub trait LossFunction<const OUT: usize>: Display {
+///
+/// `OUT`: output dimension of the [`NeuralNetwork`].
+pub trait LossFunction<const OUT: usize> {
     /// The type of the expected output used by the loss function.
     ///
     /// For a non default example, see [`NLLLoss`].
