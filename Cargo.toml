@@ -14,12 +14,11 @@ matrix = { path = "./matrix" }
 # dependencies
 anyhow = "1.0.9"
 derive_more = "0.99"
-enum_dispatch = "0.3.11"
-itertools = "0.12.0"
+# itertools = "0.12.0"
 rand = { version = "0.8.5", features = ["min_const_gen"] }
 rand_distr = "0.4.3"
 serde = { version = "1.0", features = ["derive"] }
-thiserror = "1.0.44"
+#thiserror = "1.0.44"
 
 # for examples
 mnist_util = { path = "./examples/mnist_util" }
@@ -33,12 +32,9 @@ version.workspace = true
 matrix.workspace = true
 anyhow.workspace = true
 derive_more.workspace = true
-enum_dispatch.workspace = true
-itertools.workspace = true
 rand.workspace = true
 rand_distr.workspace = true
 serde.workspace = true
-thiserror.workspace = true
 
 [dev-dependencies]
 # rayon = "1.7.0"

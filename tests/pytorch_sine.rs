@@ -59,17 +59,13 @@ where
 
 #[test]
 fn sine() {
-    fn vec<const W: usize, const H: usize>(arr: [[f64; W]; H]) -> Vec<Vec<f64>> {
-        arr.into_iter().map(Vec::from).collect()
-    }
-
-    let w1 = Matrix::from_rows(vec([
+    let w1 = Matrix::from([
         [0.4365753188883896],
         [0.9413543661345566],
         [-0.3656366713056675],
         [0.42030797989253815],
         [0.2854215078862145],
-    ]));
+    ]);
     let b1 = LayerBias::from(
         [
             -0.2996289431359356,
@@ -80,7 +76,7 @@ fn sine() {
         ]
         .to_vec(),
     );
-    let w2 = Matrix::from_rows(vec([
+    let w2 = Matrix::from([
         [
             0.21467640376231029,
             0.05910216116729297,
@@ -116,7 +112,7 @@ fn sine() {
             -0.4079191271614241,
             0.18522885908525116,
         ],
-    ]));
+    ]);
     let b2 = LayerBias::from(
         [
             -0.09097069414373553,
@@ -127,7 +123,7 @@ fn sine() {
         ]
         .to_vec(),
     );
-    let w3 = Matrix::from_rows(vec([
+    let w3 = Matrix::from([
         [
             -0.08604004294389384,
             -0.2111917324479703,
@@ -163,7 +159,7 @@ fn sine() {
             0.3271228095344742,
             -0.09826785888723547,
         ],
-    ]));
+    ]);
     let b3 = LayerBias::from(
         [
             -0.12373051458940326,
@@ -174,7 +170,7 @@ fn sine() {
         ]
         .to_vec(),
     );
-    let w4 = Matrix::from_rows(vec([
+    let w4 = Matrix::from([
         [
             0.4146347638085144,
             0.38916855376235837,
@@ -210,7 +206,7 @@ fn sine() {
             0.38662907105916866,
             0.08819483857664974,
         ],
-    ]));
+    ]);
     let b4 = LayerBias::from(
         [
             0.4170405541187824,
@@ -221,13 +217,13 @@ fn sine() {
         ]
         .to_vec(),
     );
-    let w5 = Matrix::from_rows(vec([[
+    let w5 = Matrix::from([[
         0.3413003170848592,
         0.12496182793345802,
         0.15006687729362725,
         -0.1508118644190267,
         -0.1315805547665502,
-    ]]));
+    ]]);
     let b5 = LayerBias::from([-0.1936956647543538].to_vec());
     let x = [
         [-2.0],
