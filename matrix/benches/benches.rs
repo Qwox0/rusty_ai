@@ -153,3 +153,26 @@ macro_rules! bench_alloc_zeros {
 //     alloc_zeros_f64_0512: f64 => 512,
 //     alloc_zeros_f64_1024: f64 => 1024,
 // }
+
+macro_rules! bench_from_arr {
+    ( $( $bench_name:ident : $ty:ty => $dim:expr ),* $(,)? ) => { $(
+        #[bench]
+        fn $bench_name(b: &mut Bencher) {
+            b.iter(|| black_box(Matrix::<$ty>::from(black_box([[<$ty>::default(); $dim]; $dim]))))
+        }
+    )* };
+}
+
+bench_from_arr! {
+    from_arr_f32_0004: f32 => 4,
+    from_arr_f32_0032: f32 => 32,
+    from_arr_f32_0256: f32 => 256,
+    from_arr_f32_0512: f32 => 512,
+    // from_arr_f32_1024: f32 => 1024, // -> Stack overflow
+
+    from_arr_f64_0004: f64 => 4,
+    from_arr_f64_0032: f64 => 32,
+    from_arr_f64_0256: f64 => 256,
+    // from_arr_f64_0512: f64 => 512, // -> Stack overflow
+    // from_arr_f64_1024: f64 => 1024, // -> Stack overflow
+}
