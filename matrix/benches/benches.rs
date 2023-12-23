@@ -20,7 +20,7 @@
 //! test mul_vec_1024      ... bench:     803,260 ns/iter (+/- 16,343)
 //! ```
 //!
-//! # Results with Box<[T]>
+//! # Results with `Box<[T]>`
 //!
 //! ```
 //! test alloc_id_f32_0004 ... bench:          44 ns/iter (+/- 39)
@@ -53,6 +53,13 @@
 //! test alloc_id_f64_0256 ... bench:       9,028 ns/iter (+/- 65)
 //! test alloc_id_f64_0512 ... bench:      49,760 ns/iter (+/- 14,681)
 //! test alloc_id_f64_1024 ... bench:     425,785 ns/iter (+/- 111,819)
+//! test from_arr_f32_0004 ... bench:          21 ns/iter (+/- 0)
+//! test from_arr_f32_0032 ... bench:         333 ns/iter (+/- 23)
+//! test from_arr_f32_0256 ... bench:      36,119 ns/iter (+/- 9,583)
+//! test from_arr_f32_0512 ... bench:     153,749 ns/iter (+/- 4,601)
+//! test from_arr_f64_0004 ... bench:          33 ns/iter (+/- 1)
+//! test from_arr_f64_0032 ... bench:         617 ns/iter (+/- 108)
+//! test from_arr_f64_0256 ... bench:      76,034 ns/iter (+/- 18,698)
 //! test mul_vec_0004      ... bench:          28 ns/iter (+/- 0)
 //! test mul_vec_0032      ... bench:         446 ns/iter (+/- 6)
 //! test mul_vec_0256      ... bench:      44,688 ns/iter (+/- 4,253)

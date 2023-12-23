@@ -1,6 +1,6 @@
 #![feature(test)]
+#![feature(iter_array_chunks)]
 
-use itertools::Itertools;
 use rand::Rng;
 use rand_distr::{Bernoulli, Distribution};
 use rusty_ai::{
@@ -56,9 +56,9 @@ fn gen_data(rng: &mut impl Rng, count: usize) -> PairList<2, bool> {
     Bernoulli::new(0.5)
         .unwrap()
         .sample_iter(rng)
-        .tuples()
+        .array_chunks()
         .take(count)
-        .map(|(in1, in2)| ([in1 as u8 as f64, in2 as u8 as f64], in1 ^ in2))
+        .map(|[in1, in2]| ([in1 as u8 as f64, in2 as u8 as f64], in1 ^ in2))
         .collect()
 }
 
