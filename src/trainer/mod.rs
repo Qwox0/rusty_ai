@@ -27,6 +27,11 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
         &self.network
     }
 
+    /// Returns a reference to the internal [`Gradient`].
+    pub fn get_gradient(&self) -> &Gradient {
+        &self.gradient
+    }
+
     /// Converts `self` into the underlying [`NeuralNetwork`]. This can be used after the training
     /// is finished.
     pub fn into_nn(self) -> NeuralNetwork<IN, OUT> {
@@ -241,3 +246,125 @@ where
 
 #[cfg(test)]
 mod benches;
+
+#[cfg(test)]
+mod seeded_tests {
+    use crate::{
+        optimizer::sgd::SGD, prelude::SquaredError, ActivationFn, BuildLayer, Initializer, Input,
+        NNBuilder, Norm, ParamsIter,
+    };
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+
+    #[test]
+    fn test_propagation() {
+        const SEED: u64 = 69420;
+        let mut rng = StdRng::seed_from_u64(SEED);
+
+        let ai = NNBuilder::default()
+            .rng(&mut rng)
+            .input::<2>()
+            .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::ReLU)
+            .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::ReLU)
+            .layer(3, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::Sigmoid)
+            .build::<3>();
+
+        let out = ai.propagate(&Input::new(Box::new(rng.gen())));
+
+        assert_eq!(
+            out,
+            [0.5571132267977859, 0.3835754220312069, 0.5254153762665995],
+            "incorrect output"
+        );
+    }
+
+    #[test]
+    fn test_gradient() {
+        const SEED: u64 = 69420;
+        let mut rng = StdRng::seed_from_u64(SEED);
+
+        let mut ai = NNBuilder::default()
+            .rng(&mut rng)
+            .input::<2>()
+            .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::LeakyReLU { leak_rate: 0.1 })
+            .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::Identity)
+            .layer(3, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::Sigmoid)
+            .build::<3>()
+            .to_trainer()
+            .loss_function(SquaredError)
+            .optimizer(SGD::default())
+            .retain_gradient(true)
+            .new_clip_gradient_norm(5.0, Norm::Two)
+            .build();
+
+        //let pairs = (0..5).map(|_| (Input::new(Box::new(rng.gen())),
+        // rng.gen())).collect::<Vec<_>>();
+        let pairs = (0..5)
+            .map(|_| Input::new(Box::new(rng.gen())))
+            .map(|input| {
+                let sum = input.iter().sum();
+                let prod = input.iter().product();
+                (input, [sum, prod, 0.0])
+            })
+            .collect::<Vec<_>>();
+        ai.train(&pairs).execute();
+
+        let gradient_parameters = ai.get_gradient().iter().copied().collect::<Vec<_>>();
+
+        #[rustfmt::skip]
+        const EXPECTED: &[f64] = &[-0.31527687134612725, -0.2367818186318013, 0.020418606049140496, 0.015550533247454118, -0.001738594474681532, -0.004567137662788988, 0.033859035247529076, 0.02977764834407858, 0.009605083538032784, 0.006826476555722042, -0.6146889718563872, 0.040329523770678166, -0.0050435074713498255, 0.07884882135388332, 0.01821395483674612, -0.29603217316507463, 0.03346627048986953, -0.05878503376051679, -0.2158320807897315, 0.026983231976989056, -0.24554656005324604, 0.02887071882597527, -0.05843956975876532, -0.17243502863504168, 0.022467020003968326, 0.1311511999366582, -0.014868359886407069, 0.02611204347681894, 0.09796223173142266, -0.01217871097874241, -0.054034033529765414, 0.005815532263211411, -0.008911633440899904, -0.034708137931585205, 0.0043542213467064154, 0.2911033451780113, -0.033617414595422807, 0.06373660842764983, 0.21011649849556374, -0.026765687357284716, -0.6362499755696547, -0.5444227081050653, 0.288719083038049, -0.09632461875232448, 0.6412639438519863, -0.2336931253665935, -0.005400196361134401, 0.34277389227803257, -0.01683276960395113, 0.18829397721654298, 0.22312222066614518, 0.0668809841607016, -0.21284993370400693, 0.004724430001813006, -0.06979054513916816, 0.6470015756088618, 0.15347488461571596, -0.7149338885041989, 0.04221164029892477, -0.30940480020839184, -0.4461655070529444, 0.4131071925533384, 1.1799836756082676];
+
+        assert_eq!(gradient_parameters.as_slice(), EXPECTED, "incorrect gradient elements")
+    }
+
+    #[test]
+    fn test_training() {
+        const SEED: u64 = 69420;
+        let mut rng = StdRng::seed_from_u64(SEED);
+
+        let mut ai = NNBuilder::default()
+            .rng(&mut rng)
+            .input::<2>()
+            .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::ReLU)
+            .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::ReLU)
+            .layer(3, Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .activation_function(ActivationFn::Sigmoid)
+            .build::<3>()
+            .to_trainer()
+            .loss_function(SquaredError)
+            .optimizer(SGD::default())
+            .retain_gradient(true)
+            .new_clip_gradient_norm(5.0, Norm::Two)
+            .build();
+
+        #[rustfmt::skip]
+        const PARAMS: &[f64] = &[0.006887838447803829, 0.6393999304942023, 0.34936912393918684, -0.4047589840789866, -0.37941201236065963, -0.06972914538603359, 0.43380493311798884, 0.2808271748488419, -0.16417981196958276, -0.2391556648674174, 0.2108008059374471, -0.5508539013658884, 0.30609095651501483, 0.0010017747733542803, -0.2439626553503762, 0.1739790758995245, -0.35504329049611705, 0.2807057469930026, -0.021561872961492812, -0.2224985097439988, 0.18025297158732995, -0.3118176626548729, 0.26646269895835534, -0.4111905543260018, 0.07174135969857715, -0.3910179151410674, -0.14027757282776454, 0.39256214288992813, -0.1804116593475944, -0.06183204149127286, 0.30148591157620747, -0.07045111402421522, 0.15330561621693045, -0.05987140494810189, 0.16392997905786127, -0.41157175802213586, 0.06448666319062674, 0.3549482907502232, -0.1752947400236416, 0.17664346553608495, 0.4130563079306305, 0.12362639119103341, -0.4340562639542757, -0.09883618080186729, -0.05709696039076012, 0.3577843982370516, 0.1972113234741723, -0.2053210678418987, -0.03384982362548067, -0.32891932430635185, -0.26690036384241284, -0.24283061456061486, 0.23016935417459677, 0.23254520394702988, 0.3651839637543794, -0.310479259746818, -0.3017997213731933, 0.08646500039777222, -0.17584424522752867, 0.29123399909249675, 0.06853079258143152, -0.3543537884722492, 0.2413959457728258];
+        let params = ai.get_network().iter().copied().collect::<Vec<_>>();
+        assert_eq!(&params, PARAMS, "incorrect seed");
+
+        let input = Input::new(Box::new(rng.gen()));
+        let eo = rng.gen();
+        let pair = (input, eo);
+        let mut res_iter = ai.train([&pair]).losses();
+        let (out, loss) = res_iter.next().unwrap();
+        assert!(res_iter.count() == 0);
+        assert_eq!(
+            out,
+            [0.5571132267977859, 0.3835754220312069, 0.5254153762665995],
+            "incorrect output"
+        );
+        assert_eq!(loss, 0.09546645303826229, "incorrect loss");
+
+        #[rustfmt::skip]
+        const TRAINED_PARAMS: &[f64] = &[0.006923563018772624, 0.6394027251638263, 0.34936912393918684, -0.4047589840789866, -0.37941201236065963, -0.06972914538603359, 0.4338005056392426, 0.2808268284950572, -0.16417981196958276, -0.2391556648674174, 0.2108390906551984, -0.5508539013658884, 0.30609095651501483, 0.0009970300061099876, -0.2439626553503762, 0.1740371485495925, -0.35504329049611705, 0.2807057469930026, -0.021468064744182752, -0.2224985097439988, 0.18025297158732995, -0.3118176626548729, 0.26646269895835534, -0.4111905543260018, 0.07174135969857715, -0.3910179151410674, -0.14027757282776454, 0.39256214288992813, -0.1804116593475944, -0.06183204149127286, 0.30148591157620747, -0.07045111402421522, 0.15330561621693045, -0.05987140494810189, 0.16392997905786127, -0.41157175802213586, 0.06448666319062674, 0.3549482907502232, -0.1752947400236416, 0.17664346553608495, 0.41327636150634567, 0.12362639119103341, -0.4340562639542757, -0.09883618080186729, -0.05709696039076012, 0.3577021351880676, 0.1972113234741723, -0.2053210678418987, -0.03384982362548067, -0.32891932430635185, -0.2675398913944368, -0.24283061456061486, 0.23016935417459677, 0.23254520394702988, 0.3651839637543794, -0.3103430753259401, -0.3017997213731933, 0.08646500039777222, -0.17584424522752867, 0.29123399909249675, 0.06834789558685518, -0.3557756621890464, 0.24169872717461338];
+        let trained_params = ai.get_network().iter().copied().collect::<Vec<_>>();
+        assert_eq!(&trained_params, TRAINED_PARAMS, "incorrect trained parameters");
+    }
+}

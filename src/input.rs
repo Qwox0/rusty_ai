@@ -52,10 +52,15 @@ impl<const N: usize> TryFrom<Vec<f64>> for Input<N> {
 }
 
 impl<'a, const N: usize> Input<N> {
+    /// Create a new neural network [`Input`].
+    pub fn new(elements: Box<[f64; N]>) -> Self {
+        Input(elements)
+    }
+
     /// # Panics
     ///
     /// Panics if the length of the `val` slice doesn't match `IN`.
-    pub fn new(vec: Vec<f64>) -> Self {
+    pub fn try_from_vec(vec: Vec<f64>) -> Self {
         Self::try_from(vec).unwrap()
     }
 
