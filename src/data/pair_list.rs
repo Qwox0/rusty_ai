@@ -1,5 +1,6 @@
 use crate::input::Input;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 #[allow(unused_imports)]
 use {crate::NeuralNetwork, std::ops::Index};
 
@@ -87,6 +88,24 @@ impl<'a, const IN: usize, EO> IntoIterator for &'a PairList<IN, EO> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
+    }
+}
+
+impl<const IN: usize, EO: Send> IntoParallelIterator for PairList<IN, EO> {
+    type Item = Pair<IN, EO>;
+    type Iter = rayon::vec::IntoIter<Self::Item>;
+
+    fn into_par_iter(self) -> Self::Iter {
+        self.0.into_par_iter()
+    }
+}
+
+impl<'a, const IN: usize, EO: Sync> IntoParallelIterator for &'a PairList<IN, EO> {
+    type Item = &'a Pair<IN, EO>;
+    type Iter = rayon::slice::Iter<'a, Pair<IN, EO>>;
+
+    fn into_par_iter(self) -> Self::Iter {
+        self.0.par_iter()
     }
 }
 

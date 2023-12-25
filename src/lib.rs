@@ -5,6 +5,7 @@
 #![feature(portable_simd)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(associated_type_defaults)]
+#![feature(exact_size_is_empty)]
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

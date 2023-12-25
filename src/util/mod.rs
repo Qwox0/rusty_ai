@@ -4,7 +4,6 @@ mod lerp;
 pub use entrywise_arithmetic::*;
 pub use lerp::*;
 
-#[allow(unused)]
 pub fn cpu_count() -> usize {
     std::thread::available_parallelism().map(|x| x.get()).unwrap_or(8)
 }

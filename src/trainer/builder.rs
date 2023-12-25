@@ -1,6 +1,6 @@
 use super::NNTrainer;
 use crate::{
-    clip_gradient_norm::ClipGradientNorm, loss_function::LossFunction, NeuralNetwork, Norm,
+    clip_gradient_norm::ClipGradientNorm, loss_function::LossFunction, util, NeuralNetwork, Norm,
     OptimizerValues,
 };
 #[allow(unused_imports)]
@@ -26,6 +26,7 @@ pub struct NNTrainerBuilder<const IN: usize, const OUT: usize, L, O> {
     optimizer: O,
     retain_gradient: bool,
     clip_gradient_norm: Option<ClipGradientNorm>,
+    training_threads: usize,
 }
 
 impl<const IN: usize, const OUT: usize> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
@@ -33,6 +34,7 @@ impl<const IN: usize, const OUT: usize> NNTrainerBuilder<IN, OUT, NoLossFunction
     ///
     /// `retain_gradient`: `false`
     /// `clip_gradient_norm`: [`None`]
+    /// `training_threads`: [`std::thread::available_parallelism`]
     pub fn new(network: NeuralNetwork<IN, OUT>) -> Self {
         NNTrainerBuilder {
             network,
@@ -40,6 +42,7 @@ impl<const IN: usize, const OUT: usize> NNTrainerBuilder<IN, OUT, NoLossFunction
             retain_gradient: false,
             optimizer: NoOptimizer,
             clip_gradient_norm: None,
+            training_threads: util::cpu_count(),
         }
     }
 }
@@ -74,6 +77,12 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainerBuilder<IN, OUT, L, O> {
         let clip_grad_norm = ClipGradientNorm::new(norm_type, max_norm);
         self.clip_gradient_norm(clip_grad_norm)
     }
+
+    /// Sets the number of cpu threads used for training. currently not working (TODO)
+    pub fn training_threads(mut self, count: usize) -> Self {
+        self.training_threads = count;
+        self
+    }
 }
 
 impl<const IN: usize, const OUT: usize, EO, L, O> NNTrainerBuilder<IN, OUT, L, O>
@@ -89,6 +98,7 @@ where
             optimizer,
             retain_gradient,
             clip_gradient_norm,
+            training_threads: _,
         } = self;
         let optimizer = optimizer.init_with_layers(network.get_layers()).into();
 

@@ -169,6 +169,39 @@ pub use _bench_example_epoch as bench_example_epoch;
 /// test benches::epoch_datacount_900_neurons_500 ... bench:   3,930,385 ns/iter (+/- 587,206)
 /// test benches::epoch_datacount_900_neurons_900 ... bench:   6,668,852 ns/iter (+/- 985,858)
 /// ```
+///
+/// # Results with rayon
+///
+/// ```
+/// test benches::epoch_datacount_100_neurons_003 ... bench:      44,367 ns/iter (+/- 3,261)
+/// test benches::epoch_datacount_100_neurons_005 ... bench:      47,409 ns/iter (+/- 7,531)
+/// test benches::epoch_datacount_100_neurons_010 ... bench:      58,925 ns/iter (+/- 4,591)
+/// test benches::epoch_datacount_100_neurons_100 ... bench:     161,681 ns/iter (+/- 34,975)
+/// test benches::epoch_datacount_100_neurons_500 ... bench:     424,835 ns/iter (+/- 86,984)
+/// test benches::epoch_datacount_100_neurons_900 ... bench:     800,583 ns/iter (+/- 131,383)
+/// test benches::epoch_datacount_500_neurons_003 ... bench:     143,521 ns/iter (+/- 19,674)
+/// test benches::epoch_datacount_500_neurons_005 ... bench:     144,590 ns/iter (+/- 22,819)
+/// test benches::epoch_datacount_500_neurons_010 ... bench:     166,325 ns/iter (+/- 15,133)
+/// test benches::epoch_datacount_500_neurons_030 ... bench:     237,854 ns/iter (+/- 39,518)
+/// test benches::epoch_datacount_500_neurons_050 ... bench:     303,969 ns/iter (+/- 58,847)
+/// test benches::epoch_datacount_500_neurons_070 ... bench:     423,059 ns/iter (+/- 121,634)
+/// test benches::epoch_datacount_500_neurons_090 ... bench:     452,006 ns/iter (+/- 140,686)
+/// test benches::epoch_datacount_500_neurons_100 ... bench:     536,609 ns/iter (+/- 198,314)
+/// test benches::epoch_datacount_500_neurons_200 ... bench:     920,333 ns/iter (+/- 349,582)
+/// test benches::epoch_datacount_500_neurons_300 ... bench:   1,354,631 ns/iter (+/- 610,535)
+/// test benches::epoch_datacount_500_neurons_400 ... bench:   1,362,134 ns/iter (+/- 414,454)
+/// test benches::epoch_datacount_500_neurons_500 ... bench:   1,371,858 ns/iter (+/- 227,611)
+/// test benches::epoch_datacount_500_neurons_600 ... bench:   1,624,216 ns/iter (+/- 283,872)
+/// test benches::epoch_datacount_500_neurons_700 ... bench:   1,945,982 ns/iter (+/- 438,969)
+/// test benches::epoch_datacount_500_neurons_800 ... bench:   2,148,179 ns/iter (+/- 314,916)
+/// test benches::epoch_datacount_500_neurons_900 ... bench:   2,401,087 ns/iter (+/- 414,738)
+/// test benches::epoch_datacount_900_neurons_003 ... bench:     231,682 ns/iter (+/- 60,844)
+/// test benches::epoch_datacount_900_neurons_005 ... bench:     237,438 ns/iter (+/- 62,057)
+/// test benches::epoch_datacount_900_neurons_010 ... bench:     242,021 ns/iter (+/- 49,833)
+/// test benches::epoch_datacount_900_neurons_100 ... bench:     644,834 ns/iter (+/- 145,178)
+/// test benches::epoch_datacount_900_neurons_500 ... bench:   2,303,908 ns/iter (+/- 543,419)
+/// test benches::epoch_datacount_900_neurons_900 ... bench:   3,728,160 ns/iter (+/- 476,066)
+/// ```
 #[cfg(test)]
 mod benches {
     use super::*;

@@ -25,8 +25,8 @@ where
 fn test<F, L, O>(args: Args<F, L, O>)
 where
     F: Fn(usize) -> bool,
-    L: LossFunction<1, ExpectedOutput = [f64; 1]>,
-    O: Optimizer,
+    L: LossFunction<1, ExpectedOutput = [f64; 1]> + Send + Sync,
+    O: Optimizer + Send + Sync,
 {
     let Args { mut ai, data, losses, epochs, test_condition } = args;
     let test = |epoch: usize, ai: &NNTrainer<1, 1, L, O>, expected_loss: f64| {
@@ -34,12 +34,7 @@ where
 
         println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, error, error.to_bits());
         println!("    expected_loss: {:<20} {:064b}", expected_loss, expected_loss.to_bits());
-        println!(
-            "{}diff:
-        {:064b}\n",
-            " ".repeat(34),
-            error.to_bits() ^ expected_loss.to_bits()
-        );
+        println!("{}diff: {:064b}\n", " ".repeat(34), error.to_bits() ^ expected_loss.to_bits());
         let diff = (error - expected_loss).abs();
         println!("diff: {} = 10^{}", diff, diff.log10());
         assert!(diff < 1e-14);

@@ -6,6 +6,10 @@
 use crate::NeuralNetwork;
 use crate::*;
 use serde::{Deserialize, Serialize};
+use std::{
+    iter::Sum,
+    ops::{Add, AddAssign},
+};
 
 pub mod aliases;
 mod layer;
@@ -25,6 +29,12 @@ impl Gradient {
             l.weight_gradient.iter_mut().for_each(|x| *x = 0.0);
         }
     }
+
+    fn _add(&mut self, rhs: &Gradient) {
+        for (r, l) in self.iter_mut().zip(rhs.iter()) {
+            *r += *l;
+        }
+    }
 }
 
 impl FromIterator<GradientLayer> for Gradient {
@@ -40,6 +50,35 @@ impl ParamsIter for Gradient {
 
     fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64> {
         self.layers.iter_mut().map(GradientLayer::iter_mut).flatten()
+    }
+}
+
+impl Add<&Self> for Gradient {
+    type Output = Self;
+
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        self._add(rhs);
+        self
+    }
+}
+
+impl Add<Self> for Gradient {
+    type Output = Self;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self + &rhs
+    }
+}
+
+impl AddAssign<&Self> for Gradient {
+    fn add_assign(&mut self, rhs: &Self) {
+        self._add(rhs)
+    }
+}
+
+impl AddAssign<Self> for Gradient {
+    fn add_assign(&mut self, rhs: Self) {
+        self._add(&rhs)
     }
 }
 
