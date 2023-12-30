@@ -4,11 +4,12 @@ mod softmax;
 
 use crate::gradient::aliases::{OutputGradient, WeightedSumGradient};
 use derive_more::Display;
+use matrix::Float;
 use serde::{Deserialize, Serialize};
 
 /// see the specific variant for documentation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Display)]
-pub enum ActivationFn {
+pub enum ActivationFn<X> {
     /// Identity(x) = x
     /// Identity'(x) = 1
     #[default]
@@ -29,7 +30,7 @@ pub enum ActivationFn {
     /// LeakyReLU'(0) := 0
     /// see [Numerical influence of ReLU'(0) on backpropagation](https://hal.science/hal-03265059/file/Impact_of_ReLU_prime.pdf)
     #[allow(missing_docs)]
-    LeakyReLU { leak_rate: f64 },
+    LeakyReLU { leak_rate: X },
 
     /// Sigmoid(x) = 1/(1 + exp(-x)) = exp(x)/(exp(x) + 1)
     /// Sigmoid'(x) = e^(-x)/(1+e^(-x))^2 = e^x/(1+e^x)^2
@@ -90,42 +91,42 @@ pub enum ActivationFn {
     LogSoftmax,
 }
 
-impl ActivationFunction for ActivationFn {
-    fn propagate(&self, input: Vec<f64>) -> Vec<f64> {
+impl<F: Float> ActivationFunction<F> for ActivationFn<F> {
+    fn propagate(&self, input: Vec<F>) -> Vec<F> {
         use ActivationFn::*;
-        use ActivationFunction as F;
+        use ActivationFunction as AF;
         match *self {
-            Identity => F::propagate(&identity::Identity, input),
-            ReLU => F::propagate(&relu::ReLU, input),
-            LeakyReLU { leak_rate } => F::propagate(&relu::LeakyReLU { leak_rate }, input),
-            Sigmoid => F::propagate(&sigmoid::Sigmoid, input),
-            Softmax => F::propagate(&softmax::Softmax, input),
-            LogSoftmax => F::propagate(&softmax::LogSoftmax, input),
+            Identity => AF::propagate(&identity::Identity, input),
+            ReLU => AF::propagate(&relu::ReLU, input),
+            LeakyReLU { leak_rate } => AF::propagate(&relu::LeakyReLU { leak_rate }, input),
+            Sigmoid => AF::propagate(&sigmoid::Sigmoid, input),
+            Softmax => AF::propagate(&softmax::Softmax, input),
+            LogSoftmax => AF::propagate(&softmax::LogSoftmax, input),
         }
     }
 
     fn backpropagate(
         &self,
-        output_gradient: OutputGradient,
-        self_output: &[f64],
-    ) -> WeightedSumGradient {
+        output_gradient: OutputGradient<F>,
+        self_output: &[F],
+    ) -> WeightedSumGradient<F> {
         use ActivationFn::*;
-        use ActivationFunction as F;
+        use ActivationFunction as AF;
         match *self {
-            Identity => F::backpropagate(&identity::Identity, output_gradient, self_output),
-            ReLU => F::backpropagate(&relu::ReLU, output_gradient, self_output),
+            Identity => AF::backpropagate(&identity::Identity, output_gradient, self_output),
+            ReLU => AF::backpropagate(&relu::ReLU, output_gradient, self_output),
             LeakyReLU { leak_rate } => {
-                F::backpropagate(&relu::LeakyReLU { leak_rate }, output_gradient, self_output)
+                AF::backpropagate(&relu::LeakyReLU { leak_rate }, output_gradient, self_output)
             },
-            Sigmoid => F::backpropagate(&sigmoid::Sigmoid, output_gradient, self_output),
-            Softmax => F::backpropagate(&softmax::Softmax, output_gradient, self_output),
-            LogSoftmax => F::backpropagate(&softmax::LogSoftmax, output_gradient, self_output),
+            Sigmoid => AF::backpropagate(&sigmoid::Sigmoid, output_gradient, self_output),
+            Softmax => AF::backpropagate(&softmax::Softmax, output_gradient, self_output),
+            LogSoftmax => AF::backpropagate(&softmax::LogSoftmax, output_gradient, self_output),
         }
     }
 }
 
 /// Helper for [`ActivationFn`].
-pub trait ActivationFunction {
+pub trait ActivationFunction<X> {
     /// Calculates the Vector of neuron activation from `input` which should contain weighted sums.
     ///
     /// # Propagation
@@ -139,7 +140,7 @@ pub trait ActivationFunction {
     /// General case: `self(X) = Y`
     /// Usual   case: `self(x_i) = y_i` (example: ReLU)
     /// Special case: `y_i = e^x_i/(sum of e^x for x in X)` (example: Softmax)
-    fn propagate(&self, input: Vec<f64>) -> Vec<f64>;
+    fn propagate(&self, input: Vec<X>) -> Vec<X>;
 
     /// # Propagation
     ///
@@ -160,24 +161,25 @@ pub trait ActivationFunction {
     /// Simple  case: `dL/dx_i` = `dL/dy_i` * `dy_i/dx_i`
     fn backpropagate(
         &self,
-        output_gradient: OutputGradient,
-        self_output: &[f64],
-    ) -> WeightedSumGradient;
+        output_gradient: OutputGradient<X>,
+        self_output: &[X],
+    ) -> WeightedSumGradient<X>;
 }
 
+/*
 /// Similar to [`ActivationFunction`] but function can be applied to a single [`f64`]. In case of
 /// an input Vector each value is independently mapped to the output Vector.
 ///
 /// Each type implementing this trait automatically implements [`ActivationFunction`] with the
 /// behavior described above.
 trait SimpleActivationFunction: ActivationFunction {
-    fn propagate(&self, input: f64) -> f64;
+    fn propagate<X: Float>(&self, input: X) -> X;
 
-    /// Calculates the derivative of the activation function for a single value [`f64`] from the
+    /// Calculates the derivative of the activation function for a single [`Element`] from the
     /// non-derivative output of the activation function.
     /// # Panics
     /// Panics if the activation function variant only supports entire Vector calculations.
-    fn derivative_from_output(&self, self_output: f64) -> f64;
+    fn derivative_from_output<X: Float>(&self, self_output: X) -> X;
 
     /// # Backpropagation
     ///
@@ -188,22 +190,25 @@ trait SimpleActivationFunction: ActivationFunction {
     /// `y_i`: activation of neuron `i`. (`self_output`)
     /// `dL/dy_i`: `output_gradient`
     #[inline]
-    fn backpropagate(&self, output_derivative: f64, self_output: f64) -> f64 {
+    fn backpropagate<X: Float>(&self, output_derivative: X, self_output: X) -> X {
         output_derivative * self.derivative_from_output(self_output)
     }
 }
 
 impl<T: SimpleActivationFunction> ActivationFunction for T {
-    fn propagate(&self, input: Vec<f64>) -> Vec<f64> {
+    fn propagate<X: Float>(&self, input: Vec<X>) -> Vec<X> {
+        println!("input = {:?}", input);
         let prop = |x| SimpleActivationFunction::propagate(self, x);
-        input.into_iter().map(prop).collect()
+        let out = input.into_iter().map(prop).collect();
+        panic!("out = {:?}", out);
+        out
     }
 
-    fn backpropagate(
+    fn backpropagate<X: Float>(
         &self,
-        output_gradient: OutputGradient,
-        self_output: &[f64],
-    ) -> WeightedSumGradient {
+        output_gradient: OutputGradient<X>,
+        self_output: &[X],
+    ) -> WeightedSumGradient<X> {
         output_gradient
             .into_iter()
             .zip(self_output)
@@ -211,6 +216,7 @@ impl<T: SimpleActivationFunction> ActivationFunction for T {
             .collect()
     }
 }
+*/
 
 mod identity {
     use super::*;
@@ -218,13 +224,17 @@ mod identity {
     #[derive(Debug, Clone, Copy, Display)]
     pub(super) struct Identity;
 
-    impl SimpleActivationFunction for Identity {
-        fn propagate(&self, input: f64) -> f64 {
+    impl<X> ActivationFunction<X> for Identity {
+        fn propagate(&self, input: Vec<X>) -> Vec<X> {
             input
         }
 
-        fn derivative_from_output(&self, _self_output: f64) -> f64 {
-            1.0
+        fn backpropagate(
+            &self,
+            output_gradient: OutputGradient<X>,
+            _self_output: &[X],
+        ) -> WeightedSumGradient<X> {
+            output_gradient
         }
     }
 }

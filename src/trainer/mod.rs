@@ -3,10 +3,9 @@
 use crate::{clip_gradient_norm::ClipGradientNorm, training::Training, *};
 use data::Pair;
 use loss_function::LossFunction;
-use rand::seq::IteratorRandom;
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator};
+use matrix::Float;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Borrow, fmt::Display, iter::Map};
+use std::{fmt::Display, iter::Map};
 
 mod builder;
 pub use builder::{markers, NNTrainerBuilder};
@@ -15,9 +14,9 @@ pub use builder::{markers, NNTrainerBuilder};
 ///
 /// Can be constructed using a [`NNTrainerBuilder`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NNTrainer<const IN: usize, const OUT: usize, L, O> {
-    network: NeuralNetwork<IN, OUT>,
-    gradient: Gradient,
+pub struct NNTrainer<X, const IN: usize, const OUT: usize, L, O> {
+    network: NeuralNetwork<X, IN, OUT>,
+    gradient: Gradient<X>,
     loss_function: L,
     retain_gradient: bool,
     optimizer: O,
@@ -25,40 +24,46 @@ pub struct NNTrainer<const IN: usize, const OUT: usize, L, O> {
     // training_threads: usize,
 }
 
-impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
+impl<X, const IN: usize, const OUT: usize, L, O> NNTrainer<X, IN, OUT, L, O> {
     /// Returns a reference to the underlying [`NeuralNetwork`].
-    pub fn get_network(&self) -> &NeuralNetwork<IN, OUT> {
+    pub fn get_network(&self) -> &NeuralNetwork<X, IN, OUT> {
         &self.network
     }
 
     /// Returns a reference to the internal [`Gradient`].
-    pub fn get_gradient(&self) -> &Gradient {
+    pub fn get_gradient(&self) -> &Gradient<X> {
         &self.gradient
     }
 
     /// Converts `self` into the underlying [`NeuralNetwork`]. This can be used after the training
     /// is finished.
-    pub fn into_nn(self) -> NeuralNetwork<IN, OUT> {
+    pub fn into_nn(self) -> NeuralNetwork<X, IN, OUT> {
         self.network
     }
 
     /// The [`Gradient`] must have the correct dimensions.
     ///
-    /// It is recommended to create the Gradient with `NeuralNetwork::init_zero_gradient`.
-    pub fn unchecked_set_gradient(&mut self, gradient: Gradient) {
+    /// It is recommended to create the Gradient<X> with `NeuralNetwork::init_zero_gradient`.
+    pub fn unchecked_set_gradient(&mut self, gradient: Gradient<X>) {
         self.gradient = gradient;
     }
+}
 
-    /// The [`Gradient`] must have the correct dimensions.
-    ///
-    /// It is recommended to create the Gradient with `NeuralNetwork::init_zero_gradient`.
-    pub fn unchecked_add_gradient(&mut self, gradient: Gradient) {
-        self.gradient += gradient;
+impl<X: Float, const IN: usize, const OUT: usize, L, O> NNTrainer<X, IN, OUT, L, O> {
+    fn new(
+        network: NeuralNetwork<X, IN, OUT>,
+        loss_function: L,
+        optimizer: O,
+        retain_gradient: bool,
+        clip_gradient_norm: Option<ClipGradientNorm>,
+    ) -> Self {
+        let gradient = network.init_zero_gradient();
+        Self { network, gradient, loss_function, retain_gradient, optimizer, clip_gradient_norm }
     }
 
     /// Propagates an [`Input`] through the underlying neural network and returns its output.
     #[inline]
-    pub fn propagate(&self, input: &Input<IN>) -> [f64; OUT] {
+    pub fn propagate(&self, input: &Input<X, IN>) -> [X; OUT] {
         self.network.propagate(input)
     }
 
@@ -72,9 +77,9 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
     pub fn propagate_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a Input<IN>) -> [f64; OUT]>
+    ) -> Map<B::IntoIter, impl FnMut(&'a Input<X, IN>) -> [X; OUT]>
     where
-        B: IntoIterator<Item = &'a Input<IN>>,
+        B: IntoIterator<Item = &'a Input<X, IN>>,
     {
         self.network.propagate_batch(batch)
     }
@@ -86,8 +91,17 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
     ///
     /// This is used internally during training.
     #[inline]
-    pub fn verbose_propagate(&self, input: &Input<IN>) -> VerbosePropagation<OUT> {
+    pub fn verbose_propagate(&self, input: &Input<X, IN>) -> VerbosePropagation<X, OUT> {
         self.network.verbose_propagate(input)
+    }
+}
+
+impl<X: Num, const IN: usize, const OUT: usize, L, O> NNTrainer<X, IN, OUT, L, O> {
+    /// The [`Gradient`] must have the correct dimensions.
+    ///
+    /// It is recommended to create the Gradient<X> with `NeuralNetwork::init_zero_gradient`.
+    pub fn unchecked_add_gradient(&mut self, gradient: Gradient<X>) {
+        self.gradient += gradient;
     }
 
     /// Sets every parameter of the interal [`Gradient`] to `0.0`.
@@ -105,7 +119,9 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
             self.set_zero_gradient();
         }
     }
+}
 
+impl<X: Float, const IN: usize, const OUT: usize, L, O> NNTrainer<X, IN, OUT, L, O> {
     /// Clips the internal [`Gradient`] based on `self.clip_gradient_norm`.
     ///
     /// If `self.clip_gradient_norm` is [`None`], this does nothing.
@@ -117,26 +133,19 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O> {
     }
 }
 
-impl<const IN: usize, const OUT: usize, L, EO, O> NNTrainer<IN, OUT, L, O>
-where L: LossFunction<OUT, ExpectedOutput = EO>
+impl<X, const IN: usize, const OUT: usize, L, EO, O> NNTrainer<X, IN, OUT, L, O>
+where L: LossFunction<X, OUT, ExpectedOutput = EO>
 {
-    fn new(
-        network: NeuralNetwork<IN, OUT>,
-        loss_function: L,
-        optimizer: O,
-        retain_gradient: bool,
-        clip_gradient_norm: Option<ClipGradientNorm>,
-    ) -> Self {
-        let gradient = network.init_zero_gradient();
-        Self { network, gradient, loss_function, retain_gradient, optimizer, clip_gradient_norm }
-    }
-
     /// Gets the [`LossFunction`] used during training.
     #[inline]
     pub fn get_loss_function(&self) -> &L {
         &self.loss_function
     }
+}
 
+impl<X: Float, const IN: usize, const OUT: usize, L, EO, O> NNTrainer<X, IN, OUT, L, O>
+where L: LossFunction<X, OUT, ExpectedOutput = EO>
+{
     /// Propagate a [`VerbosePropagation`] Result backwards through the Neural
     /// Network. This modifies the internal [`Gradient`].
     ///
@@ -151,8 +160,8 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     ///         j              i        i
     /// n_(L-1) = 3           n_L = 2
     ///
-    /// L: current Layer with n_L Neurons called L_1, L_2, ..., L_n
-    /// L-1: previous Layer with n_(L-1) Neurons
+    /// L: current Layer<X> with n_L Neurons called L_1, L_2, ..., L_n
+    /// L-1: previous Layer<X> with n_(L-1) Neurons
     /// o_L_i: output of Neuron L_i
     /// e_i: expected output of Neuron L_i
     /// Cost: C = 0.5 * ∑ (o_L_i - e_i)^2 from i = 1 to n_L
@@ -165,7 +174,7 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     /// -> dC/dz_i = dC/do_L_i * do_L_i/dz_i = (o_L_i - e_i) * f'(z_i)
     ///
     /// w_ij: weight of connection from (L-1)_j to L_i
-    /// b_L: bias of Layer L
+    /// b_L: bias of Layer<X> L
     /// weighted sum: z_i = b_L + ∑ w_ij * o_(L-1)_j from j = 1 to n_(L-1)
     /// -> dz_i/dw_ij      = o_(L-1)_j
     /// -> dz_i/do_(L-1)_j = w_ij
@@ -178,7 +187,11 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     ///               = (o_L_i - e_i) *     f'(z_i) *       w_ij
     /// dC/db_L       = dC/do_L_i     * do_L_i/dz_i * dz_i/dw_ij
     ///               = (o_L_i - e_i) *     f'(z_i)
-    pub fn backpropagate(&mut self, verbose_prop: &VerbosePropagation<OUT>, expected_output: &EO) {
+    pub fn backpropagate(
+        &mut self,
+        verbose_prop: &VerbosePropagation<X, OUT>,
+        expected_output: &EO,
+    ) {
         // gradient of the cost function with respect to the neuron output of the last layer.
         let output_gradient = self.loss_function.backpropagate(verbose_prop, expected_output);
         self.network.backpropagate(verbose_prop, output_gradient, &mut self.gradient);
@@ -187,9 +200,9 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     /// Like `backpropagate` but modifies the `gradient` parameter instead of the internal gradient
     pub fn backpropagate_into(
         &self,
-        verbose_prop: &VerbosePropagation<OUT>,
+        verbose_prop: &VerbosePropagation<X, OUT>,
         expected_output: &EO,
-        gradient: &mut Gradient,
+        gradient: &mut Gradient<X>,
     ) {
         // gradient of the cost function with respect to the neuron output of the last layer.
         let output_gradient = self.loss_function.backpropagate(verbose_prop, expected_output);
@@ -198,7 +211,7 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
 
     /// To test a batch of multiple pairs use `test_batch`.
     #[inline]
-    pub fn test(&self, input: &Input<IN>, expected_output: &EO) -> ([f64; OUT], f64) {
+    pub fn test(&self, input: &Input<X, IN>, expected_output: &EO) -> ([X; OUT], X) {
         self.network.test(input, expected_output, &self.loss_function)
     }
 
@@ -211,17 +224,17 @@ where L: LossFunction<OUT, ExpectedOutput = EO>
     pub fn test_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<IN, EO>) -> ([f64; OUT], f64)>
+    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO>) -> ([X; OUT], X)>
     where
-        B: IntoIterator<Item = &'a Pair<IN, EO>>,
+        B: IntoIterator<Item = &'a Pair<X, IN, EO>>,
         EO: 'a,
     {
         batch.into_iter().map(|(input, eo)| self.test(input, eo))
     }
 }
 
-impl<const IN: usize, const OUT: usize, L, O> NNTrainer<IN, OUT, L, O>
-where O: Optimizer
+impl<X: Element, const IN: usize, const OUT: usize, L, O> NNTrainer<X, IN, OUT, L, O>
+where O: Optimizer<X>
 {
     /// Uses the internal [`Optimizer`] and [`Gradient`] to optimize the internal
     /// [`NeuralNetwork`] once.
@@ -231,10 +244,10 @@ where O: Optimizer
     }
 }
 
-impl<const IN: usize, const OUT: usize, L, EO, O> NNTrainer<IN, OUT, L, O>
+impl<X: Element, const IN: usize, const OUT: usize, L, EO, O> NNTrainer<X, IN, OUT, L, O>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO>,
-    O: Optimizer,
+    L: LossFunction<X, OUT, ExpectedOutput = EO>,
+    O: Optimizer<X>,
 {
     /// Trains the internal [`NeuralNetwork`] lazily.
     #[inline]
@@ -245,18 +258,24 @@ where
     //{
     //    Training::new(self, batch.into_iter())
     //}
-    pub fn train<'a>(&'a mut self, batch: &'a [Pair<IN, EO>]) -> Training<'a, Self, Pair<IN, EO>>
-    where EO: 'a {
+    pub fn train<'a>(
+        &'a mut self,
+        batch: &'a [Pair<X, IN, EO>],
+    ) -> Training<'a, Self, Pair<X, IN, EO>>
+    where
+        EO: 'a,
+    {
         Training::new(self, batch.as_ref())
     }
 
+    /*
     /// creates a sample [`NNTrainer`].
     ///
     /// This is probably only useful for testing.
     pub fn default<V>() -> Self
     where
         L: Default,
-        V: OptimizerValues<Optimizer = O> + Default,
+        V: OptimizerValues<X, Optimizer = O> + Default,
     {
         NeuralNetwork::default()
             .to_trainer()
@@ -264,12 +283,14 @@ where
             .optimizer(V::default())
             .build()
     }
+    */
 }
 
-impl<const IN: usize, const OUT: usize, L, EO, O> Display for NNTrainer<IN, OUT, L, O>
+impl<X: Element, const IN: usize, const OUT: usize, L, EO, O> Display
+    for NNTrainer<X, IN, OUT, L, O>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO> + Display,
-    O: Optimizer + Display,
+    L: LossFunction<X, OUT, ExpectedOutput = EO> + Display,
+    O: Optimizer<X> + Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.network)?;
@@ -294,6 +315,7 @@ mod seeded_tests {
         let mut rng = StdRng::seed_from_u64(SEED);
 
         let ai = NNBuilder::default()
+            .double_precision()
             .rng(&mut rng)
             .input::<2>()
             .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
@@ -316,6 +338,7 @@ mod seeded_tests {
         let mut rng = StdRng::seed_from_u64(SEED);
 
         let mut ai = NNBuilder::default()
+            .double_precision()
             .rng(&mut rng)
             .input::<2>()
             .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
@@ -332,6 +355,12 @@ mod seeded_tests {
             .new_clip_gradient_norm(5.0, Norm::Two)
             .build();
 
+        // nn params pre training
+        let params = ai.get_network().iter().copied().collect::<Vec<_>>();
+        #[rustfmt::skip]
+        let expected = &[0.006887838447803829, 0.6393999304942023, 0.34936912393918684, -0.4047589840789866, -0.37941201236065963, -0.06972914538603359, 0.43380493311798884, 0.2808271748488419, -0.16417981196958276, -0.2391556648674174, 0.2108008059374471, -0.5508539013658884, 0.30609095651501483, 0.0010017747733542803, -0.2439626553503762, 0.1739790758995245, -0.35504329049611705, 0.2807057469930026, -0.021561872961492812, -0.2224985097439988, 0.18025297158732995, -0.3118176626548729, 0.26646269895835534, -0.4111905543260018, 0.07174135969857715, -0.3910179151410674, -0.14027757282776454, 0.39256214288992813, -0.1804116593475944, -0.06183204149127286, 0.30148591157620747, -0.07045111402421522, 0.15330561621693045, -0.05987140494810189, 0.16392997905786127, -0.41157175802213586, 0.06448666319062674, 0.3549482907502232, -0.1752947400236416, 0.17664346553608495, 0.4130563079306305, 0.12362639119103341, -0.4340562639542757, -0.09883618080186729, -0.05709696039076012, 0.3577843982370516, 0.1972113234741723, -0.2053210678418987, -0.03384982362548067, -0.32891932430635185, -0.26690036384241284, -0.24283061456061486, 0.23016935417459677, 0.23254520394702988, 0.3651839637543794, -0.310479259746818, -0.3017997213731933, 0.08646500039777222, -0.17584424522752867, 0.29123399909249675, 0.06853079258143152, -0.3543537884722492, 0.2413959457728258];
+        assert_eq!(&params, expected, "incorrect seed");
+
         let pairs = (0..5)
             .map(|_| Input::new(Box::new(rng.gen())))
             .map(|input| {
@@ -340,13 +369,18 @@ mod seeded_tests {
                 (input, [sum, prod, 0.0])
             })
             .collect::<Vec<_>>();
-        ai.train(&pairs).execute();
+        ai.train(&pairs).execute_single_thread();
+        //let out = ai.train(&pairs).outputs_single_thread().collect::<Vec<_>>();
+        //#[rustfmt::skip]
+        //let expected = &[[0.6094448691923857, 0.32679752420868363, 0.49491840692097566], [0.6085349603591848, 0.32961919965215464, 0.4890806852003969], [0.6455469394878132, 0.29867520935167713, 0.4551196011602426], [0.6250466147194926, 0.31942805417560755, 0.46366993008961255], [0.6252413455643969, 0.3184616187182594, 0.46576189882566815]];
+        //assert_eq!(out[0], expected[0]);
 
         let gradient = ai.get_gradient().iter().copied();
         #[rustfmt::skip]
         let expected = &[-0.31527687134612725, -0.2367818186318013, 0.020418606049140496, 0.015550533247454118, -0.001738594474681532, -0.004567137662788988, 0.033859035247529076, 0.02977764834407858, 0.009605083538032784, 0.006826476555722042, -0.6146889718563872, 0.040329523770678166, -0.0050435074713498255, 0.07884882135388332, 0.01821395483674612, -0.29603217316507463, 0.03346627048986953, -0.05878503376051679, -0.2158320807897315, 0.026983231976989056, -0.24554656005324604, 0.02887071882597527, -0.05843956975876532, -0.17243502863504168, 0.022467020003968326, 0.1311511999366582, -0.014868359886407069, 0.02611204347681894, 0.09796223173142266, -0.01217871097874241, -0.054034033529765414, 0.005815532263211411, -0.008911633440899904, -0.034708137931585205, 0.0043542213467064154, 0.2911033451780113, -0.033617414595422807, 0.06373660842764983, 0.21011649849556374, -0.026765687357284716, -0.6362499755696547, -0.5444227081050653, 0.288719083038049, -0.09632461875232448, 0.6412639438519863, -0.2336931253665935, -0.005400196361134401, 0.34277389227803257, -0.01683276960395113, 0.18829397721654298, 0.22312222066614518, 0.0668809841607016, -0.21284993370400693, 0.004724430001813006, -0.06979054513916816, 0.6470015756088618, 0.15347488461571596, -0.7149338885041989, 0.04221164029892477, -0.30940480020839184, -0.4461655070529444, 0.4131071925533384, 1.1799836756082676];
         let err = gradient.zip(expected).map(|(p, e)| (p - e).abs()).sum::<f64>();
-        assert!(err < 1e-15, "incorrect gradient elements (err: {})", err);
+        println!("error = {:?}", err);
+        assert!(err < 1e-18, "incorrect gradient elements (err: {})", err);
     }
 
     #[test]
@@ -355,6 +389,7 @@ mod seeded_tests {
         let mut rng = StdRng::seed_from_u64(SEED);
 
         let mut ai = NNBuilder::default()
+            .double_precision()
             .rng(&mut rng)
             .input::<2>()
             .layer(5, Initializer::PytorchDefault, Initializer::PytorchDefault)
@@ -425,6 +460,7 @@ mod seeded_tests {
             .zip(TRAINED_PARAMS)
             .map(|(p, e)| (p - e).abs())
             .sum::<f64>();
+        println!("error = {:?}", err);
         assert!(err < 1e-15, "incorrect trained parameters (err: {})", err);
 
         let trained_params = ai.get_network().iter().copied().collect::<Vec<_>>();

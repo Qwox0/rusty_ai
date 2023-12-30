@@ -10,23 +10,24 @@ const IMAGE_SIDE: usize = 28;
 const IMAGE_SIZE: usize = IMAGE_SIDE * IMAGE_SIDE;
 const OUTPUTS: usize = 10;
 
-const NORMALIZE_MEAN: f64 = 0.5;
-const NORMALIZE_STD: f64 = 0.5;
-fn transform(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<IMAGE_SIZE, [f64; OUTPUTS]> {
+const NORMALIZE_MEAN: f32 = 0.5;
+const NORMALIZE_STD: f32 = 0.5;
+fn transform<X: Num>(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<X, IMAGE_SIZE, [X; OUTPUTS]> {
     img_vec
         .into_iter()
-        .map(|x| ((x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD)
+        .map(|x| (((x as f32) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD).cast())
         .array_chunks()
         .zip(lbl_vec.into_iter().map(|x| {
-            let mut out = [0.0; OUTPUTS];
-            out[x as usize] = 1.0;
+            let mut out = [X::ZERO; OUTPUTS];
+            out[x as usize] = X::ONE;
             out
         }))
         .collect()
 }
 
-fn setup_ai() -> NNTrainer<IMAGE_SIZE, OUTPUTS, SquaredError, SGD_> {
+fn setup_ai() -> NNTrainer<f64, IMAGE_SIZE, OUTPUTS, SquaredError, SGD_<f64>> {
     NNBuilder::default()
+        .double_precision()
         .input::<IMAGE_SIZE>()
         .layer(128, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .activation_function(ActivationFn::ReLU)
@@ -94,7 +95,7 @@ pub fn main() {
     }
 }
 
-pub fn print_image(pair: &Pair<IMAGE_SIZE, [f64; 10]>, val_range: Range<f64>) {
+pub fn print_image(pair: &Pair<f64, IMAGE_SIZE, [f64; 10]>, val_range: Range<f64>) {
     println!(
         "{} label: {:?}",
         image_to_string::<IMAGE_SIDE, IMAGE_SIZE>(pair.0.as_ref(), val_range),

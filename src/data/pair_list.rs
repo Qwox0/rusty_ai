@@ -1,31 +1,32 @@
 use crate::input::Input;
+use matrix::Element;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator};
 #[allow(unused_imports)]
 use {crate::NeuralNetwork, std::ops::Index};
 
 /// A data pair used for training a [`NeuralNetwork`].
-pub type Pair<const IN: usize, EO> = (Input<IN>, EO);
+pub type Pair<X, const IN: usize, EO> = (Input<X, IN>, EO);
 
 /// A list of data [`Pair`]s used for training a [`NeuralNetwork`].
 ///
 /// implements [`Index<usize, Output = Pair<IN, EO>>`].
 #[derive(Debug, Clone, derive_more::From, derive_more::Deref, derive_more::Index)]
-pub struct PairList<const IN: usize, EO>(pub Vec<Pair<IN, EO>>);
+pub struct PairList<X, const IN: usize, EO>(pub Vec<Pair<X, IN, EO>>);
 
-impl<const IN: usize, I, EO> FromIterator<(I, EO)> for PairList<IN, EO>
-where I: Into<Input<IN>>
+impl<X, const IN: usize, I, EO> FromIterator<(I, EO)> for PairList<X, IN, EO>
+where I: Into<Input<X, IN>>
 {
     fn from_iter<T: IntoIterator<Item = (I, EO)>>(iter: T) -> Self {
         iter.into_iter().map(|(i, eo)| (i.into(), eo)).collect::<Vec<_>>().into()
     }
 }
 
-impl<const IN: usize, EO> PairList<IN, EO> {
+impl<X, const IN: usize, EO> PairList<X, IN, EO> {
     /// if `inputs` and `expected_outputs` have different lengths, the additional elements of the
     /// longer iterator will be ignored.
     pub fn new(
-        inputs: impl IntoIterator<Item = Input<IN>>,
+        inputs: impl IntoIterator<Item = Input<X, IN>>,
         expected_outputs: impl IntoIterator<Item = impl Into<EO>>,
     ) -> Self {
         let expected_outputs = expected_outputs.into_iter().map(Into::into);
@@ -35,8 +36,8 @@ impl<const IN: usize, EO> PairList<IN, EO> {
     /// Creates a list of pairs from an [`Iterator`] over [`Input`]s and a function which creates
     /// the expected outputs.
     pub fn with_fn(
-        inputs: impl IntoIterator<Item = Input<IN>>,
-        mut f: impl FnMut(&Input<IN>) -> EO,
+        inputs: impl IntoIterator<Item = Input<X, IN>>,
+        mut f: impl FnMut(&Input<X, IN>) -> EO,
     ) -> Self {
         inputs
             .into_iter()
@@ -48,7 +49,7 @@ impl<const IN: usize, EO> PairList<IN, EO> {
     }
 
     /// Returns an [`Iterator`] over the data pairs.
-    pub fn iter(&self) -> std::slice::Iter<'_, Pair<IN, EO>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Pair<X, IN, EO>> {
         self.0.iter()
     }
 
@@ -73,26 +74,26 @@ impl<const IN: usize, EO> PairList<IN, EO> {
     }
 }
 
-impl<const IN: usize, EO> IntoIterator for PairList<IN, EO> {
+impl<X, const IN: usize, EO> IntoIterator for PairList<X, IN, EO> {
     type IntoIter = std::vec::IntoIter<Self::Item>;
-    type Item = Pair<IN, EO>;
+    type Item = Pair<X, IN, EO>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl<'a, const IN: usize, EO> IntoIterator for &'a PairList<IN, EO> {
-    type IntoIter = std::slice::Iter<'a, (Input<IN>, EO)>;
-    type Item = &'a Pair<IN, EO>;
+impl<'a, X, const IN: usize, EO> IntoIterator for &'a PairList<X, IN, EO> {
+    type IntoIter = std::slice::Iter<'a, (Input<X, IN>, EO)>;
+    type Item = &'a Pair<X, IN, EO>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
     }
 }
 
-impl<const IN: usize, EO: Send> IntoParallelIterator for PairList<IN, EO> {
-    type Item = Pair<IN, EO>;
+impl<X: Element, const IN: usize, EO: Send> IntoParallelIterator for PairList<X, IN, EO> {
+    type Item = Pair<X, IN, EO>;
     type Iter = rayon::vec::IntoIter<Self::Item>;
 
     fn into_par_iter(self) -> Self::Iter {
@@ -100,18 +101,18 @@ impl<const IN: usize, EO: Send> IntoParallelIterator for PairList<IN, EO> {
     }
 }
 
-impl<'a, const IN: usize, EO: Sync> IntoParallelIterator for &'a PairList<IN, EO> {
-    type Item = &'a Pair<IN, EO>;
-    type Iter = rayon::slice::Iter<'a, Pair<IN, EO>>;
+impl<'a, X: Element, const IN: usize, EO: Sync> IntoParallelIterator for &'a PairList<X, IN, EO> {
+    type Item = &'a Pair<X, IN, EO>;
+    type Iter = rayon::slice::Iter<'a, Pair<X, IN, EO>>;
 
     fn into_par_iter(self) -> Self::Iter {
         self.0.par_iter()
     }
 }
 
-impl PairList<1, f64> {
+impl<X> PairList<X, 1, X> {
     /// Create a [`PairList`] for a [`NeuralNetwork`] with 1 input and 1 output
-    pub fn from_simple_vecs(vec_in: Vec<f64>, vec_out: Vec<f64>) -> Self {
+    pub fn from_simple_vecs(vec_in: Vec<X>, vec_out: Vec<X>) -> Self {
         vec_in.into_iter().map(|x| Input::from([x])).zip(vec_out).collect()
     }
 }

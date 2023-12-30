@@ -1,40 +1,55 @@
-use super::SimpleActivationFunction;
+use crate::{gradient::aliases::WeightedSumGradient, ActivationFunction};
 use derive_more::Display;
+use matrix::Num;
 
 #[derive(Debug, Clone, Copy, Display)]
 pub(super) struct ReLU;
 
-impl SimpleActivationFunction for ReLU {
+impl<X: Num> ActivationFunction<X> for ReLU {
     #[inline]
-    fn propagate(&self, input: f64) -> f64 {
-        leaky_relu(input, 0.0)
+    fn propagate(&self, input: Vec<X>) -> Vec<X> {
+        input.into_iter().map(|x| leaky_relu(x, X::lit(0))).collect()
     }
 
-    #[inline]
-    fn derivative_from_output(&self, self_output: f64) -> f64 {
-        if self_output.is_sign_positive() { 1.0 } else { 0.0 }
+    fn backpropagate(
+        &self,
+        output_gradient: crate::gradient::aliases::OutputGradient<X>,
+        self_output: &[X],
+    ) -> WeightedSumGradient<X> {
+        output_gradient
+            .into_iter()
+            .zip(self_output)
+            .map(|(dl_dy, y)| dl_dy * if y.is_positive() { X::lit(1) } else { X::lit(0) })
+            .collect()
     }
 }
 
 #[derive(Debug, Clone, Copy, Display)]
 #[display(fmt = "LeakyReLU {}", leak_rate)]
-pub(super) struct LeakyReLU {
-    pub leak_rate: f64,
+pub(super) struct LeakyReLU<X> {
+    pub leak_rate: X,
 }
 
-impl SimpleActivationFunction for LeakyReLU {
+impl<X: Num> ActivationFunction<X> for LeakyReLU<X> {
     #[inline]
-    fn propagate(&self, input: f64) -> f64 {
-        leaky_relu(input, self.leak_rate)
+    fn propagate(&self, input: Vec<X>) -> Vec<X> {
+        input.into_iter().map(|x| leaky_relu(x, self.leak_rate)).collect()
     }
 
-    #[inline]
-    fn derivative_from_output(&self, self_output: f64) -> f64 {
-        if self_output.is_sign_positive() { 1.0 } else { self.leak_rate }
+    fn backpropagate(
+        &self,
+        output_gradient: crate::gradient::aliases::OutputGradient<X>,
+        self_output: &[X],
+    ) -> WeightedSumGradient<X> {
+        output_gradient
+            .into_iter()
+            .zip(self_output)
+            .map(|(dl_dy, y)| dl_dy * if y.is_positive() { X::lit(1) } else { self.leak_rate })
+            .collect()
     }
 }
 
 #[inline]
-fn leaky_relu(x: f64, leak_rate: f64) -> f64 {
-    if x.is_sign_positive() { x } else { leak_rate * x }
+fn leaky_relu<X: Num>(x: X, leak_rate: X) -> X {
+    if x.is_positive() { x } else { leak_rate * x }
 }

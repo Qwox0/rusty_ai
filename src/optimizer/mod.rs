@@ -14,23 +14,23 @@ pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 ///
 /// This is only used by [`NNTrainer`]. Thus the dimensions of `nn` and `gradient` will always
 /// match.
-pub trait Optimizer {
+pub trait Optimizer<X> {
     /// Optimize the parameters of a [`NeuralNetwork`] based on a [`Gradient`].
     fn optimize<const IN: usize, const OUT: usize>(
         &mut self,
-        nn: &mut NeuralNetwork<IN, OUT>,
-        gradient: &Gradient,
+        nn: &mut NeuralNetwork<X, IN, OUT>,
+        gradient: &Gradient<X>,
     );
 }
 
 /// Represents the constants/configuration of an [`Optimizer`].
 ///
 /// Used by [`NNTrainerBuilder`] to create an [`Optimizer`] of type `Self::Optimizer`.
-pub trait OptimizerValues {
+pub trait OptimizerValues<X> {
     /// Target [`Optimizer`] type
-    type Optimizer: Optimizer;
+    type Optimizer: Optimizer<X>;
 
     /// Creates an [`Optimizer`] based on the configuration in `self` and the [`NeuralNetwork`]
     /// [`Layer`]s in `layers`.
-    fn init_with_layers(self, layers: &[Layer]) -> Self::Optimizer;
+    fn init_with_layers(self, layers: &[Layer<X>]) -> Self::Optimizer;
 }

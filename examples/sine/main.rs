@@ -24,6 +24,7 @@ pub fn main() {
         .expect("could open file");
 
     let mut ai = NNBuilder::default()
+        .double_precision()
         .default_activation_function(ActivationFn::ReLU)
         .input::<1>()
         .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)

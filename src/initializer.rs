@@ -1,25 +1,26 @@
 use crate::{bias::LayerBias, matrix::Matrix};
+use matrix::{Float, Num};
 use rand::Rng;
 
 /// see [tensorflow docs](https://www.tensorflow.org/api_docs/python/tf/keras/initializers)
 /// or [pytorch docs](https://pytorch.org/docs/stable/nn.init.html)
 #[derive(Debug, Clone)]
-pub enum Initializer<T> {
+pub enum Initializer<X, T> {
     /// Fixed value
     Initialized(T),
 
     /// Initializes all values with the fixed value `self.0`
-    Constant(f64),
+    Constant(X),
 
     /// Uniform from start (`self.0`; inclusive) to end (`self.1`; exclusive)
-    Uniform(f64, f64),
+    Uniform(X, X),
 
     /// `𝓝 (self.mean, self.std_dev^2)`
     Normal {
         /// mean of the normal distribution
-        mean: f64,
+        mean: X,
         /// standard deviation of the normal distribution
-        std_dev: f64,
+        std_dev: X,
     },
 
     /// `𝓝 (0, 1)`
@@ -42,18 +43,20 @@ pub enum Initializer<T> {
 
 // pub type DataInitializer<const DIM: usize> = Initializer<[f64; DIM]>;
 
-impl<T> Initializer<T> {
+impl<X: Num, T> Initializer<X, T> {
     /// Initializes all values with the fixed value `1`.
     #[allow(non_upper_case_globals)]
-    pub const Ones: Self = Initializer::Constant(1.0);
+    pub const Ones: Self = Initializer::Constant(X::ONE);
     /// Initializes all values with the fixed value `0`.
     #[allow(non_upper_case_globals)]
-    pub const Zeros: Self = Initializer::Constant(0.0);
+    pub const Zeros: Self = Initializer::Constant(X::ZERO);
 }
 
-impl Initializer<Matrix<f64>> {
+impl<X: Float> Initializer<X, Matrix<X>>
+where rand_distr::StandardNormal: rand_distr::Distribution<X>
+{
     /// Uses `self` to create a weights [`Matrix`].
-    pub fn init_weights(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Matrix<f64> {
+    pub fn init_weights(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Matrix<X> {
         macro_rules! mat {
             ($iter:expr) => {
                 Matrix::from_iter(inputs, outputs, $iter)
@@ -73,9 +76,11 @@ impl Initializer<Matrix<f64>> {
     }
 }
 
-impl Initializer<LayerBias> {
-    /// Uses `self` to create a weights [`LayerBias`].
-    pub fn init_bias(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> LayerBias {
+impl<X: Float> Initializer<X, LayerBias<X>>
+where rand_distr::StandardNormal: rand_distr::Distribution<X>
+{
+    /// Uses `self` to create a weights [`LayerBias<X>`].
+    pub fn init_bias(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> LayerBias<X> {
         macro_rules! bias {
             ($iter:expr) => {
                 LayerBias::from_iter(outputs, $iter)
@@ -85,7 +90,7 @@ impl Initializer<LayerBias> {
         match self {
             Initialized(x) => x,
             Constant(x) => LayerBias::from(vec![x; outputs]),
-            TensorFlowDefault => LayerBias::from(vec![0.0; outputs]),
+            TensorFlowDefault => LayerBias::from(vec![X::zero(); outputs]),
             Uniform(low, high) => bias!(uniform(rng, low, high)),
             Normal { mean, std_dev } => bias!(normal(rng, mean, std_dev)),
             StandardNormal => bias!(std_normal(rng)),
@@ -96,39 +101,53 @@ impl Initializer<LayerBias> {
     }
 }
 
-fn uniform<'a>(rng: &'a mut impl Rng, low: f64, high: f64) -> impl Iterator<Item = f64> + 'a {
+fn uniform<'a, X: Float>(rng: &'a mut impl Rng, low: X, high: X) -> impl Iterator<Item = X> + 'a {
     rng.sample_iter(rand_distr::Uniform::new(low, high))
 }
 
 /// # Panics
 /// Panics if `std_dev` is not finite.
-fn normal<'a>(rng: &'a mut impl Rng, mean: f64, std_dev: f64) -> impl Iterator<Item = f64> + 'a {
+fn normal<'a, X: Float>(
+    rng: &'a mut impl Rng,
+    mean: X,
+    std_dev: X,
+) -> impl Iterator<Item = X> + 'a
+where
+    rand_distr::StandardNormal: rand_distr::Distribution<X>,
+{
     rng.sample_iter(rand_distr::Normal::new(mean, std_dev).expect("standard deviation is finite"))
 }
 
-fn std_normal<'a>(rng: &'a mut impl Rng) -> impl Iterator<Item = f64> + 'a {
+fn std_normal<'a, X: 'a>(rng: &'a mut impl Rng) -> impl Iterator<Item = X> + 'a
+where rand_distr::StandardNormal: rand_distr::Distribution<X> {
     rng.sample_iter(rand_distr::StandardNormal)
 }
 
-fn glorot_uniform<'a>(
+fn glorot_uniform<'a, X: Float>(
     rng: &'a mut impl Rng,
     inputs: usize,
     outputs: usize,
-) -> impl Iterator<Item = f64> + 'a {
-    let x = (6.0 / (inputs + outputs) as f64).sqrt(); // TODO: gain
+) -> impl Iterator<Item = X> + 'a {
+    let x = (6.0.cast::<X>() / (inputs + outputs).cast()).sqrt(); // TODO: gain
     uniform(rng, -x, x)
 }
 
-fn glorot_normal<'a>(
+fn glorot_normal<'a, X: Float>(
     rng: &'a mut impl Rng,
     inputs: usize,
     outputs: usize,
-) -> impl Iterator<Item = f64> + 'a {
-    let std_dev = (2.0 / (inputs + outputs) as f64).sqrt(); // TODO: gain
-    normal(rng, 0.0, std_dev)
+) -> impl Iterator<Item = X> + 'a
+where
+    rand_distr::StandardNormal: rand_distr::Distribution<X>,
+{
+    let std_dev = (2.0.cast::<X>() / (inputs + outputs).cast()).sqrt(); // TODO: gain
+    normal(rng, X::zero(), std_dev)
 }
 
-fn pytorch_default<'a>(rng: &'a mut impl Rng, inputs: usize) -> impl Iterator<Item = f64> + 'a {
-    let x = (inputs as f64).recip().sqrt();
+fn pytorch_default<'a, X: Float>(
+    rng: &'a mut impl Rng,
+    inputs: usize,
+) -> impl Iterator<Item = X> + 'a {
+    let x = inputs.cast::<X>().recip().sqrt();
     uniform(rng, -x, x)
 }

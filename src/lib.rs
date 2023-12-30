@@ -23,6 +23,7 @@ pub mod neural_network;
 mod norm;
 pub mod optimizer;
 mod propagation;
+pub mod reexport;
 pub mod trainer;
 pub mod training;
 mod traits;
@@ -32,11 +33,12 @@ pub use activation_function::{ActivationFn, ActivationFunction};
 pub use gradient::{Gradient, GradientLayer};
 pub use initializer::Initializer;
 pub use input::Input;
-pub use matrix;
+pub use matrix::{self, Element, Float, Num};
 pub use neural_network::{BuildLayer, NNBuilder, NeuralNetwork};
 pub use norm::Norm;
 pub use optimizer::{Optimizer, OptimizerValues};
 pub use propagation::VerbosePropagation;
+pub use reexport::half::{bf16, f16};
 pub use traits::ParamsIter;
 
 /// # `rusty_ai` prelude

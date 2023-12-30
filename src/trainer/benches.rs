@@ -1,7 +1,13 @@
 /*
 extern crate test;
 
-use crate::*;
+use super::*;
+use test::*;
+
+#[bench]
+fn single_thread(b: &mut Bencher) {
+    b.iter(|| {})
+}
 use rayon::prelude::*;
 use std::{sync::Mutex, thread::ScopedJoinHandle};
 use test::black_box;

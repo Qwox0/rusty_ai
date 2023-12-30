@@ -3,9 +3,10 @@
 use crate::trainer::NNTrainer;
 #[allow(unused_imports)]
 use crate::NeuralNetwork;
+use matrix::{Element, Num};
 
-mod with_rayon;
 mod single_threaded;
+mod with_rayon;
 
 /// Represents a training step of a neural network.
 ///
@@ -27,13 +28,15 @@ impl<'a, NN, P> Training<'a, NN, P> {
 ///
 /// Created by `Training::outputs`.
 #[must_use = "`Iterators` must be consumed to do work."]
-pub struct TrainingOutputs<'a, const IN: usize, const OUT: usize, L, O, I> {
-    nn: &'a mut NNTrainer<IN, OUT, L, O>,
+pub struct TrainingOutputs<'a, X: Element, const IN: usize, const OUT: usize, L, O, I> {
+    nn: &'a mut NNTrainer<X, IN, OUT, L, O>,
     iter: I,
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, O, I> TrainingOutputs<'a, IN, OUT, L, O, I> {
-    fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
+impl<'a, X: Num, const IN: usize, const OUT: usize, L, O, I>
+    TrainingOutputs<'a, X, IN, OUT, L, O, I>
+{
+    fn new(nn: &'a mut NNTrainer<X, IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
         TrainingOutputs { nn, iter }
     }
@@ -43,13 +46,15 @@ impl<'a, const IN: usize, const OUT: usize, L, O, I> TrainingOutputs<'a, IN, OUT
 ///
 /// Created by `Training::losses`.
 #[must_use = "`Iterators` must be consumed to do work."]
-pub struct TrainingLosses<'a, const IN: usize, const OUT: usize, L, O, I> {
-    nn: &'a mut NNTrainer<IN, OUT, L, O>,
+pub struct TrainingLosses<'a, X, const IN: usize, const OUT: usize, L, O, I> {
+    nn: &'a mut NNTrainer<X, IN, OUT, L, O>,
     iter: I,
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, O, I> TrainingLosses<'a, IN, OUT, L, O, I> {
-    fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
+impl<'a, X: Num, const IN: usize, const OUT: usize, L, O, I>
+    TrainingLosses<'a, X, IN, OUT, L, O, I>
+{
+    fn new(nn: &'a mut NNTrainer<X, IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
         TrainingLosses { nn, iter }
     }
@@ -80,7 +85,7 @@ impl<'a, NN, I> Training<'a, NN, I> {
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Training<'a, NNTrainer<IN, OUT, L, O>, I>
+impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Training<'a, NNTrainer<X, IN, OUT, L, O>, I>
 where
     L: LossFunction<OUT, ExpectedOutput = EO>,
     O: Optimizer,
@@ -126,14 +131,14 @@ where
 /// Created by `Training::outputs`.
 #[must_use = "`Iterators` must be consumed to do work."]
 pub struct TrainingOutputs<'a, const IN: usize, const OUT: usize, L, O, I> {
-    nn: &'a mut NNTrainer<IN, OUT, L, O>,
+    nn: &'a mut NNTrainer<X, IN, OUT, L, O>,
     iter: I,
 }
 
 impl<'a, const IN: usize, const OUT: usize, L, O, I: ExactSizeIterator>
     TrainingOutputs<'a, IN, OUT, L, O, I>
 {
-    fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
+    fn new(nn: &'a mut NNTrainer<X, IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
         TrainingOutputs { nn, iter }
     }
@@ -183,14 +188,14 @@ where
 /// Created by `Training::losses`.
 #[must_use = "`Iterators` must be consumed to do work."]
 pub struct TrainingLosses<'a, const IN: usize, const OUT: usize, L, O, I> {
-    nn: &'a mut NNTrainer<IN, OUT, L, O>,
+    nn: &'a mut NNTrainer<X, IN, OUT, L, O>,
     iter: I,
 }
 
 impl<'a, const IN: usize, const OUT: usize, L, O, I: ExactSizeIterator>
     TrainingLosses<'a, IN, OUT, L, O, I>
 {
-    fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
+    fn new(nn: &'a mut NNTrainer<X, IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
         TrainingLosses { nn, iter }
     }
@@ -265,7 +270,7 @@ impl<'a, NN, I> Training<'a, NN, I> {
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Training<'a, NNTrainer<IN, OUT, L, O>, I>
+impl<'a, const IN: usize, const OUT: usize, L, EO, O, I> Training<'a, NNTrainer<X, IN, OUT, L, O>, I>
 where
     L: LossFunction<OUT, ExpectedOutput = EO> + Send + Sync,
     O: Optimizer + Send + Sync,
@@ -351,12 +356,12 @@ where
 /// Created by `Training::outputs`.
 #[must_use = "`ExactSizeIterators` must be consumed to do work."]
 pub struct TrainingOutputs<'a, const IN: usize, const OUT: usize, L, O, I> {
-    nn: &'a mut NNTrainer<IN, OUT, L, O>,
+    nn: &'a mut NNTrainer<X, IN, OUT, L, O>,
     iter: I,
 }
 
 impl<'a, const IN: usize, const OUT: usize, L, O, I> TrainingOutputs<'a, IN, OUT, L, O, I> {
-    fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
+    fn new(nn: &'a mut NNTrainer<X, IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
         TrainingOutputs { nn, iter }
     }
@@ -421,12 +426,12 @@ where
 /// Created by `Training::losses`.
 #[must_use = "`ExactSizeIterators` must be consumed to do work."]
 pub struct TrainingLosses<'a, const IN: usize, const OUT: usize, L, O, I> {
-    nn: &'a mut NNTrainer<IN, OUT, L, O>,
+    nn: &'a mut NNTrainer<X, IN, OUT, L, O>,
     iter: I,
 }
 
 impl<'a, const IN: usize, const OUT: usize, L, O, I> TrainingLosses<'a, IN, OUT, L, O, I> {
-    fn new(nn: &'a mut NNTrainer<IN, OUT, L, O>, iter: I) -> Self {
+    fn new(nn: &'a mut NNTrainer<X, IN, OUT, L, O>, iter: I) -> Self {
         nn.maybe_set_zero_gradient();
         TrainingLosses { nn, iter }
     }

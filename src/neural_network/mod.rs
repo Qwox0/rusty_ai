@@ -13,22 +13,27 @@ use crate::{
     },
     Gradient, Input, ParamsIter, VerbosePropagation,
 };
+use matrix::{Element, Float};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, iter::Map};
+use std::{
+    borrow::Cow,
+    fmt::{Debug, Display},
+    iter::Map,
+};
 
 pub mod builder;
 pub use builder::{BuildLayer, NNBuilder};
 
 /// layers contains all Hidden Layers and the Output Layers
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NeuralNetwork<const IN: usize, const OUT: usize> {
-    layers: Vec<Layer>,
+pub struct NeuralNetwork<X, const IN: usize, const OUT: usize> {
+    layers: Vec<Layer<X>>,
 }
 
-impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
+impl<X, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
     /// use [`NNBuilder`] instead!
     #[inline]
-    fn new(layers: Vec<Layer>) -> NeuralNetwork<IN, OUT> {
+    fn new(layers: Vec<Layer<X>>) -> NeuralNetwork<X, IN, OUT> {
         NeuralNetwork { layers }
     }
 
@@ -36,24 +41,26 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     ///
     /// Used to
     #[inline]
-    pub fn to_trainer(self) -> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
+    pub fn to_trainer(self) -> NNTrainerBuilder<X, IN, OUT, NoLossFunction, NoOptimizer> {
         NNTrainerBuilder::new(self)
     }
 
     /// Returns the layers of `self` as a slice.
     #[inline]
-    pub fn get_layers(&self) -> &[Layer] {
+    pub fn get_layers(&self) -> &[Layer<X>] {
         &self.layers
     }
+}
 
+impl<X: Float, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
     /// Creates a [`Gradient`] with the same dimensions as `self` and every element initialized to
     /// `0.0`
-    pub fn init_zero_gradient(&self) -> Gradient {
+    pub fn init_zero_gradient(&self) -> Gradient<X> {
         self.layers.iter().map(Layer::init_zero_gradient).collect()
     }
 
     /// Propagates an [`Input`] through the neural network and returns its output.
-    pub fn propagate(&self, input: &Input<IN>) -> [f64; OUT] {
+    pub fn propagate(&self, input: &Input<X, IN>) -> [X; OUT] {
         let input = Cow::from(input.as_slice());
         self.layers
             .iter()
@@ -74,9 +81,9 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     pub fn propagate_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> [f64; OUT] + 'a>
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> [X; OUT] + 'a>
     where
-        B: IntoIterator<Item = &'a Input<IN>>,
+        B: IntoIterator<Item = &'a Input<X, IN>>,
     {
         batch.into_iter().map(|i| self.propagate(i))
     }
@@ -87,7 +94,7 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     /// If only the final output is needed, use `propagate` instead.
     ///
     /// This is used internally during training.
-    pub fn verbose_propagate(&self, input: &Input<IN>) -> VerbosePropagation<OUT> {
+    pub fn verbose_propagate(&self, input: &Input<X, IN>) -> VerbosePropagation<X, OUT> {
         let mut outputs = Vec::with_capacity(self.layers.len() + 1);
         let nn_out = self.layers.iter().fold(input.to_vec(), |input, layer| {
             let out = layer.propagate(&input);
@@ -107,9 +114,9 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     /// `self`.
     pub fn backpropagate(
         &self,
-        verbose_prop: &VerbosePropagation<OUT>,
-        nn_output_gradient: OutputGradient,
-        gradient: &mut Gradient,
+        verbose_prop: &VerbosePropagation<X, OUT>,
+        nn_output_gradient: OutputGradient<X>,
+        gradient: &mut Gradient<X>,
     ) {
         self.layers
             .iter()
@@ -122,12 +129,12 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
     }
 
     /// Tests the neural network.
-    pub fn test<L: LossFunction<OUT>>(
+    pub fn test<L: LossFunction<X, OUT>>(
         &self,
-        input: &Input<IN>,
+        input: &Input<X, IN>,
         expected_output: &L::ExpectedOutput,
         loss_function: &L,
-    ) -> ([f64; OUT], f64) {
+    ) -> ([X; OUT], X) {
         let out = self.propagate(input);
         let loss = loss_function.propagate(&out, expected_output);
         (out, loss)
@@ -144,38 +151,43 @@ impl<const IN: usize, const OUT: usize> NeuralNetwork<IN, OUT> {
         &'a self,
         batch: B,
         loss_fn: &'a L,
-    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> ([f64; OUT], f64) + 'a>
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> ([X; OUT], X) + 'a>
     where
-        B: IntoIterator<Item = (&'a Input<IN>, &'a EO)>,
-        L: LossFunction<OUT, ExpectedOutput = EO>,
+        B: IntoIterator<Item = (&'a Input<X, IN>, &'a EO)>,
+        L: LossFunction<X, OUT, ExpectedOutput = EO>,
     {
         batch.into_iter().map(|(input, eo)| self.test(input, eo, loss_fn))
     }
 }
 
-impl<const IN: usize, const OUT: usize> ParamsIter for NeuralNetwork<IN, OUT> {
-    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64> {
+impl<X: Element, const IN: usize, const OUT: usize> ParamsIter<X> for NeuralNetwork<X, IN, OUT> {
+    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a X> {
         self.layers.iter().map(Layer::iter).flatten()
     }
 
-    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64> {
+    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut X> {
         self.layers.iter_mut().map(Layer::iter_mut).flatten()
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize> Default for NeuralNetwork<IN, OUT> {
+impl<'a, X, const IN: usize, const OUT: usize> Default for NeuralNetwork<X, IN, OUT>
+where
+    X: Float,
+    rand_distr::StandardNormal: rand_distr::Distribution<X>,
+{
     /// creates a [`NeuralNetwork`] with one layer. Every parameter is equal to `0.0`.
     ///
     /// This is probably only useful for testing.
     fn default() -> Self {
         NNBuilder::default()
+            .element_type()
             .input()
-            .layer_from_parameters(Matrix::with_zeros(IN, OUT), vec![0.0; OUT].into())
+            .layer_from_parameters(Matrix::with_zeros(IN, OUT), vec![X::zero(); OUT].into())
             .build()
     }
 }
 
-impl<const IN: usize, const OUT: usize> std::fmt::Display for NeuralNetwork<IN, OUT> {
+impl<X: Display, const IN: usize, const OUT: usize> Display for NeuralNetwork<X, IN, OUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let get_plural_s = |x: usize| if x == 1 { "" } else { "s" };
         writeln!(
