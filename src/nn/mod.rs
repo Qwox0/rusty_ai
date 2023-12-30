@@ -21,6 +21,9 @@ use std::{
     iter::Map,
 };
 
+mod component;
+pub use component::NNComponent;
+
 pub mod builder;
 pub use builder::{BuildLayer, NNBuilder};
 

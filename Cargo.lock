@@ -27,6 +27,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "const_tensor"
+version = "0.1.0"
+dependencies = [
+ "half",
+ "inline_closure",
+ "matrix",
+ "num",
+ "rand",
+ "rand_distr",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -351,6 +363,7 @@ name = "rusty_ai"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "const_tensor",
  "derive_more",
  "half",
  "inline_closure",

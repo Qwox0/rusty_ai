@@ -1,0 +1,13 @@
+[package]
+name = "const_tensor"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+matrix.workspace = true
+
+half.workspace = true
+inline_closure.workspace = true
+num.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
