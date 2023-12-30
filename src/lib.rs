@@ -19,7 +19,7 @@ mod initializer;
 mod input;
 pub mod layer;
 pub mod loss_function;
-pub mod neural_network;
+pub mod nn;
 mod norm;
 pub mod optimizer;
 mod propagation;
@@ -34,7 +34,7 @@ pub use gradient::{Gradient, GradientLayer};
 pub use initializer::Initializer;
 pub use input::Input;
 pub use matrix::{self, Element, Float, Num};
-pub use neural_network::{BuildLayer, NNBuilder, NeuralNetwork};
+pub use nn::{BuildLayer, NNBuilder, NeuralNetwork};
 pub use norm::Norm;
 pub use optimizer::{Optimizer, OptimizerValues};
 pub use propagation::VerbosePropagation;
@@ -52,7 +52,7 @@ pub mod prelude {
         gradient::aliases::*,
         loss_function::*,
         matrix::*,
-        neural_network::builder::{markers::*, BuilderNoParts, BuilderWithParts},
+        nn::builder::{markers::*, BuilderNoParts, BuilderWithParts},
         optimizer::{adam::*, sgd::*, *},
         trainer::{markers::*, *},
         training::*,

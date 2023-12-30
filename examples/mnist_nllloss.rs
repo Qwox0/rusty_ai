@@ -8,7 +8,7 @@ use mnist_util::{get_mnist, image_to_string, Mnist};
 use rusty_ai::{
     data::{Pair, PairList},
     loss_function::NLLLoss,
-    neural_network::NNBuilder,
+    nn::NNBuilder,
     optimizer::sgd::SGD,
     ActivationFn, BuildLayer, Initializer, Norm,
 };

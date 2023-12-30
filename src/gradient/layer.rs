@@ -63,7 +63,7 @@ impl<X: Display> Display for GradientLayer<X> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        neural_network::builder::{BuildLayer, NNBuilder},
+        nn::builder::{BuildLayer, NNBuilder},
         Initializer,
     };
 

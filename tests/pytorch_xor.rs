@@ -3,7 +3,7 @@ use rusty_ai::{
     data::PairList,
     loss_function::SquaredError,
     matrix::Matrix,
-    neural_network::NNBuilder,
+    nn::NNBuilder,
     optimizer::sgd::{SGD, SGD_},
     trainer::NNTrainer,
     ActivationFn, BuildLayer, Input,
