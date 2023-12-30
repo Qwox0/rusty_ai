@@ -4,7 +4,12 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
+half.workspace = true
+inline_closure.workspace = true
+num.workspace = true
 serde.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

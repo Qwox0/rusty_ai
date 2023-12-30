@@ -21,10 +21,10 @@ impl Default for SGD {
     }
 }
 
-impl OptimizerValues for SGD {
-    type Optimizer = SGD_;
+impl<X: Float> OptimizerValues<X> for SGD {
+    type Optimizer = SGD_<X>;
 
-    fn init_with_layers(self, layers: &[Layer]) -> Self::Optimizer {
+    fn init_with_layers(self, layers: &[Layer<X>]) -> Self::Optimizer {
         let prev_change = layers.iter().map(Layer::init_zero_gradient).collect::<Vec<_>>().into();
         SGD_ { val: self, prev_change }
     }
@@ -37,27 +37,27 @@ impl OptimizerValues for SGD {
 /// use [`OptimizerValues::init_with_layers`] on [`SGD`] to create this
 /// optimizer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SGD_ {
+pub struct SGD_<X> {
     val: SGD,
-    prev_change: Gradient,
+    prev_change: Gradient<X>,
 }
 
-impl Optimizer for SGD_ {
+impl<X: Num> Optimizer<X> for SGD_<X> {
     fn optimize<'a, const IN: usize, const OUT: usize>(
         &mut self,
-        nn: &mut NeuralNetwork<IN, OUT>,
-        gradient: &Gradient,
+        nn: &mut NeuralNetwork<X, IN, OUT>,
+        gradient: &Gradient<X>,
     ) {
         let SGD { learning_rate, momentum } = self.val;
         for ((x, dx), change) in nn.iter_mut().zip(gradient.iter()).zip(self.prev_change.iter_mut())
         {
-            *change = momentum * *change - learning_rate * dx;
+            *change = momentum.cast::<X>() * *change - learning_rate.cast::<X>() * *dx;
             *x += *change;
         }
     }
 }
 
-impl Display for SGD_ {
+impl<X> Display for SGD_<X> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let SGD { learning_rate, momentum } = self.val;
         write!(f, "SGD {{ learning_rate: {learning_rate}")?;

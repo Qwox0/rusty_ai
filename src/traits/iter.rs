@@ -1,9 +1,11 @@
+use matrix::Element;
+
 /// trait for iterating over the parameters of type [`f64`].
-pub trait ParamsIter {
+pub trait ParamsIter<X: Element> {
     /// creates an [`Iterator`] over references to the parameters of `self`
-    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64>;
+    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a X>;
     /// creates an [`Iterator`] over mutable references to the parameters of `self`
-    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64>;
+    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut X>;
 }
 
 pub(crate) fn default_params_chain<W, B, T>(

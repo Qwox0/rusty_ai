@@ -2,12 +2,13 @@ use super::{Training, TrainingLosses, TrainingOutputs};
 use crate::{
     loss_function::LossFunction, optimizer::Optimizer, prelude::Pair, trainer::NNTrainer, Input,
 };
+use matrix::{Float, Num};
 
-impl<'a, const IN: usize, const OUT: usize, L, EO, O>
-    Training<'a, NNTrainer<IN, OUT, L, O>, Pair<IN, EO>>
+impl<'a, X: Float, const IN: usize, const OUT: usize, L, EO, O>
+    Training<'a, NNTrainer<X, IN, OUT, L, O>, Pair<X, IN, EO>>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO>,
-    O: Optimizer,
+    L: LossFunction<X, OUT, ExpectedOutput = EO>,
+    O: Optimizer<X>,
     EO: 'a + Sync,
 {
     /// single threaded version of `execute`.
@@ -24,36 +25,36 @@ where
     /// single threaded version of `outputs`.
     pub fn outputs_single_thread(
         self,
-    ) -> TrainingOutputs<'a, IN, OUT, L, O, core::slice::Iter<'a, Pair<IN, EO>>> {
+    ) -> TrainingOutputs<'a, X, IN, OUT, L, O, core::slice::Iter<'a, Pair<X, IN, EO>>> {
         TrainingOutputs::new(self.nn, self.data.iter())
     }
 
     /// single threaded version of `losses`.
     pub fn losses_single_thread(
         self,
-    ) -> TrainingLosses<'a, IN, OUT, L, O, core::slice::Iter<'a, Pair<IN, EO>>> {
+    ) -> TrainingLosses<'a, X, IN, OUT, L, O, core::slice::Iter<'a, Pair<X, IN, EO>>> {
         TrainingLosses::new(self.nn, self.data.iter())
     }
 
     /// single threaded version of `mean_loss`.
-    pub fn mean_loss_single_thread(self) -> f64 {
+    pub fn mean_loss_single_thread(self) -> X {
         let mut count = 0;
-        let sum = self.losses_single_thread().fold(0.0, |acc, (_, loss)| {
+        let sum = self.losses_single_thread().fold(X::zero(), |acc, (_, loss)| {
             count += 1;
             acc + loss
         });
-        sum / count as f64
+        sum / count.cast()
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, O, I> Iterator
-    for TrainingOutputs<'a, IN, OUT, L, O, I>
+impl<'a, X: Float, const IN: usize, const OUT: usize, L, O, I> Iterator
+    for TrainingOutputs<'a, X, IN, OUT, L, O, I>
 where
-    L: LossFunction<OUT>,
-    O: Optimizer,
-    I: ExactSizeIterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
+    L: LossFunction<X, OUT>,
+    O: Optimizer<X>,
+    I: ExactSizeIterator<Item = &'a (Input<X, IN>, L::ExpectedOutput)>,
 {
-    type Item = [f64; OUT];
+    type Item = [X; OUT];
 
     fn next(&mut self) -> Option<Self::Item> {
         let (input, eo) = self.iter.next()?;
@@ -69,12 +70,12 @@ where
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, O, I> ExactSizeIterator
-    for TrainingOutputs<'a, IN, OUT, L, O, I>
+impl<'a, X: Float, const IN: usize, const OUT: usize, L, O, I> ExactSizeIterator
+    for TrainingOutputs<'a, X, IN, OUT, L, O, I>
 where
-    L: LossFunction<OUT>,
-    O: Optimizer,
-    I: ExactSizeIterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
+    L: LossFunction<X, OUT>,
+    O: Optimizer<X>,
+    I: ExactSizeIterator<Item = &'a (Input<X, IN>, L::ExpectedOutput)>,
 {
     fn len(&self) -> usize {
         self.iter.len()
@@ -85,14 +86,14 @@ where
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, O, I> Iterator
-    for TrainingLosses<'a, IN, OUT, L, O, I>
+impl<'a, X: Float, const IN: usize, const OUT: usize, L, O, I> Iterator
+    for TrainingLosses<'a, X, IN, OUT, L, O, I>
 where
-    L: LossFunction<OUT>,
-    O: Optimizer,
-    I: ExactSizeIterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
+    L: LossFunction<X, OUT>,
+    O: Optimizer<X>,
+    I: ExactSizeIterator<Item = &'a (Input<X, IN>, L::ExpectedOutput)>,
 {
-    type Item = ([f64; OUT], f64);
+    type Item = ([X; OUT], X);
 
     fn next(&mut self) -> Option<Self::Item> {
         let (input, eo) = self.iter.next()?;
@@ -110,12 +111,12 @@ where
     }
 }
 
-impl<'a, const IN: usize, const OUT: usize, L, O, I> ExactSizeIterator
-    for TrainingLosses<'a, IN, OUT, L, O, I>
+impl<'a, X: Float, const IN: usize, const OUT: usize, L, O, I> ExactSizeIterator
+    for TrainingLosses<'a, X, IN, OUT, L, O, I>
 where
-    L: LossFunction<OUT>,
-    O: Optimizer,
-    I: ExactSizeIterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
+    L: LossFunction<X, OUT>,
+    O: Optimizer<X>,
+    I: ExactSizeIterator<Item = &'a (Input<X, IN>, L::ExpectedOutput)>,
 {
     fn len(&self) -> usize {
         self.iter.len()
@@ -125,4 +126,3 @@ where
         self.iter.is_empty()
     }
 }
-

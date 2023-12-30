@@ -12,11 +12,11 @@ use rusty_ai::{
 struct Args<'a, F, L, O>
 where
     F: Fn(usize) -> bool,
-    L: LossFunction<1, ExpectedOutput = [f64; 1]>,
-    O: Optimizer,
+    L: LossFunction<f64, 1, ExpectedOutput = [f64; 1]>,
+    O: Optimizer<f64>,
 {
-    ai: NNTrainer<1, 1, L, O>,
-    data: PairList<1, [f64; 1]>,
+    ai: NNTrainer<f64, 1, 1, L, O>,
+    data: PairList<f64, 1, [f64; 1]>,
     losses: &'a [f64],
     epochs: usize,
     test_condition: F,
@@ -25,11 +25,11 @@ where
 fn test<F, L, O>(args: Args<F, L, O>)
 where
     F: Fn(usize) -> bool,
-    L: LossFunction<1, ExpectedOutput = [f64; 1]> + Send + Sync,
-    O: Optimizer + Send + Sync,
+    L: LossFunction<f64, 1, ExpectedOutput = [f64; 1]> + Send + Sync,
+    O: Optimizer<f64> + Send + Sync,
 {
     let Args { mut ai, data, losses, epochs, test_condition } = args;
-    let test = |epoch: usize, ai: &NNTrainer<1, 1, L, O>, expected_loss: f64| {
+    let test = |epoch: usize, ai: &NNTrainer<f64, 1, 1, L, O>, expected_loss: f64| {
         let error = ai.test_batch(data.iter()).map(|(_, loss)| loss).sum::<f64>();
 
         println!("epoch: {:>4}, loss: {:<20} {:064b}", epoch, error, error.to_bits());
@@ -271,6 +271,7 @@ fn sine() {
     ];
 
     let ai = NNBuilder::default()
+        .double_precision()
         .default_activation_function(ActivationFn::ReLU)
         .input::<1>()
         .layer_from_parameters(w1, b1)

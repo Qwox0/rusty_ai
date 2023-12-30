@@ -7,43 +7,42 @@ use crate::{
 };
 #[allow(unused_imports)]
 use crate::{layer::Layer, Gradient};
+use matrix::Element;
 use serde::{Deserialize, Serialize};
-use std::iter::once;
+use std::{fmt::Display, iter::once};
 
 /// Contains the estimated Gradient of the loss function with respect to the
 /// weights and the bias in a layer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GradientLayer {
-    pub(super) weight_gradient: WeightGradient,
-    pub(super) bias_gradient: BiasGradient,
+pub struct GradientLayer<X> {
+    pub(super) weight_gradient: WeightGradient<X>,
+    pub(super) bias_gradient: BiasGradient<X>,
 }
 
-impl GradientLayer {
+impl<X> GradientLayer<X> {
     /// Creates part of a [`Gradient`] which represents the derivatives with respect to the
     /// parameters in a [`Layer`].
-    pub fn new(weight_gradient: Matrix<f64>, bias_gradient: LayerBias) -> Self {
+    pub fn new(weight_gradient: Matrix<X>, bias_gradient: LayerBias<X>) -> Self {
         Self { weight_gradient, bias_gradient }
     }
 
     /// Iterates through the parameters of the layer mutably.
-    pub fn iter_mut_neurons<'a>(
-        &'a mut self,
-    ) -> impl Iterator<Item = (&'a mut [f64], &'a mut f64)> {
+    pub fn iter_mut_neurons<'a>(&'a mut self) -> impl Iterator<Item = (&'a mut [X], &'a mut X)> {
         self.weight_gradient.iter_rows_mut().zip(&mut self.bias_gradient)
     }
 }
 
-impl ParamsIter for GradientLayer {
-    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a f64> {
+impl<X: Element> ParamsIter<X> for GradientLayer<X> {
+    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a X> {
         default_params_chain(&self.weight_gradient, &self.bias_gradient)
     }
 
-    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut f64> {
+    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut X> {
         default_params_chain(&mut self.weight_gradient, &mut self.bias_gradient)
     }
 }
 
-impl std::fmt::Display for GradientLayer {
+impl<X: Display> Display for GradientLayer<X> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let bias_header = "Biases:".to_string();
         let bias_str_iter =

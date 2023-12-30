@@ -1,17 +1,14 @@
-use super::{Training, TrainingLosses, TrainingOutputs};
-use crate::{
-    loss_function::LossFunction, optimizer::Optimizer, prelude::Pair, trainer::NNTrainer, Input,
-};
-use rayon::iter::{
-    plumbing::Consumer, IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator,
-};
+use super::Training;
+use crate::{loss_function::LossFunction, optimizer::Optimizer, prelude::Pair, trainer::NNTrainer};
+use matrix::Float;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::sync::mpsc;
 
-impl<'a, const IN: usize, const OUT: usize, L, EO, O>
-    Training<'a, NNTrainer<IN, OUT, L, O>, Pair<IN, EO>>
+impl<'a, X: Float, const IN: usize, const OUT: usize, L, EO, O>
+    Training<'a, NNTrainer<X, IN, OUT, L, O>, Pair<X, IN, EO>>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO> + Send + Sync,
-    O: Optimizer + Send + Sync,
+    L: LossFunction<X, OUT, ExpectedOutput = EO> + Send + Sync,
+    O: Optimizer<X> + Send + Sync,
     EO: 'a + Sync,
 {
     /// Executes the [`Training`] and optimizes the [`NeuralNetwork`].
@@ -37,7 +34,7 @@ where
     /// calculated during the training.
     ///
     /// The order of the items isn't guaranteed!
-    pub fn outputs(self) -> mpsc::IntoIter<[f64; OUT]> {
+    pub fn outputs(self) -> mpsc::IntoIter<[X; OUT]> {
         self.nn.maybe_set_zero_gradient();
 
         let (sender, receiver) = mpsc::channel();
@@ -64,7 +61,7 @@ where
     /// [`NeuralNetwork`] calculated during the training.
     ///
     /// The order of the items isn't guaranteed!
-    pub fn losses(self) -> mpsc::IntoIter<([f64; OUT], f64)> {
+    pub fn losses(self) -> mpsc::IntoIter<([X; OUT], X)> {
         self.nn.maybe_set_zero_gradient();
 
         let (sender, receiver) = mpsc::channel();
@@ -92,7 +89,7 @@ where
     }
 
     /// Executes the [`Training`] and returns the mean of the losses calculated during training.
-    pub fn mean_loss(self) -> f64 {
+    pub fn mean_loss(self) -> X {
         todo!("mean_loss")
         /*
         let mut count = 0;
@@ -100,7 +97,7 @@ where
             count += 1;
             acc + loss
         });
-        sum / count as f64
+        sum / count as X
         */
     }
 }
@@ -110,7 +107,7 @@ impl<'a, const IN: usize, const OUT: usize, L, O, I> Iterator
     for TrainingOutputs<'a, IN, OUT, L, O, I>
 where
     L: LossFunction<OUT>,
-    O: Optimizer,
+    O: Optimizer<X>,
     I: ExactSizeIterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
 {
     type Item = [f64; OUT];
@@ -133,7 +130,7 @@ impl<'a, const IN: usize, const OUT: usize, L, O, I> ExactSizeIterator
     for TrainingOutputs<'a, IN, OUT, L, O, I>
 where
     L: LossFunction<OUT>,
-    O: Optimizer,
+    O: Optimizer<X>,
     I: ExactSizeIterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
 {
     fn len(&self) -> usize {
@@ -149,7 +146,7 @@ impl<'a, const IN: usize, const OUT: usize, L, O, I> Iterator
     for TrainingLosses<'a, IN, OUT, L, O, I>
 where
     L: LossFunction<OUT>,
-    O: Optimizer,
+    O: Optimizer<X>,
     I: ExactSizeIterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
 {
     type Item = ([f64; OUT], f64);
@@ -174,7 +171,7 @@ impl<'a, const IN: usize, const OUT: usize, L, O, I> ExactSizeIterator
     for TrainingLosses<'a, IN, OUT, L, O, I>
 where
     L: LossFunction<OUT>,
-    O: Optimizer,
+    O: Optimizer<X>,
     I: ExactSizeIterator<Item = &'a (Input<IN>, L::ExpectedOutput)>,
 {
     fn len(&self) -> usize {

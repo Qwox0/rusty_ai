@@ -18,7 +18,7 @@ fn main() -> Result<(), serde_json::Error> {
     let json = serde_json::to_string(&ai)?;
     println!("\nJSON: {}", json);
 
-    let new_ai: NeuralNetwork<IN, OUT> = serde_json::from_str(&json)?;
+    let new_ai: NeuralNetwork<f32, IN, OUT> = serde_json::from_str(&json)?;
     println!("\nNEW_AI: {}", new_ai);
 
     assert_eq!(ai, new_ai);

@@ -19,7 +19,7 @@ impl<const IN: usize, T: AsRef<[f64]>> AsInput<IN> for T {
     }
 }
 
-impl AsInput<1> for f64 {
+impl AsInput<X, 1> for f64 {
     fn try_as_input<'a>(&'a self) -> Option<Input<'a, 1>> {
         Some(self.as_input())
     }
@@ -32,18 +32,18 @@ impl AsInput<1> for f64 {
 
 /// an array stored on the heap.
 #[derive(Debug, Clone, derive_more::Index)]
-pub struct Input<const N: usize>(Box<[f64; N]>);
+pub struct Input<X, const N: usize>(Box<[X; N]>);
 
-impl<const N: usize> From<[f64; N]> for Input<N> {
-    fn from(value: [f64; N]) -> Self {
+impl<X, const N: usize> From<[X; N]> for Input<X, N> {
+    fn from(value: [X; N]) -> Self {
         Self(Box::new(value))
     }
 }
 
-impl<const N: usize> TryFrom<Vec<f64>> for Input<N> {
+impl<X, const N: usize> TryFrom<Vec<X>> for Input<X, N> {
     type Error = anyhow::Error;
 
-    fn try_from(value: Vec<f64>) -> Result<Self, Self::Error> {
+    fn try_from(value: Vec<X>) -> Result<Self, Self::Error> {
         value
             .try_into()
             .map(Self)
@@ -51,33 +51,33 @@ impl<const N: usize> TryFrom<Vec<f64>> for Input<N> {
     }
 }
 
-impl<'a, const N: usize> Input<N> {
+impl<'a, X, const N: usize> Input<X, N> {
     /// Create a new neural network [`Input`].
-    pub fn new(elements: Box<[f64; N]>) -> Self {
+    pub fn new(elements: Box<[X; N]>) -> Self {
         Input(elements)
     }
 
     /// # Panics
     ///
     /// Panics if the length of the `val` slice doesn't match `IN`.
-    pub fn try_from_vec(vec: Vec<f64>) -> Self {
+    pub fn try_from_vec(vec: Vec<X>) -> Self {
         Self::try_from(vec).unwrap()
     }
 
     /// Returns all input elements as a slice.
-    pub fn as_slice(&self) -> &[f64] {
+    pub fn as_slice(&self) -> &[X] {
         self
     }
 }
 
-impl<const N: usize> AsRef<[f64; N]> for Input<N> {
-    fn as_ref(&self) -> &[f64; N] {
+impl<X, const N: usize> AsRef<[X; N]> for Input<X, N> {
+    fn as_ref(&self) -> &[X; N] {
         &self.0
     }
 }
 
-impl<const I: usize> Deref for Input<I> {
-    type Target = [f64];
+impl<X, const I: usize> Deref for Input<X, I> {
+    type Target = [X];
 
     fn deref(&self) -> &Self::Target {
         self.0.deref()
@@ -92,7 +92,8 @@ mod tests {
 
     #[test]
     fn get_arr_ref() {
-        let input = Input::<TOO_BIG_FOR_STACK>::try_from(vec![1.0; TOO_BIG_FOR_STACK]).unwrap();
+        let input =
+            Input::<f64, TOO_BIG_FOR_STACK>::try_from(vec![1.0; TOO_BIG_FOR_STACK]).unwrap();
         let arr = input.as_ref();
         println!("{}", arr[TOO_BIG_FOR_STACK - 1]);
     }
@@ -101,7 +102,8 @@ mod tests {
     #[should_panic = "array is too big for the stack"]
     #[ignore = "array is too big for the stack"]
     fn get_arr_panic() {
-        let input = Input::<TOO_BIG_FOR_STACK>::try_from(vec![1.0; TOO_BIG_FOR_STACK]).unwrap();
+        let input =
+            Input::<f64, TOO_BIG_FOR_STACK>::try_from(vec![1.0; TOO_BIG_FOR_STACK]).unwrap();
         let arr = *input.0;
         println!("{}", arr[TOO_BIG_FOR_STACK - 1]);
     }

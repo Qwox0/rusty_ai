@@ -3,6 +3,7 @@
 #![feature(array_chunks)]
 #![feature(test)]
 
+use matrix::Num;
 use mnist_util::{get_mnist, image_to_string, Mnist};
 use rusty_ai::{
     data::{Pair, PairList},
@@ -19,10 +20,10 @@ const OUTPUTS: usize = 10;
 
 const NORMALIZE_MEAN: f64 = 0.5;
 const NORMALIZE_STD: f64 = 0.5;
-fn transform(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<IMAGE_SIZE, usize> {
+fn transform<X: Num>(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<X, IMAGE_SIZE, usize> {
     img_vec
         .into_iter()
-        .map(|x| ((x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD)
+        .map(|x| (((x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD).cast())
         .array_chunks()
         .zip(lbl_vec.into_iter().map(usize::from))
         .collect()
@@ -41,6 +42,7 @@ pub fn main() {
     print_image(&training_data[50], -1.0..1.0);
 
     let mut ai = NNBuilder::default()
+        .double_precision()
         .input::<IMAGE_SIZE>()
         .layer(128, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .activation_function(ActivationFn::ReLU)
@@ -93,7 +95,7 @@ pub fn main() {
     }
 }
 
-pub fn print_image(pair: &Pair<IMAGE_SIZE, usize>, val_range: Range<f64>) {
+pub fn print_image(pair: &Pair<f64, IMAGE_SIZE, usize>, val_range: Range<f64>) {
     println!(
         "{} label: {}",
         image_to_string::<IMAGE_SIDE, IMAGE_SIZE>(pair.0.as_ref(), val_range),

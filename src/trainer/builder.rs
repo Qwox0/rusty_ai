@@ -6,6 +6,7 @@ use crate::{
 #[allow(unused_imports)]
 use crate::{Gradient, Optimizer};
 use markers::*;
+use matrix::Float;
 
 /// Markers uses by [`NNTrainerBuilder`].
 pub mod markers {
@@ -20,8 +21,8 @@ pub mod markers {
 }
 
 /// A Builder used to create a [`NNTrainer`] from and for a [`NeuralNetwork`].
-pub struct NNTrainerBuilder<const IN: usize, const OUT: usize, L, O> {
-    network: NeuralNetwork<IN, OUT>,
+pub struct NNTrainerBuilder<X, const IN: usize, const OUT: usize, L, O> {
+    network: NeuralNetwork<X, IN, OUT>,
     loss_function: L,
     optimizer: O,
     retain_gradient: bool,
@@ -29,13 +30,15 @@ pub struct NNTrainerBuilder<const IN: usize, const OUT: usize, L, O> {
     training_threads: usize,
 }
 
-impl<const IN: usize, const OUT: usize> NNTrainerBuilder<IN, OUT, NoLossFunction, NoOptimizer> {
+impl<X, const IN: usize, const OUT: usize>
+    NNTrainerBuilder<X, IN, OUT, NoLossFunction, NoOptimizer>
+{
     /// # Defaults
     ///
     /// `retain_gradient`: `false`
     /// `clip_gradient_norm`: [`None`]
     /// `training_threads`: [`std::thread::available_parallelism`]
-    pub fn new(network: NeuralNetwork<IN, OUT>) -> Self {
+    pub fn new(network: NeuralNetwork<X, IN, OUT>) -> Self {
         NNTrainerBuilder {
             network,
             loss_function: NoLossFunction,
@@ -47,16 +50,16 @@ impl<const IN: usize, const OUT: usize> NNTrainerBuilder<IN, OUT, NoLossFunction
     }
 }
 
-impl<const IN: usize, const OUT: usize, L, O> NNTrainerBuilder<IN, OUT, L, O> {
+impl<X, const IN: usize, const OUT: usize, L, O> NNTrainerBuilder<X, IN, OUT, L, O> {
     /// Sets the [`LossFunction`] used by the [`NNTrainer`].
-    pub fn loss_function<L2>(self, loss_function: L2) -> NNTrainerBuilder<IN, OUT, L2, O>
-    where L2: LossFunction<OUT> {
+    pub fn loss_function<L2>(self, loss_function: L2) -> NNTrainerBuilder<X, IN, OUT, L2, O>
+    where L2: LossFunction<X, OUT> {
         NNTrainerBuilder { loss_function, ..self }
     }
 
     /// Sets the [`Optimizer`] used by the [`NNTrainer`].
-    pub fn optimizer<O2>(self, optimizer: O2) -> NNTrainerBuilder<IN, OUT, L, O2>
-    where O2: OptimizerValues {
+    pub fn optimizer<O2>(self, optimizer: O2) -> NNTrainerBuilder<X, IN, OUT, L, O2>
+    where O2: OptimizerValues<X> {
         NNTrainerBuilder { optimizer, ..self }
     }
 
@@ -73,7 +76,7 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainerBuilder<IN, OUT, L, O> {
     }
 
     /// Activates and sets a new [`ClipGradientNorm`] which is created from the parameters.
-    pub fn new_clip_gradient_norm(self, max_norm: f64, norm_type: Norm) -> Self {
+    pub fn new_clip_gradient_norm(self, max_norm: f32, norm_type: Norm) -> Self {
         let clip_grad_norm = ClipGradientNorm::new(norm_type, max_norm);
         self.clip_gradient_norm(clip_grad_norm)
     }
@@ -85,13 +88,13 @@ impl<const IN: usize, const OUT: usize, L, O> NNTrainerBuilder<IN, OUT, L, O> {
     }
 }
 
-impl<const IN: usize, const OUT: usize, EO, L, O> NNTrainerBuilder<IN, OUT, L, O>
+impl<X: Float, const IN: usize, const OUT: usize, EO, L, O> NNTrainerBuilder<X, IN, OUT, L, O>
 where
-    L: LossFunction<OUT, ExpectedOutput = EO>,
-    O: OptimizerValues,
+    L: LossFunction<X, OUT, ExpectedOutput = EO>,
+    O: OptimizerValues<X>,
 {
     /// Consumes the Builder to create a new [`NNTrainer`].
-    pub fn build(self) -> NNTrainer<IN, OUT, L, O::Optimizer> {
+    pub fn build(self) -> NNTrainer<X, IN, OUT, L, O::Optimizer> {
         let NNTrainerBuilder {
             network,
             loss_function,

@@ -1,15 +1,16 @@
 use crate::{
     gradient::aliases::{OutputGradient, WeightedSumGradient},
-    *,
+    ActivationFunction,
 };
 use derive_more::Display;
+use matrix::Float;
 
 #[derive(Debug, Clone, Copy, Display)]
 pub(super) struct Softmax;
 
-impl ActivationFunction for Softmax {
-    fn propagate(&self, mut input: Vec<f64>) -> Vec<f64> {
-        let mut sum = 0.0;
+impl<F: Float> ActivationFunction<F> for Softmax {
+    fn propagate(&self, mut input: Vec<F>) -> Vec<F> {
+        let mut sum = F::zero();
         for x in input.iter_mut() {
             *x = x.exp();
             sum += *x;
@@ -19,17 +20,17 @@ impl ActivationFunction for Softmax {
 
     fn backpropagate(
         &self,
-        output_gradient: OutputGradient,
-        self_output: &[f64],
-    ) -> WeightedSumGradient {
+        output_gradient: OutputGradient<F>,
+        self_output: &[F],
+    ) -> WeightedSumGradient<F> {
         // dL/dx_i = y_i * (dL/dy_i - sum dL/dy_k * y_k for k in 1..=n)
-        let s: f64 = output_gradient.iter().zip(self_output).map(|(&dl_dy, &y)| dl_dy * y).sum();
+        let s: F = output_gradient.iter().zip(self_output).map(|(&dl_dy, &y)| dl_dy * y).sum();
         // dL/dx_i = y_i * (dL/dy_i - s)
         output_gradient
             .into_iter()
             .map(|out_grad| out_grad - s)
             .zip(self_output)
-            .map(|(out_grad, out)| out * out_grad)
+            .map(|(out_grad, out)| *out * out_grad)
             .collect()
     }
 }
@@ -37,10 +38,10 @@ impl ActivationFunction for Softmax {
 #[derive(Debug, Clone, Copy, Display)]
 pub(super) struct LogSoftmax;
 
-impl ActivationFunction for LogSoftmax {
-    fn propagate(&self, input: Vec<f64>) -> Vec<f64> {
+impl<F: Float> ActivationFunction<F> for LogSoftmax {
+    fn propagate(&self, input: Vec<F>) -> Vec<F> {
         // ln(e^(x_i)/exp_sum) == x_i - ln(exp_sum)
-        let ln_sum = input.iter().copied().map(f64::exp).sum::<f64>().ln();
+        let ln_sum = input.iter().copied().map(F::exp).sum::<F>().ln();
         input.into_iter().map(|x| x - ln_sum).collect()
     }
 
@@ -83,9 +84,9 @@ impl ActivationFunction for LogSoftmax {
     /// dL/x3 = -1 * do3/x3 = softmax(x3) - 1
     fn backpropagate(
         &self,
-        output_gradient: OutputGradient,
-        self_output: &[f64],
-    ) -> WeightedSumGradient {
+        output_gradient: OutputGradient<F>,
+        self_output: &[F],
+    ) -> WeightedSumGradient<F> {
         // dL/dx_i = dL/dy_i - sum dL/dy_k * exp(y_k) for k in 1..=n
         // println!("self_output: {:?}", self_output);
         // println!("output_gradient: {:?}", output_gradient);
@@ -103,9 +104,9 @@ impl ActivationFunction for LogSoftmax {
         self_output
             .iter()
             .copied()
-            .map(f64::exp)
+            .map(F::exp)
             .zip(&output_gradient)
-            .map(|(exp_y, dl_dy)| exp_y + dl_dy)
+            .map(|(exp_y, dl_dy)| exp_y + *dl_dy)
             .collect()
     }
 }
@@ -113,7 +114,7 @@ impl ActivationFunction for LogSoftmax {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use loss_function::{LossFunction, NLLLoss};
+    use crate::loss_function::{LossFunction, NLLLoss};
 
     #[test]
     fn log_softmax_backprop() {

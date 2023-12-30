@@ -10,8 +10,8 @@ use rusty_ai::{
 };
 
 fn test_ai<const IN: usize, const OUT: usize>(
-    ai: &NNTrainer<IN, OUT, SquaredError, SGD_>,
-    data: &PairList<IN, [f64; OUT]>,
+    ai: &NNTrainer<f64, IN, OUT, SquaredError, SGD_<f64>>,
+    data: &PairList<f64, IN, [f64; OUT]>,
     epoch: usize,
 ) {
     let loss: f64 = ai.test_batch(data).map(|(_, l)| l).sum();
@@ -42,6 +42,7 @@ fn xor() {
     let b4 = LayerBias::from(vec![-0.47832936152865413]);
 
     let mut ai = NNBuilder::default()
+        .double_precision()
         .input::<2>()
         .default_activation_function(ActivationFn::ReLU)
         .layer_from_parameters(w1, b1)
@@ -59,7 +60,7 @@ fn xor() {
     //let data = DataList::random_simple(2000, -PI..PI, f64::sin);
     let x = [[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]];
     let y = [[0.0], [1.0], [1.0], [0.0]];
-    let data: PairList<2, _> = x.into_iter().zip(y).collect();
+    let data: PairList<f64, 2, _> = x.into_iter().zip(y).collect();
     println!("\ndata: {:?}\n", data);
 
     let (outputs, losses): (Vec<[f64; 1]>, Vec<f64>) = ai.test_batch(&data).unzip();

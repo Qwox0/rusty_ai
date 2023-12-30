@@ -21,24 +21,27 @@ pub use number::*;
 mod ring;
 pub use ring::*;
 
+mod element;
+pub use element::{Element, Float, Num};
+
 mod util;
 use util::*;
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq, Serialize, Deserialize)]
-pub struct Matrix<T> {
+pub struct Matrix<X> {
     width: usize,
     /// `height * width` is stored in `elements.len()`
-    elements: Box<[T]>,
+    elements: Box<[X]>,
 }
 
-impl<T> Default for Matrix<T> {
+impl<X> Default for Matrix<X> {
     /// Creates a new 0x0 [`Matrix`].
     fn default() -> Self {
         Self { width: 0, elements: Box::new([]) }
     }
 }
 
-impl<T> Matrix<T> {
+impl<X: Element> Matrix<X> {
     /// Creates a new [`Matrix`].
     ///
     /// # Safety
@@ -46,12 +49,12 @@ impl<T> Matrix<T> {
     /// `elements.len()` must be a multiple of `width`. Otherwise there might be problems with
     /// `Matrix::iter_rows` and `Matrix::iter_rows_mut`.
     #[inline]
-    pub const unsafe fn new_unchecked(width: usize, elements: Box<[T]>) -> Self {
+    pub const unsafe fn new_unchecked(width: usize, elements: Box<[X]>) -> Self {
         Self { width, elements }
     }
 
     /// Creates a new [`Matrix`] if `elements.len()` is a multiple of `width`.
-    pub fn new(width: usize, elements: Box<[T]>) -> Option<Self> {
+    pub fn new(width: usize, elements: Box<[X]>) -> Option<Self> {
         let len = elements.len();
         if len.checked_rem(width).unwrap_or(len) == 0 {
             Some(unsafe { Self::new_unchecked(width, elements) })
@@ -60,6 +63,87 @@ impl<T> Matrix<T> {
         }
     }
 
+    /// Creates a [`Matrix`] from its dimensions and a value [`Iterator`].
+    /// The [`Matrix`] is filled with values row by row.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if the iterator is too small.
+    /// * If `width * height` overflows.
+    pub fn from_iter(width: usize, height: usize, iter: impl IntoIterator<Item = X>) -> Matrix<X> {
+        let len = width * height;
+        let elements: Box<[X]> = iter.into_iter().take(len).collect();
+        assert_eq!(elements.len(), len);
+        unsafe { Matrix::new_unchecked(width, elements) }
+    }
+
+    /// Creates a [`Matrix`] from its dimensions and a value [`Iterator`] and returns [`None`] if
+    /// * the iterator is too small.
+    /// * `width * height` overflows.
+    ///
+    /// The [`Matrix`] is filled with values row by row.
+    ///
+    /// ```rust
+    /// # use matrix::Matrix;
+    /// let m = Matrix::checked_from_iter(2, 2, 1..).expect("could create matrix");
+    /// assert_eq!(m.get_row(0), Some([1, 2].as_slice()));
+    /// assert_eq!(m.get_row(1), Some([3, 4].as_slice()));
+    /// assert_eq!(m.get_row(2), None);
+    /// ```
+    pub fn checked_from_iter(
+        width: usize,
+        height: usize,
+        iter: impl IntoIterator<Item = X>,
+    ) -> Option<Matrix<X>> {
+        let len = width.checked_mul(height)?;
+        let elements: Box<[X]> = iter.into_iter().take(len).collect();
+        if elements.len() != len {
+            return None;
+        }
+        unsafe { Some(Matrix::new_unchecked(width, elements)) }
+    }
+
+    /// Creates a [`Matrix`] from an Iterator of rows.
+    ///
+    /// ```rust
+    /// # use matrix::Matrix;
+    /// Matrix::from_rows([[1, 0].as_slice(), [0, 1].as_slice()]);
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if the rows don't have the same length:
+    ///
+    /// ```rust, should_panic
+    /// # use matrix::Matrix;
+    /// Matrix::from_rows([[1, 0].as_slice(), [0].as_slice()]); // -> Panics
+    /// ```
+    pub fn from_rows<'a>(elements: impl IntoIterator<Item = &'a [X]>) -> Matrix<X>
+    where X: 'a + Clone {
+        let mut elements_iter = elements.into_iter();
+        let Some(first) = elements_iter.next() else {
+            return Matrix::default();
+        };
+        let width = first.len();
+
+        let mut elements = Vec::with_capacity(width * (1 + elements_iter.size_hint().0));
+        elements.extend_from_slice(first);
+        while let Some(row) = elements_iter.next() {
+            if row.len() != width {
+                panic!("row length must equal width (width: {width}, got: {})", row.len());
+            }
+            elements.extend_from_slice(row);
+        }
+        unsafe { Matrix::new_unchecked(width, elements.into_boxed_slice()) }
+    }
+
+    pub fn with_default(width: usize, height: usize, default: X) -> Matrix<X> {
+        let elements = vec![default; width * height];
+        unsafe { Matrix::new_unchecked(width, elements.into_boxed_slice()) }
+    }
+}
+
+impl<X> Matrix<X> {
     /// Gets the width of the [`Matrix`].
     #[doc(alias = "get_input_count")]
     #[inline]
@@ -83,125 +167,51 @@ impl<T> Matrix<T> {
     }
 
     /// Gets the elements of the [`Matrix`] as a slice.
-    pub const fn get_elements(&self) -> &[T] {
+    pub const fn get_elements(&self) -> &[X] {
         &self.elements
     }
 
     /// Gets the elements of the [`Matrix`] as a mutable slice.
-    pub fn get_elements_mut(&mut self) -> &mut [T] {
+    pub fn get_elements_mut(&mut self) -> &mut [X] {
         &mut self.elements
     }
 
-    /// Creates a [`Matrix`] from its dimensions and a value [`Iterator`].
-    /// The [`Matrix`] is filled with values row by row.
-    ///
-    /// # Panics
-    ///
-    /// * Panics if the iterator is too small.
-    /// * If `width * height` overflows.
-    pub fn from_iter(width: usize, height: usize, iter: impl IntoIterator<Item = T>) -> Matrix<T> {
-        let len = width * height;
-        let elements: Box<[T]> = iter.into_iter().take(len).collect();
-        assert_eq!(elements.len(), len);
-        unsafe { Matrix::new_unchecked(width, elements) }
-    }
-
-    /// Creates a [`Matrix`] from its dimensions and a value [`Iterator`] and returns [`None`] if
-    /// * the iterator is too small.
-    /// * `width * height` overflows.
-    ///
-    /// The [`Matrix`] is filled with values row by row.
-    ///
-    /// ```rust
-    /// # use matrix::Matrix;
-    /// let m = Matrix::checked_from_iter(2, 2, 1..).expect("could create matrix");
-    /// assert_eq!(m.get_row(0), Some([1, 2].as_slice()));
-    /// assert_eq!(m.get_row(1), Some([3, 4].as_slice()));
-    /// assert_eq!(m.get_row(2), None);
-    /// ```
-    pub fn checked_from_iter(
-        width: usize,
-        height: usize,
-        iter: impl IntoIterator<Item = T>,
-    ) -> Option<Matrix<T>> {
-        let len = width.checked_mul(height)?;
-        let elements: Box<[T]> = iter.into_iter().take(len).collect();
-        if elements.len() != len {
-            return None;
-        }
-        unsafe { Some(Matrix::new_unchecked(width, elements)) }
-    }
-
-    /// Creates a [`Matrix`] from an Iterator of rows.
-    ///
-    /// ```rust
-    /// # use matrix::Matrix;
-    /// Matrix::from_rows([[1, 0].as_slice(), [0, 1].as_slice()]);
-    /// ```
-    ///
-    /// # Panics
-    ///
-    /// Panics if the rows don't have the same length:
-    ///
-    /// ```rust, should_panic
-    /// # use matrix::Matrix;
-    /// Matrix::from_rows([[1, 0].as_slice(), [0].as_slice()]); // -> Panics
-    /// ```
-    pub fn from_rows<'a>(elements: impl IntoIterator<Item = &'a [T]>) -> Matrix<T>
-    where T: 'a + Clone {
-        let mut elements_iter = elements.into_iter();
-        let Some(first) = elements_iter.next() else {
-            return Matrix::default();
-        };
-        let width = first.len();
-
-        let mut elements = Vec::with_capacity(width * (1 + elements_iter.size_hint().0));
-        elements.extend_from_slice(first);
-        while let Some(row) = elements_iter.next() {
-            if row.len() != width {
-                panic!("row length must equal width (width: {width}, got: {})", row.len());
-            }
-            elements.extend_from_slice(row);
-        }
-        unsafe { Matrix::new_unchecked(width, elements.into_boxed_slice()) }
-    }
-
     #[inline]
-    pub fn get_row(&self, y: usize) -> Option<&[T]> {
+    pub fn get_row(&self, y: usize) -> Option<&[X]> {
         self.elements.get(y * self.width..(y + 1) * self.width)
     }
 
     #[inline]
-    pub fn get_row_mut(&mut self, y: usize) -> Option<&mut [T]> {
+    pub fn get_row_mut(&mut self, y: usize) -> Option<&mut [X]> {
         self.elements.get_mut(y * self.width..(y + 1) * self.width)
     }
 
     #[inline]
-    pub fn get(&self, y: usize, x: usize) -> Option<&T> {
+    pub fn get(&self, y: usize, x: usize) -> Option<&X> {
         self.elements.get(y * self.width + x)
     }
 
     #[inline]
-    pub fn get_mut(&mut self, y: usize, x: usize) -> Option<&mut T> {
+    pub fn get_mut(&mut self, y: usize, x: usize) -> Option<&mut X> {
         self.elements.get_mut(y * self.width + x)
     }
 
     #[inline]
-    pub const fn iter_rows(&self) -> IterRows<'_, T> {
+    pub const fn iter_rows(&self) -> IterRows<'_, X> {
         // SAFETY: `self.elements.len()` is a multiple of `self.width`. See [`IterRows::new`]
         unsafe { IterRows::new(&self.elements, self.width) }
     }
 
     #[inline]
-    pub fn iter_rows_mut(&mut self) -> IterRowsMut<'_, T> {
+    pub fn iter_rows_mut(&mut self) -> IterRowsMut<'_, X> {
         unsafe { IterRowsMut::new(&mut self.elements, self.width) }
     }
 
-    pub fn iter<'a>(&'a self) -> Iter<'_, T> {
+    pub fn iter<'a>(&'a self) -> Iter<'_, X> {
         self.elements.iter()
     }
 
-    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'_, T> {
+    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'_, X> {
         self.elements.iter_mut()
     }
 
@@ -211,65 +221,56 @@ impl<T> Matrix<T> {
     }
 }
 
-impl<T, const W: usize, const H: usize> From<[[T; W]; H]> for Matrix<T> {
-    fn from(elements: [[T; W]; H]) -> Self {
+impl<X: Element, const W: usize, const H: usize> From<[[X; W]; H]> for Matrix<X> {
+    fn from(elements: [[X; W]; H]) -> Self {
         let elements = elements.into_iter().flatten().collect();
         unsafe { Matrix::new_unchecked(W, elements) }
     }
 }
 
-impl<T> IntoIterator for Matrix<T> {
-    type IntoIter = std::vec::IntoIter<T>;
-    type Item = T;
+impl<X> IntoIterator for Matrix<X> {
+    type IntoIter = std::vec::IntoIter<X>;
+    type Item = X;
 
     fn into_iter(self) -> Self::IntoIter {
         self.elements.into_vec().into_iter()
     }
 }
 
-impl<'a, T> IntoIterator for &'a Matrix<T> {
-    type IntoIter = Iter<'a, T>;
-    type Item = &'a T;
+impl<'a, X> IntoIterator for &'a Matrix<X> {
+    type IntoIter = Iter<'a, X>;
+    type Item = &'a X;
 
     fn into_iter(self) -> Self::IntoIter {
         self.elements.iter()
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut Matrix<T> {
-    type IntoIter = IterMut<'a, T>;
-    type Item = &'a mut T;
+impl<'a, X> IntoIterator for &'a mut Matrix<X> {
+    type IntoIter = IterMut<'a, X>;
+    type Item = &'a mut X;
 
     fn into_iter(self) -> Self::IntoIter {
         self.elements.iter_mut()
     }
 }
 
-impl<T: Ring + Clone> Matrix<T> {
-    pub fn with_zeros(width: usize, height: usize) -> Matrix<T> {
-        Matrix::with_default(width, height, T::ZERO)
+impl<X: Num> Matrix<X> {
+    pub fn with_zeros(width: usize, height: usize) -> Matrix<X> {
+        Matrix::with_default(width, height, X::zero())
     }
 
     /// Creates the `n` by `n` identity Matrix.
-    pub fn identity(n: usize) -> Matrix<T> {
+    pub fn identity(n: usize) -> Matrix<X> {
         (0..n).into_iter().fold(Matrix::with_zeros(n, n), |mut acc, i| {
-            *acc.get_mut(i, i).unwrap() = T::ONE;
+            *acc.get_mut(i, i).unwrap() = X::one();
             acc
         })
     }
 }
 
-impl<T: Clone> Matrix<T> {
-    pub fn with_default(width: usize, height: usize, default: T) -> Matrix<T> {
-        let elements = vec![default; width * height];
-        unsafe { Matrix::new_unchecked(width, elements.into_boxed_slice()) }
-    }
-}
-
-impl<T> Matrix<T>
-where T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>
-{
-    pub fn mul_vec(&self, vec: &[T]) -> Vec<T> {
+impl<X: Num> Matrix<X> {
+    pub fn mul_vec(&self, vec: &[X]) -> Vec<X> {
         assert_eq!(
             self.width,
             vec.len(),
@@ -283,12 +284,11 @@ where T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>
 
 macro_rules! impl_mul {
     ( $( $matrix: ty )*) => { $(
-        impl<T, V> std::ops::Mul<V> for $matrix
+        impl<X: Num, V> std::ops::Mul<V> for $matrix
         where
-            T: Default + Clone + std::ops::Add<Output = T> + std::ops::Mul<Output = T>,
-            V: AsRef<[T]>,
+            V: AsRef<[X]>,
         {
-            type Output = Vec<T>;
+            type Output = Vec<X>;
 
             fn mul(self, rhs: V) -> Self::Output {
                 self.mul_vec(rhs.as_ref())
@@ -297,23 +297,23 @@ macro_rules! impl_mul {
     )* };
 }
 
-impl_mul! { Matrix<T> &Matrix<T> }
+impl_mul! { Matrix<X> &Matrix<X> }
 
-impl<T> Index<(usize, usize)> for Matrix<T> {
-    type Output = T;
+impl<X> Index<(usize, usize)> for Matrix<X> {
+    type Output = X;
 
     fn index(&self, index: (usize, usize)) -> &Self::Output {
         self.get(index.0, index.1).unwrap()
     }
 }
 
-impl<T> IndexMut<(usize, usize)> for Matrix<T> {
+impl<X> IndexMut<(usize, usize)> for Matrix<X> {
     fn index_mut(&mut self, index: (usize, usize)) -> &mut Self::Output {
         self.get_mut(index.0, index.1).unwrap()
     }
 }
 
-impl<T: Display> Matrix<T> {
+impl<X: Display> Matrix<X> {
     pub fn to_string_with_title(&self, title: impl ToString) -> Result<String, std::fmt::Error> {
         let title = title.to_string();
         let mut title = title.trim();
@@ -354,7 +354,7 @@ impl<T: Display> Matrix<T> {
     }
 }
 
-impl<T: Display> Display for Matrix<T> {
+impl<X: Display> Display for Matrix<X> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = self.to_string_with_title("")?;
         write!(f, "{}", text)

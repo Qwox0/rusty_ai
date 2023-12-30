@@ -43,15 +43,15 @@ use matrix::Matrix;
 //               = (o_L_i - e_i) *     f'(z_i)
 
 /// derivatives of the total loss with respect to the neuron activations
-pub type OutputGradient = Vec<f64>;
+pub type OutputGradient<X> = Vec<X>;
 
 /// derivatives of the total loss with respect to the weighted sums
-pub type WeightedSumGradient = Vec<f64>;
+pub type WeightedSumGradient<X> = Vec<X>;
 
 /// derivatives of the total loss with respect to the incoming weights
-pub type WeightGradient = Matrix<f64>;
+pub type WeightGradient<X> = Matrix<X>;
 /// derivatives of the total loss with respect to the previous neuron
 /// activations
-pub type InputGradient = Vec<f64>;
+pub type InputGradient<X> = Vec<X>;
 /// derivatives of the total loss with respect to the biases of a [`Layer`].
-pub type BiasGradient = LayerBias;
+pub type BiasGradient<X> = LayerBias<X>;
