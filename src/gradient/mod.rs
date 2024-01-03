@@ -6,7 +6,10 @@
 use crate::NeuralNetwork;
 use crate::*;
 use serde::{Deserialize, Serialize};
-use std::ops::{Add, AddAssign};
+use std::{
+    iter,
+    ops::{Add, AddAssign},
+};
 
 pub mod aliases;
 mod layer;

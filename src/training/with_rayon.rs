@@ -23,7 +23,6 @@ where
                 self.nn.backpropagate_into(&out, eo, &mut gradient);
                 gradient
             })
-            .fold(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad)
             .reduce(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad);
         self.nn.unchecked_add_gradient(gradient);
         self.nn.clip_gradient();
@@ -36,7 +35,6 @@ where
     /// The order of the items isn't guaranteed!
     pub fn outputs(self) -> mpsc::IntoIter<[X; OUT]> {
         self.nn.maybe_set_zero_gradient();
-
         let (sender, receiver) = mpsc::channel();
         let gradient = self
             .data
@@ -48,7 +46,6 @@ where
                 sender.send(out.get_nn_output()).expect("could send output");
                 gradient
             })
-            .fold(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad)
             .reduce(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad);
         self.nn.unchecked_set_gradient(gradient);
         self.nn.clip_gradient();
@@ -79,7 +76,6 @@ where
 
                 gradient
             })
-            .fold(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad)
             .reduce(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad);
         self.nn.unchecked_set_gradient(gradient);
         self.nn.clip_gradient();

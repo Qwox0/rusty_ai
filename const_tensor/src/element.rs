@@ -1,3 +1,4 @@
+use crate::Len;
 use core::fmt;
 use half::{bf16, f16};
 use inline_closure::inline_closure;
@@ -10,7 +11,10 @@ use std::{
 /// Represents a single value in a multidimensional object. Like a 0D Tensor.
 ///
 /// This trait is automatically implemented.
-pub trait Element: Copy + Default + fmt::Debug + fmt::Display + Send + Sync + 'static {}
+pub trait Element:
+    Copy + Len<1> + Default + fmt::Debug + fmt::Display + Send + Sync + 'static
+{
+}
 
 macro_rules! impl_element {
     ($($ty:ty)+) => {
