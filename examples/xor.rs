@@ -275,4 +275,48 @@ mod benches {
         epoch_datacount_900_neurons_500: 500, 900;
         epoch_datacount_900_neurons_900: 900, 900;
     }
+
+    /*
+    #[bench]
+    fn bench1_epoch_single_threaded(b: &mut Bencher) {
+        let mut ai = get_nn::<f64>(1000);
+        let mut rng = rand::thread_rng();
+        let mut training_data = gen_data(&mut rng, 1000);
+        b.iter(|| {
+            black_box(Training::execute_single_thread(black_box(NNTrainer::train(
+                black_box(&mut ai),
+                black_box(&training_data),
+            ))));
+            training_data.shuffle_rng(&mut rng);
+        })
+    }
+
+    #[bench]
+    fn bench2_epoch_rayon(b: &mut Bencher) {
+        let mut ai = get_nn::<f64>(1000);
+        let mut rng = rand::thread_rng();
+        let mut training_data = gen_data(&mut rng, 1000);
+        b.iter(|| {
+            black_box(Training::execute(black_box(NNTrainer::train(
+                black_box(&mut ai),
+                black_box(&training_data),
+            ))));
+            training_data.shuffle_rng(&mut rng);
+        })
+    }
+
+    #[bench]
+    fn bench3_epoch_rayon_f32(b: &mut Bencher) {
+        let mut ai = get_nn::<f32>(1000);
+        let mut rng = rand::thread_rng();
+        let mut training_data = gen_data(&mut rng, 1000);
+        b.iter(|| {
+            black_box(Training::execute(black_box(NNTrainer::train(
+                black_box(&mut ai),
+                black_box(&training_data),
+            ))));
+            training_data.shuffle_rng(&mut rng);
+        })
+    }
+    */
 }

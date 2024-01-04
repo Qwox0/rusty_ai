@@ -7,8 +7,9 @@
 #![feature(associated_type_defaults)]
 #![feature(exact_size_is_empty)]
 #![doc = include_str!("../README.md")]
-#![forbid(unsafe_code)]
+//#![forbid(unsafe_code)]
 #![warn(missing_docs)]
+#![feature(generic_const_exprs)]
 
 mod activation_function;
 pub mod bias;

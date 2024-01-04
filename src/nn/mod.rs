@@ -13,19 +13,33 @@ use crate::{
     },
     Gradient, Input, ParamsIter, VerbosePropagation,
 };
+use const_tensor::Tensor;
 use matrix::{Element, Float};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
     iter::Map,
+    marker::PhantomData,
 };
 
 mod component;
-//pub use component::NNComponent;
+pub use component::NNComponent;
 
 pub mod builder;
 pub use builder::{BuildLayer, NNBuilder};
+
+mod linear;
+
+mod relu;
+
+mod flatten;
+
+#[derive(Debug)]
+pub struct NN<X: const_tensor::Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> {
+    components: C,
+    _marker: PhantomData<(X, IN, OUT)>,
+}
 
 /// layers contains all Hidden Layers and the Output Layers
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
