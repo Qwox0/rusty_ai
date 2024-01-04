@@ -1,4 +1,3 @@
-use crate::Len;
 use core::fmt;
 use half::{bf16, f16};
 use inline_closure::inline_closure;
@@ -11,10 +10,7 @@ use std::{
 /// Represents a single value in a multidimensional object. Like a 0D Tensor.
 ///
 /// This trait is automatically implemented.
-pub trait Element:
-    Copy + Len<1> + Default + fmt::Debug + fmt::Display + Send + Sync + 'static
-{
-}
+pub trait Element: Copy + Default + fmt::Debug + fmt::Display + Send + Sync + 'static {}
 
 macro_rules! impl_element {
     ($($ty:ty)+) => {
@@ -32,6 +28,7 @@ impl_element! {
     f16 bf16
 }
 
+/// An [`Element`] which also implements some numeric operations.
 pub trait Num:
     Element
     + num::ToPrimitive
@@ -41,19 +38,27 @@ pub trait Num:
     + MoreNumOps
     + SampleUniform // Remove this?
 {
+    /// Additive identity of `Self`
     const ZERO: Self;
+    /// Multiplicative identity of `Self`
     const ONE: Self;
+    /// Maximum value of `Self`.
     const MAX: Self;
+    /// Minimum value of `Self`.
     const MIN: Self;
 
+    /// Creates a new number from an [`i32`]. This should be used for simple values which don't
+    /// result in precision problems.
     /* const */
     fn lit(lit: i32) -> Self;
 
     /// Returns `true` if `self` is positive and `false` if the number is zero or negative.
     fn is_positive(self) -> bool;
 
+    /// Defines the overflow behavior of the `cast` method.
     fn clamp_overflow(is_pos_overflow: bool) -> Self;
 
+    /// Returns `Self::MAX` or `Self::MIN` based on `is_pos`.
     #[inline]
     fn signed_max(is_pos: bool) -> Self {
         if is_pos { Self::MAX } else { Self::MIN }
@@ -71,7 +76,7 @@ pub trait Num:
         X::from(self).unwrap_or_else(|| X::clamp_overflow(self.is_positive()))
     }
 
-    /// Returns `Self::ZERO` or `Self::ONE` based on the `bool`.
+    /// Returns `Self::ZERO` or `Self::ONE` based on the [`bool`].
     fn from_bool(b: bool) -> Self {
         if b { Self::ONE } else { Self::ZERO }
     }
@@ -141,6 +146,8 @@ impl_num! {
     clamp_overflow: Self::signed_max,
 }
 
+/// Some numeric operations required for a type to implement [`Num`].
+///
 /// This trait is automatically implemented.
 pub trait MoreNumOps:
     AddAssign
@@ -169,11 +176,16 @@ impl<
 {
 }
 
+/// A [`Num`] which also implements some floating point operations.
+///
 /// This trait is automatically implemented.
 pub trait Float: Num + num::Float {
+    /// Creates a new float from a [`f32`]. This should be used for simple values which don't
+    /// result in precision problems.
     fn f_lit(lit: f32) -> Self {
         Self::from_f32(lit).unwrap_or_else(|| Self::clamp_overflow(lit.is_positive()))
     }
+
     /// Returns infinity with the sign based on `is_pos`.
     #[inline]
     fn signed_infinity(is_pos: bool) -> Self {
@@ -182,5 +194,3 @@ pub trait Float: Num + num::Float {
 }
 
 impl<T: Num + num::Float> Float for T {}
-
-//impl Float for half::f16 {}

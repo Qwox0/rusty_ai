@@ -1,202 +1,179 @@
-use crate::{Element, Len, Shape};
-use core::slice;
-use std::{
-    iter::{FusedIterator, Map},
-    mem,
-};
+use crate::{vector, Element, Num, Tensor};
+use core::{mem, slice};
+use std::iter::Map;
 
-/// similar to [`str`] and `slice`.
-///
-/// # temporary(?) `LEN` constant
-///
-/// * total amount of elements in the tensor
-/// * length this tensor transmuted to its 1D representation
-/// * to remove `unconstrained generic constant` errors
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[repr(transparent)]
-#[allow(non_camel_case_types)]
-pub struct tensor<S: Shape, const LEN: usize> {
-    data: S,
-}
+pub unsafe trait ToArr<Elem>: Sized {
+    type Arr: AsRef<[Elem]> + AsMut<[Elem]>;
 
-impl<X: Element, S: Shape<Element = X> + Len<LEN>, const LEN: usize> tensor<S, LEN> {
-    pub(crate) fn new_boxed(data: S) -> Box<tensor<S, LEN>> {
-        Box::new(tensor { data })
+    fn to_arr(self) -> Self::Arr {
+        let t = mem::ManuallyDrop::new(self);
+        unsafe { mem::transmute_copy(&t) }
     }
 
-    /// TODO
-    pub(crate) fn literal<'a>(data: S) -> &'a tensor<S, LEN> {
+    fn as_arr(&self) -> &Self::Arr {
+        unsafe { mem::transmute(self) }
+    }
+
+    fn as_arr_mut(&mut self) -> &mut Self::Arr {
+        unsafe { mem::transmute(self) }
+    }
+}
+
+unsafe impl<T> ToArr<T> for T {
+    type Arr = [T; 1];
+}
+
+unsafe impl<T, const N: usize> ToArr<T> for [T; N] {
+    type Arr = [T; N];
+}
+
+/// Length of a tensor ([`TensorData`]).
+///
+/// # SAFETY
+///
+/// Some provided methods on [`TensorData`] requires the correct implementation of this trait.
+/// Otherwise undefined behavior might occur.
+pub unsafe trait Len<const LEN: usize> {}
+
+/// Trait for Tensor data. Types implementing this trait are similar to [`str`] and `slice` and
+/// should only be accessed behind a reference.
+///
+/// # SAFETY
+///
+/// * The data structure must be equivalent to [`Box<Self::Data>`] as [`mem::transmute`] and
+/// [`mem::transmute_copy`] are used to convert between [`Tensor`] types.
+/// * The `LEN` constant has to equal the length of the tensor in its 1D representation.
+pub unsafe trait TensorData<X: Element>: Sized {
+    /// [`Tensor`] type owning `Self`.
+    type Owned: Tensor<X, Data = Self>;
+    /// Internal Shape of the tensor data. Usually an array `[[[[X; A]; B]; ...]; Z]` with the same
+    /// dimensions as the tensor.
+    type Shape: Copy + ToArr<<Self::SubData as TensorData<X>>::Shape>;
+    /// The [`TensorData`] one dimension lower.
+    type SubData: TensorData<X>;
+
+    /// The dimension of the tensor.
+    const DIM: usize;
+    /// The length of the tensor in its 1D representation.
+    const LEN: usize;
+
+    /// Creates a new tensor data in a [`Box`].
+    fn new_boxed(data: Self::Shape) -> Box<Self>;
+
+    /// Transmutes `self` into the inner value.
+    #[inline]
+    fn _as_inner(&self) -> &Self::Shape {
+        unsafe { mem::transmute(self) }
+    }
+
+    /// Transmutes `self` into the inner value.
+    #[inline]
+    fn _as_inner_mut(&mut self) -> &mut Self::Shape {
+        unsafe { mem::transmute(self) }
+    }
+
+    /// similar to `&str` and `&[]` literals.
+    #[inline]
+    fn literal<'a>(data: Self::Shape) -> &'a Self {
         Box::leak(Self::new_boxed(data))
     }
 
-    fn wrap_ref(data: &S) -> &tensor<S, LEN> {
+    /// Transmutes a reference to the shape into tensor data.
+    #[inline]
+    fn wrap_ref(data: &Self::Shape) -> &Self {
         unsafe { mem::transmute(data) }
     }
 
-    fn wrap_ref_mut(data: &mut S) -> &mut tensor<S, LEN> {
+    /// Transmutes a mutable reference to the shape into tensor data.
+    #[inline]
+    fn wrap_ref_mut(data: &mut Self::Shape) -> &mut Self {
         unsafe { mem::transmute(data) }
     }
-}
 
-// S::LEN must equal LEN!!
-impl<X: Element, S: Shape<Element = X>, const LEN: usize> tensor<S, LEN> {
     /// Clones `self` into a new [`Box`].
-    pub fn to_box(&self) -> Box<tensor<S, LEN>> {
-        //Box::new(tensor { data: self.data })
-        Box::new(tensor { data: self.data.clone() })
-    }
-
-    pub(crate) fn into_inner(self) -> S {
-        self.data
-    }
-
-    pub(crate) fn as_inner(&self) -> &S {
-        &self.data
-    }
-
-    pub(crate) fn as_inner_mut(&mut self) -> &mut S {
-        &mut self.data
-    }
-
-    pub fn set(&mut self, val: S) {
-        self.data = val;
+    #[inline]
+    fn to_box(&self) -> Box<Self> {
+        //Box::new(tensor { data: self.data.clone() });
+        Self::new_boxed(self._as_inner().clone())
     }
 
     /// Creates a reference to the elements of the tensor in its 1D representation.
     #[inline]
-    pub fn as_1d(&self) -> &tensor<[X; LEN], LEN> {
+    fn as_1d<const LEN: usize>(&self) -> &vector<X, LEN>
+    where Self: Len<LEN> {
         // TODO: test
         unsafe { mem::transmute(self) }
     }
 
     /// Creates a mutable reference to the elements of the tensor in its 1D representation.
     #[inline]
-    pub fn as_1d_mut(&mut self) -> &mut tensor<[X; LEN], LEN> {
+    fn as_1d_mut<const LEN: usize>(&mut self) -> &mut vector<X, LEN>
+    where Self: Len<LEN> {
         // TODO: test
         unsafe { mem::transmute(self) }
     }
 
+    /// Sets the tensor to `val`.
+    #[inline]
+    fn set(&mut self, val: Self::Shape) {
+        *self._as_inner_mut() = val;
+    }
+
     /// Changes the Shape of the Tensor.
     #[inline]
-    pub fn transmute_as<S2: Shape<Element = X> + Len<LEN>>(&self) -> &tensor<S2, LEN> {
+    fn transmute_as<T2: TensorData<X> + Len<{ Self::LEN }>>(&self) -> &T2 {
         unsafe { mem::transmute(self) }
     }
 
     /// Creates an [`Iterator`] over the references to the elements of `self`.
-    ///
-    /// Alias for `tensor.as_1d().iter()`.
     #[inline]
-    pub fn iter_elem(&self) -> slice::Iter<'_, X> {
-        self.as_1d().as_inner().iter()
+    fn iter_elem<const LEN: usize>(&self) -> slice::Iter<'_, X>
+    where Self: Len<LEN> {
+        self.as_1d()._as_inner().iter()
     }
 
     /// Creates an [`Iterator`] over the mutable references to the elements of `self`.
     #[inline]
-    pub fn iter_elem_mut(&mut self) -> slice::IterMut<'_, X> {
-        self.as_1d_mut().as_inner_mut().iter_mut()
+    fn iter_elem_mut<const LEN: usize>(&mut self) -> slice::IterMut<'_, X>
+    where Self: Len<LEN> {
+        self.as_1d_mut()._as_inner_mut().iter_mut()
     }
-}
 
-pub trait TensorData {
-    type SubShape;
-}
-
-impl<X: Element, S, const LEN: usize> TensorData for tensor<S, LEN>
-where S: Shape<Element = X>
-{
-    type SubShape = S::SubShape;
-}
-
-impl<SUB: Shape, const N: usize, const LEN: usize> tensor<[SUB; N], LEN> {
     /// Creates an [`Iterator`] over references to the sub tensors of the tensor.
-    pub fn iter_sub_tensors<'a, const L: usize>(
+    #[inline]
+    fn iter_sub_tensors<'a>(
         &'a self,
-        /*) -> impl Iterator<Item = &'a tensor<SUB, { SUB::LEN }>>
-        + DoubleEndedIterator
-        + ExactSizeIterator
-        + FusedIterator {*/
-    ) -> Map<slice::Iter<'a, SUB>, impl Fn(&'a SUB) -> &'a tensor<SUB, L>>
-    where
-        SUB: Len<L>,
-    {
-        self.data.iter_sub().map(tensor::wrap_ref)
+    ) -> Map<
+        slice::Iter<'a, <Self::SubData as TensorData<X>>::Shape>,
+        impl Fn(&'a <Self::SubData as TensorData<X>>::Shape) -> &'a Self::SubData,
+    > {
+        self._as_inner().as_arr().as_ref().iter().map(Self::SubData::wrap_ref)
     }
 
     /// Creates an [`Iterator`] over mutable references to the sub tensors of the tensor.
-    pub fn iter_sub_tensors_mut<'a, const L: usize>(
+    #[inline]
+    fn iter_sub_tensors_mut<'a>(
         &'a mut self,
-    ) -> impl Iterator<Item = &'a mut tensor<SUB, L>>
-    + DoubleEndedIterator
-    + ExactSizeIterator
-    + FusedIterator
-    where SUB: Len<L> {
-        /*) -> Map<
-            slice::IterMut<'_, SUB>,
-            impl Fn(&mut S::SubShape) -> &mut tensor<S::SubShape, { S::SubShape::LEN }>,
-        > {*/
-        self.data.iter_sub_mut().map(tensor::wrap_ref_mut)
+    ) -> Map<
+        slice::IterMut<'_, <Self::SubData as TensorData<X>>::Shape>,
+        impl Fn(&'a mut <Self::SubData as TensorData<X>>::Shape) -> &'a mut Self::SubData,
+    > {
+        self._as_inner_mut()
+            .as_arr_mut()
+            .as_mut()
+            .iter_mut()
+            .map(Self::SubData::wrap_ref_mut)
     }
-}
-/*
-impl<X: Element, S, SUB, const LEN: usize> tensor<S, LEN>
-where
-    S: Shape<Element = X, SubShape = SUB>,
-    SUB: Shape,
-{
-    /// Creates an [`Iterator`] over references to the sub tensors of the tensor.
-    pub fn iter_sub_tensors<'a, const L: usize>(
-        &'a self,
-        /*) -> impl Iterator<Item = &'a tensor<SUB, { SUB::LEN }>>
-        + DoubleEndedIterator
-        + ExactSizeIterator
-        + FusedIterator {*/
-    ) -> Map<slice::Iter<'_, SUB>, impl Fn(&SUB) -> &tensor<SUB, L>>
+
+    /// Multiplies the tensor by a scalar value.
+    #[inline]
+    fn scalar_mul_mut<const LEN: usize>(&mut self, scalar: X)
     where
-        SUB: Len<L>,
+        Self: Len<LEN>,
+        X: Num,
     {
-        self.data.iter_sub().map(tensor::wrap_ref)
-    }
-
-    /// Creates an [`Iterator`] over mutable references to the sub tensors of the tensor.
-    pub fn iter_sub_tensors_mut<'a, const L: usize>(
-        &'a mut self,
-    ) -> impl Iterator<Item = &'a mut tensor<SUB, L>>
-    + DoubleEndedIterator
-    + ExactSizeIterator
-    + FusedIterator
-    where SUB: Len<L> + 'a {
-        /*) -> Map<
-            slice::IterMut<'_, SUB>,
-            impl Fn(&mut S::SubShape) -> &mut tensor<S::SubShape, { S::SubShape::LEN }>,
-        > {*/
-        self.data.iter_sub_mut().map(tensor::wrap_ref_mut)
+        for x in self.iter_elem_mut() {
+            *x *= scalar;
+        }
     }
 }
- */
-
-/// Type alias for a 0D tensor.
-pub type ScalarData<X> = tensor<X, 1>;
-/// Type alias for a 1D tensor.
-pub type VectorData<X, const LEN: usize> = tensor<[X; LEN], LEN>;
-/// Type alias for a 2D tensor.
-pub type MatrixData<X, const W: usize, const H: usize> = tensor<[[X; W]; H], { W * H }>;
-/// Type alias for a 3D tensor.
-pub type Tensor3Data<X, const A: usize, const B: usize, const C: usize> =
-    tensor<[[[X; A]; B]; C], { A * B * C }>;
-/// Type alias for a 4D tensor.
-pub type Tensor4Data<X, const A: usize, const B: usize, const C: usize, const D: usize> =
-    tensor<[[[[X; A]; B]; C]; D], { A * B * C * D }>;
-
-fn test() {
-    let a: Box<tensor<i32, 1>> = tensor::new_boxed(333);
-}
-
-/*
-impl<X: Element> Deref for tensor< 1> {
-    type Target = X;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
-*/
