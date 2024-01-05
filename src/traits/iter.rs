@@ -1,3 +1,4 @@
+/*
 use matrix::Element;
 
 /// trait for iterating over the parameters of type [`f64`].
@@ -66,4 +67,5 @@ mod macros {
 }
 
 pub(crate) use macros::impl_IterParams;
+*/
 */

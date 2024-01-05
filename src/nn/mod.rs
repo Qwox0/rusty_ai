@@ -1,59 +1,41 @@
 //! # NN module
 
-#[allow(unused_imports)]
-use crate::trainer::NNTrainer;
-use crate::{
-    gradient::aliases::OutputGradient,
-    layer::Layer,
-    matrix::Matrix,
-    prelude::LossFunction,
-    trainer::{
-        markers::{NoLossFunction, NoOptimizer},
-        NNTrainerBuilder,
-    },
-    Gradient, Input, ParamsIter, VerbosePropagation,
+/*
+use crate::trainer::{
+    markers::{NoLossFunction, NoOptimizer},
+    NNTrainerBuilder,
 };
-use const_tensor::Tensor;
-use matrix::{Element, Float};
+*/
+use const_tensor::{Element, Tensor};
 use serde::{Deserialize, Serialize};
 use std::{
-    borrow::Cow,
     fmt::{Debug, Display},
-    iter::Map,
     marker::PhantomData,
 };
 
-mod component;
-pub use component::NNComponent;
-
 pub mod builder;
-pub use builder::{BuildLayer, NNBuilder};
-
+mod component;
+mod flatten;
 mod linear;
-
 mod relu;
 
-mod flatten;
+pub use builder::NNBuilder;
+pub use component::NNComponent;
 
-#[derive(Debug)]
-pub struct NN<X: const_tensor::Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NN<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> {
     components: C,
     _marker: PhantomData<(X, IN, OUT)>,
 }
 
-/// layers contains all Hidden Layers and the Output Layers
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NeuralNetwork<X, const IN: usize, const OUT: usize> {
-    layers: Vec<Layer<X>>,
-}
-
-impl<X, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
+impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
     /// use [`NNBuilder`] instead!
     #[inline]
-    fn new(layers: Vec<Layer<X>>) -> NeuralNetwork<X, IN, OUT> {
-        NeuralNetwork { layers }
+    fn new(components: C) -> NN<X, IN, OUT, C> {
+        NN { components, _marker: PhantomData }
     }
 
+    /*
     /// Converts `self` to a [`NNTrainerBuilder`] that can be used to create a [`NNTrainer`]
     ///
     /// Used to
@@ -61,15 +43,11 @@ impl<X, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
     pub fn to_trainer(self) -> NNTrainerBuilder<X, IN, OUT, NoLossFunction, NoOptimizer> {
         NNTrainerBuilder::new(self)
     }
-
-    /// Returns the layers of `self` as a slice.
-    #[inline]
-    pub fn get_layers(&self) -> &[Layer<X>] {
-        &self.layers
-    }
+    */
 }
 
-impl<X: Float, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
+/*
+impl<X: Float, const IN: usize, const OUT: usize> NN<X, IN, OUT> {
     /// Creates a [`Gradient`] with the same dimensions as `self` and every element initialized to
     /// `0.0`
     pub fn init_zero_gradient(&self) -> Gradient<X> {
@@ -177,7 +155,7 @@ impl<X: Float, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
     }
 }
 
-impl<X: Element, const IN: usize, const OUT: usize> ParamsIter<X> for NeuralNetwork<X, IN, OUT> {
+impl<X: Element, const IN: usize, const OUT: usize> ParamsIter<X> for NN<X, IN, OUT> {
     fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a X> {
         self.layers.iter().map(Layer::iter).flatten()
     }
@@ -187,12 +165,12 @@ impl<X: Element, const IN: usize, const OUT: usize> ParamsIter<X> for NeuralNetw
     }
 }
 
-impl<'a, X, const IN: usize, const OUT: usize> Default for NeuralNetwork<X, IN, OUT>
+impl<'a, X, const IN: usize, const OUT: usize> Default for NN<X, IN, OUT>
 where
     X: Float,
     rand_distr::StandardNormal: rand_distr::Distribution<X>,
 {
-    /// creates a [`NeuralNetwork`] with one layer. Every parameter is equal to `0.0`.
+    /// creates a [`NN`] with one layer. Every parameter is equal to `0.0`.
     ///
     /// This is probably only useful for testing.
     fn default() -> Self {
@@ -204,7 +182,7 @@ where
     }
 }
 
-impl<X: Display, const IN: usize, const OUT: usize> Display for NeuralNetwork<X, IN, OUT> {
+impl<X: Display, const IN: usize, const OUT: usize> Display for NN<X, IN, OUT> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let get_plural_s = |x: usize| if x == 1 { "" } else { "s" };
         writeln!(
@@ -218,3 +196,4 @@ impl<X: Display, const IN: usize, const OUT: usize> Display for NeuralNetwork<X,
         write!(f, "{}", layers_text)
     }
 }
+*/

@@ -1,3 +1,4 @@
+/*
 //! # Clip gradient norm module
 
 use crate::{Gradient, Norm, ParamsIter};
@@ -53,3 +54,4 @@ impl ClipGradientNorm {
         gradient.iter_mut().for_each(|x| *x *= clip_factor.cast());
     }
 }
+*/

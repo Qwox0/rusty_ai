@@ -1,3 +1,4 @@
+/*
 #[allow(unused)]
 use super::Pair;
 use super::PairList;
@@ -13,3 +14,4 @@ impl<X: Element, const DIM: usize> ValueList<X, DIM> {
         self.0.into_iter().map(|input| (input, gen_output(input))).collect()
     }
 }
+*/

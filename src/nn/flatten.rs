@@ -1,11 +1,11 @@
 use super::component::NNComponent;
-use const_tensor::{vector, Element, Len, Tensor, Vector};
+use const_tensor::{Element, Len, Tensor, Vector};
 use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub struct Flatten<T, PREV> {
     pub(super) prev: PREV,
-    _tensor: PhantomData<T>,
+    pub(super) _tensor: PhantomData<T>,
 }
 
 impl<X, T, const LEN: usize, NNIN, PREV> NNComponent<X, NNIN, Vector<X, LEN>> for Flatten<T, PREV>
@@ -16,15 +16,23 @@ where
     NNIN: Tensor<X>,
     PREV: NNComponent<X, NNIN, T>,
 {
+    type Grad = PREV::Grad;
+    type In = NNIN;
+    type StoredData = PREV::StoredData;
+
     #[inline]
     fn prop(&self, input: NNIN) -> Vector<X, LEN> {
         let input = self.prev.prop(input);
         input.into_1d()
     }
 
-    #[inline]
-    fn backprop(&mut self) {
+    fn train_prop(&self, input: NNIN) -> (Vector<X, LEN>, Self::StoredData) {
         todo!()
+    }
+
+    fn backprop(&self, data: PREV::StoredData, out_grad: Vector<X, LEN>, grad: &mut PREV::Grad) {
+        let t = T::from_1d(out_grad);
+        self.prev.backprop(data, t, grad)
     }
 }
 

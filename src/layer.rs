@@ -1,7 +1,6 @@
 //! # Layer<X> module
 
 #[allow(unused_imports)]
-use crate::NeuralNetwork;
 use crate::{
     bias::LayerBias,
     gradient::aliases::{InputGradient, OutputGradient},
@@ -9,7 +8,6 @@ use crate::{
     util::EntryAdd,
     *,
 };
-use matrix::Matrix;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, iter::once};
 

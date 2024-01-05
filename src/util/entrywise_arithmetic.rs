@@ -1,3 +1,4 @@
+/*
 use matrix::Num;
 
 pub trait EntryAdd<Rhs = Self>: Sized {
@@ -15,3 +16,4 @@ impl<X: Num> EntryAdd<&[X]> for Vec<X> {
         self
     }
 }
+*/

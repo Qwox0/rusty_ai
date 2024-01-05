@@ -1,3 +1,4 @@
+/*
 //! # Bias module
 
 #[allow(unused_imports)]
@@ -90,3 +91,4 @@ impl<X: Debug> Display for LayerBias<X> {
         write!(f, "{:?}", self.0)
     }
 }
+*/

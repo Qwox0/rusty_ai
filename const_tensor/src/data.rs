@@ -119,6 +119,33 @@ pub unsafe trait TensorData<X: Element>: Sized {
         *self._as_inner_mut() = val;
     }
 
+    /// Sets every element of the tensor to the scalar value `val`.
+    #[inline]
+    fn fill<const LEN: usize>(&mut self, val: X)
+    where Self: Len<LEN> {
+        self.iter_elem_mut().for_each(|x| *x = val);
+    }
+
+    /// Sets every element of the tensor to the scalar value `0`.
+    #[inline]
+    fn fill_zero<const LEN: usize>(&mut self)
+    where
+        Self: Len<LEN>,
+        X: Num,
+    {
+        self.fill(X::ZERO)
+    }
+
+    /// Sets every element of the tensor to the scalar value `1`.
+    #[inline]
+    fn fill_one<const LEN: usize>(&mut self)
+    where
+        Self: Len<LEN>,
+        X: Num,
+    {
+        self.fill(X::ONE)
+    }
+
     /// Changes the Shape of the Tensor.
     #[inline]
     fn transmute_as<T2: TensorData<X> + Len<{ Self::LEN }>>(&self) -> &T2 {

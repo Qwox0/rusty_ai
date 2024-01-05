@@ -47,7 +47,7 @@ fn basic_usage() {
 
     println!("\n# mat_mul_vec:");
     let vec = Vector::new([2, 1]);
-    let res = mat.mul_vec(vec);
+    let res = mat.mul_vec(&vec);
     println!("{:#?}", res);
     assert_eq!(res, Tensor::new([7, 13, 19]));
 

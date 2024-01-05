@@ -1,5 +1,6 @@
 //! # Loss function module
 
+/*
 use crate::{gradient::aliases::OutputGradient, layer::Layer, *};
 use anyhow::Context;
 use derive_more::Display;
@@ -200,3 +201,4 @@ fn differences<'a, X: Num, const N: usize>(
 ) -> impl Iterator<Item = X> + 'a {
     output.iter().zip(expected_output).map(|(out, expected)| *out - *expected)
 }
+*/

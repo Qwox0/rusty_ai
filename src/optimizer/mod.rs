@@ -1,4 +1,5 @@
 //! # Optimizer module
+/*
 
 pub mod adam;
 pub mod sgd;
@@ -34,3 +35,4 @@ pub trait OptimizerValues<X> {
     /// [`Layer`]s in `layers`.
     fn init_with_layers(self, layers: &[Layer<X>]) -> Self::Optimizer;
 }
+*/

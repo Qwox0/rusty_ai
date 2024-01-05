@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["const_tensor", "matrix"]
+members = ["const_tensor"]
 
 [workspace.package]
 edition = "2021"
@@ -10,7 +10,6 @@ version = "0.1.0"
 # workspace members
 rusty_ai = { path = "." }
 const_tensor = { path = "./const_tensor" }
-matrix = { path = "./matrix" }
 
 # dependencies
 anyhow = "1.0.9"
@@ -35,7 +34,6 @@ version.workspace = true
 
 [dependencies]
 const_tensor.workspace = true
-matrix.workspace = true
 
 anyhow.workspace = true
 derive_more.workspace = true

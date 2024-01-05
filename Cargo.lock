@@ -32,7 +32,6 @@ version = "0.1.0"
 dependencies = [
  "half",
  "inline_closure",
- "matrix",
  "num",
  "rand",
  "rand_distr",
@@ -150,18 +149,6 @@ name = "libm"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7012b1bbb0719e1097c47611d3898568c546d597c2e74d66f6087edd5233ff4"
-
-[[package]]
-name = "matrix"
-version = "0.1.0"
-dependencies = [
- "half",
- "inline_closure",
- "num",
- "rand",
- "rand_distr",
- "serde",
-]
 
 [[package]]
 name = "memoffset"
@@ -367,7 +354,6 @@ dependencies = [
  "derive_more",
  "half",
  "inline_closure",
- "matrix",
  "mnist_util",
  "rand",
  "rand_distr",

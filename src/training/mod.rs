@@ -1,3 +1,4 @@
+/*
 //! # Training iterator module
 
 use crate::trainer::NNTrainer;
@@ -492,4 +493,5 @@ where
         todo!()
     }
 }
+*/
 */

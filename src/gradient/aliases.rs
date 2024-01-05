@@ -1,5 +1,6 @@
 //! # Gradient aliases module
 
+/*
 use crate::bias::LayerBias;
 #[allow(unused_imports)]
 use crate::layer::Layer;
@@ -55,3 +56,4 @@ pub type WeightGradient<X> = Matrix<X>;
 pub type InputGradient<X> = Vec<X>;
 /// derivatives of the total loss with respect to the biases of a [`Layer`].
 pub type BiasGradient<X> = LayerBias<X>;
+*/

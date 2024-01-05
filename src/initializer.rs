@@ -1,11 +1,10 @@
-use crate::{bias::LayerBias, matrix::Matrix};
-use matrix::{Float, Num};
+use const_tensor::{Element, Float, Len, Num, Tensor};
 use rand::Rng;
 
 /// see [tensorflow docs](https://www.tensorflow.org/api_docs/python/tf/keras/initializers)
 /// or [pytorch docs](https://pytorch.org/docs/stable/nn.init.html)
 #[derive(Debug, Clone)]
-pub enum Initializer<X, T> {
+pub enum Initializer<X: Element, T: Tensor<X>> {
     /// Fixed value
     Initialized(T),
 
@@ -35,7 +34,7 @@ pub enum Initializer<X, T> {
     GlorotUniform,
 
     /// [TensorFlow Dense Layer docs](https://www.tensorflow.org/api_docs/python/tf/keras/layers/Dense)
-    TensorFlowDefault,
+    //TensorFlowDefault,
 
     /// [Pytorch Linear Layer docs](https://pytorch.org/docs/stable/generated/torch.nn.Linear.html)
     PytorchDefault,
@@ -43,7 +42,7 @@ pub enum Initializer<X, T> {
 
 // pub type DataInitializer<const DIM: usize> = Initializer<[f64; DIM]>;
 
-impl<X: Num, T> Initializer<X, T> {
+impl<X: Num, T: Tensor<X>> Initializer<X, T> {
     /// Initializes all values with the fixed value `1`.
     #[allow(non_upper_case_globals)]
     pub const Ones: Self = Initializer::Constant(X::ONE);
@@ -52,51 +51,22 @@ impl<X: Num, T> Initializer<X, T> {
     pub const Zeros: Self = Initializer::Constant(X::ZERO);
 }
 
-impl<X: Float> Initializer<X, Matrix<X>>
-where rand_distr::StandardNormal: rand_distr::Distribution<X>
+impl<F: Float, T: Tensor<F>> Initializer<F, T>
+where rand_distr::StandardNormal: rand_distr::Distribution<F>
 {
     /// Uses `self` to create a weights [`Matrix`].
-    pub fn init_weights(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Matrix<X> {
-        macro_rules! mat {
-            ($iter:expr) => {
-                Matrix::from_iter(inputs, outputs, $iter)
-            };
-        }
-        use Initializer::*;
+    pub fn init<const LEN: usize>(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> T
+    where T::Data: Len<LEN> {
+        use Initializer as I;
         match self {
-            Initialized(x) => x,
-            Constant(x) => Matrix::with_default(inputs, outputs, x),
-            Uniform(low, high) => mat!(uniform(rng, low, high)),
-            Normal { mean, std_dev } => mat!(normal(rng, mean, std_dev)),
-            StandardNormal => mat!(std_normal(rng)),
-            GlorotNormal => mat!(glorot_normal(rng, inputs, outputs)),
-            GlorotUniform | TensorFlowDefault => mat!(glorot_uniform(rng, inputs, outputs)),
-            PytorchDefault => mat!(pytorch_default(rng, inputs)),
-        }
-    }
-}
-
-impl<X: Float> Initializer<X, LayerBias<X>>
-where rand_distr::StandardNormal: rand_distr::Distribution<X>
-{
-    /// Uses `self` to create a weights [`LayerBias<X>`].
-    pub fn init_bias(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> LayerBias<X> {
-        macro_rules! bias {
-            ($iter:expr) => {
-                LayerBias::from_iter(outputs, $iter)
-            };
-        }
-        use Initializer::*;
-        match self {
-            Initialized(x) => x,
-            Constant(x) => LayerBias::from(vec![x; outputs]),
-            TensorFlowDefault => LayerBias::from(vec![X::zero(); outputs]),
-            Uniform(low, high) => bias!(uniform(rng, low, high)),
-            Normal { mean, std_dev } => bias!(normal(rng, mean, std_dev)),
-            StandardNormal => bias!(std_normal(rng)),
-            GlorotNormal => bias!(glorot_normal(rng, inputs, outputs)),
-            GlorotUniform => bias!(glorot_uniform(rng, inputs, outputs)),
-            PytorchDefault => bias!(pytorch_default(rng, inputs)),
+            I::Initialized(t) => t,
+            I::Constant(x) => Tensor::full(x),
+            I::Uniform(low, high) => Tensor::from_iter(uniform(rng, low, high)),
+            I::Normal { mean, std_dev } => Tensor::from_iter(normal(rng, mean, std_dev)),
+            I::StandardNormal => Tensor::from_iter(std_normal(rng)),
+            I::GlorotNormal => Tensor::from_iter(glorot_normal(rng, inputs, outputs)),
+            I::GlorotUniform => Tensor::from_iter(glorot_uniform(rng, inputs, outputs)),
+            I::PytorchDefault => Tensor::from_iter(pytorch_default(rng, inputs)),
         }
     }
 }

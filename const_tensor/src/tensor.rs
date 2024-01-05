@@ -1,4 +1,4 @@
-use crate::{Element, Len, TensorData, Vector};
+use crate::{Element, Len, Num, TensorData, Vector};
 use std::{
     borrow::{Borrow, BorrowMut},
     fmt::Debug,
@@ -34,9 +34,50 @@ pub unsafe trait Tensor<X: Element>:
         Self::from_box(Self::Data::new_boxed(data))
     }
 
+    /// Creates a new Tensor filled with the values in `iter`.
+    /// If the [`Iterator`] it too small, the rest of the elements contain the scalar value `0`.
+    #[inline]
+    fn from_iter<const LEN: usize>(iter: impl IntoIterator<Item = X>) -> Self
+    where
+        Self::Data: Len<LEN>,
+        X: Num,
+    {
+        let mut tensor = Self::zeros();
+        tensor.iter_elem_mut().zip(iter).for_each(|(x, val)| *x = val);
+        tensor
+    }
+
+    /// Creates a new Tensor filled with the scalar value.
+    #[inline]
+    fn full<const LEN: usize>(val: X) -> Self
+    where Self::Data: Len<LEN> {
+        Self::from_1d(Vector::new([val; LEN]))
+    }
+
+    /// Creates a new Tensor filled with the scalar value `0`.
+    #[inline]
+    fn zeros<const LEN: usize>() -> Self
+    where
+        Self::Data: Len<LEN>,
+        X: Num,
+    {
+        Self::full(X::ZERO)
+    }
+
+    /// Creates a new Tensor filled with the scalar value `1`.
+    #[inline]
+    fn ones<const LEN: usize>() -> Self
+    where
+        Self::Data: Len<LEN>,
+        X: Num,
+    {
+        Self::full(X::ONE)
+    }
+
     /// Creates the Tensor from a 1D representation of its elements.
     #[inline]
-    fn from_1d(vec: Vector<X, { Self::Data::LEN }>) -> Self {
+    fn from_1d<const LEN: usize>(vec: Vector<X, LEN>) -> Self
+    where Self::Data: Len<LEN> {
         let vec = mem::ManuallyDrop::new(vec);
         unsafe { mem::transmute_copy(&vec) }
     }

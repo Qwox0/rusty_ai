@@ -1,3 +1,4 @@
+/*
 //! # Gradient<X> module
 //!
 //! This module contains type definitions for documentation purposes.
@@ -6,10 +7,7 @@
 use crate::NeuralNetwork;
 use crate::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    iter,
-    ops::{Add, AddAssign},
-};
+use std::ops::{Add, AddAssign};
 
 pub mod aliases;
 mod layer;
@@ -88,3 +86,4 @@ impl<X: Element> std::fmt::Display for Gradient<X> {
         write!(f, "{}", text)
     }
 }
+*/

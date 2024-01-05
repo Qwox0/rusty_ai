@@ -1,3 +1,4 @@
+/*
 use super::NNTrainer;
 use crate::{
     clip_gradient_norm::ClipGradientNorm, loss_function::LossFunction, util, NeuralNetwork, Norm,
@@ -6,7 +7,6 @@ use crate::{
 #[allow(unused_imports)]
 use crate::{Gradient, Optimizer};
 use markers::*;
-use matrix::Float;
 
 /// Markers uses by [`NNTrainerBuilder`].
 pub mod markers {
@@ -113,3 +113,4 @@ where
         NNTrainer::new(network, loss_function, optimizer, retain_gradient, clip_gradient_norm)
     }
 }
+*/

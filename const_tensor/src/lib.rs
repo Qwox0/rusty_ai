@@ -83,10 +83,10 @@ where vector<X, W>: Len<W>
 {
     /// Multiplies the [`matrix`] `self` by the [`vector`] `vec` and returns a newly allocated
     /// [`Vector`] containing the result.
-    pub fn mul_vec(&self, vec: impl Borrow<vector<X, W>>) -> Vector<X, H> {
+    pub fn mul_vec(&self, vec: &vector<X, W>) -> Vector<X, H> {
         let mut out = Vector::new([X::ZERO; H]);
         for (row, out) in self.iter_sub_tensors().zip(out.iter_sub_tensors_mut()) {
-            out.set(row.dot_product(vec.borrow()));
+            out.set(row.dot_product(vec));
         }
         out
     }

@@ -1,3 +1,4 @@
+/*
 use matrix::Element;
 use std::slice::ArrayWindows;
 
@@ -27,3 +28,4 @@ impl<X: Element, const OUT: usize> VerbosePropagation<X, OUT> {
         self.0.last().unwrap().as_slice().try_into().unwrap()
     }
 }
+*/

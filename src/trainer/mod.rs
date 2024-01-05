@@ -1,3 +1,4 @@
+/*
 //! Trainer module.
 
 use crate::{clip_gradient_norm::ClipGradientNorm, training::Training, *};
@@ -467,3 +468,4 @@ mod seeded_tests {
         assert_eq!(&trained_params, TRAINED_PARAMS, "incorrect trained parameters");
     }
 }
+*/

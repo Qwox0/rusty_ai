@@ -1,3 +1,4 @@
+#![allow(incomplete_features)]
 #![feature(array_windows)]
 #![feature(test)]
 #![feature(type_changing_struct_update)]
@@ -6,10 +7,10 @@
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(associated_type_defaults)]
 #![feature(exact_size_is_empty)]
-#![doc = include_str!("../README.md")]
-//#![forbid(unsafe_code)]
-#![warn(missing_docs)]
 #![feature(generic_const_exprs)]
+#![doc = include_str!("../README.md")]
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 mod activation_function;
 pub mod bias;
@@ -17,8 +18,8 @@ pub mod clip_gradient_norm;
 pub mod data;
 pub mod gradient;
 mod initializer;
-mod input;
-pub mod layer;
+//mod input;
+//pub mod layer;
 pub mod loss_function;
 pub mod nn;
 mod norm;
@@ -30,32 +31,32 @@ pub mod training;
 mod traits;
 mod util;
 
-pub use activation_function::{ActivationFn, ActivationFunction};
-pub use gradient::{Gradient, GradientLayer};
+//pub use activation_function::{ActivationFn, ActivationFunction};
+pub use const_tensor::{self, Element, Float, Num};
+//pub use gradient::{Gradient, GradientLayer};
 pub use initializer::Initializer;
-pub use input::Input;
-pub use matrix::{self, Element, Float, Num};
-pub use nn::{BuildLayer, NNBuilder, NeuralNetwork};
-pub use norm::Norm;
-pub use optimizer::{Optimizer, OptimizerValues};
-pub use propagation::VerbosePropagation;
+//pub use input::Input;
+pub use nn::{NNBuilder, NN};
+//pub use norm::Norm;
+//pub use optimizer::{Optimizer, OptimizerValues};
+//pub use propagation::VerbosePropagation;
 pub use reexport::half::{bf16, f16};
-pub use traits::ParamsIter;
+//pub use traits::ParamsIter;
 
 /// # `rusty_ai` prelude
 ///
 /// includes everything
 pub mod prelude {
     pub use crate::{
-        bias::LayerBias,
-        clip_gradient_norm::ClipGradientNorm,
-        data::{DataBuilder, Pair, PairList},
-        gradient::aliases::*,
+        bias::*,
+        clip_gradient_norm::*,
+        const_tensor::*,
+        data::*,
+        //gradient::aliases::*,
         loss_function::*,
-        matrix::*,
-        nn::builder::{markers::*, BuilderNoParts, BuilderWithParts},
-        optimizer::{adam::*, sgd::*, *},
-        trainer::{markers::*, *},
+        nn::builder::markers::*,
+        optimizer::*,
+        //trainer::{markers::*, *},
         training::*,
         *,
     };

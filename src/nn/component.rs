@@ -1,61 +1,58 @@
-use super::{linear::Linear, relu::ReLU, NN};
-use const_tensor::{Element, Matrix, Tensor, Vector};
-use std::{fmt::Debug, marker::PhantomData};
+use const_tensor::{Element, Tensor};
+use std::fmt::Debug;
 
 pub trait NNComponent<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>>: Debug + Sized {
+    /// Gradient component
+    type Grad: GradComponent; //: NNComponent<X, NNIN, OUT>;
+    /// Input tensor of the component
+    ///
+    /// currently unused
+    type In: Tensor<X>;
+    /// The data which is saved during `train_prop` and used in `backprop`.
+    type StoredData: TrainData;
+
+    /// Propagates the `input` [`Tensor`] first through the entire sub network and then through
+    /// this component.
     fn prop(&self, input: NNIN) -> OUT;
 
-    fn backprop(&mut self);
+    /// Like `prop` but also returns the required data for backpropagation.
+    fn train_prop(&self, input: NNIN) -> (OUT, Self::StoredData);
+
+    fn backprop(&self, data: Self::StoredData, out_grad: OUT, grad: &mut Self::Grad);
 }
 
+pub trait GradComponent {}
+
+pub trait TrainData {}
+
+pub struct Data<T, PREV: TrainData> {
+    pub prev: PREV,
+    pub data: T,
+}
+
+impl<T, PREV: TrainData> TrainData for Data<T, PREV> {}
+
+// nn head
+
 impl<X: Element, NNIN: Tensor<X>> NNComponent<X, NNIN, NNIN> for () {
+    type Grad = ();
+    type In = NNIN;
+    type StoredData = ();
+
+    #[inline]
     fn prop(&self, input: NNIN) -> NNIN {
         input
     }
 
-    fn backprop(&mut self) {
-        todo!()
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Builder<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>, C> {
-    components: C,
-    _out: PhantomData<OUT>,
-    _marker: PhantomData<(X, NNIN)>,
-}
-
-impl<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>, PREV: NNComponent<X, NNIN, OUT>>
-    Builder<X, NNIN, OUT, PREV>
-{
     #[inline]
-    fn add_component<C: NNComponent<X, NNIN, OUT2>, OUT2: Tensor<X>>(
-        self,
-        c: impl FnOnce(PREV) -> C,
-    ) -> Builder<X, NNIN, OUT2, C> {
-        Builder { components: c(self.components), _out: PhantomData, ..self }
+    fn train_prop(&self, input: NNIN) -> (NNIN, Self::StoredData) {
+        (input, ())
     }
 
-    fn relu(self) -> Builder<X, NNIN, OUT, ReLU<PREV>> {
-        Builder { components: ReLU { prev: self.components }, ..self }
-    }
-
-    fn build(self) -> NN<X, NNIN, OUT, PREV> {
-        NN { components: self.components, _marker: PhantomData }
-    }
+    #[inline]
+    fn backprop(&self, _data: (), _out_grad: NNIN, _grad: &mut ()) {}
 }
 
-impl<X: Element, NNIN: Tensor<X>, const IN: usize, PREV: NNComponent<X, NNIN, Vector<X, IN>>>
-    Builder<X, NNIN, Vector<X, IN>, PREV>
-{
-    fn layer<const N: usize>(
-        self,
-        weights: [[X; IN]; N],
-        bias: [X; N],
-    ) -> Builder<X, NNIN, Vector<X, N>, Linear<X, IN, N, PREV>> {
-        let weights = Matrix::new(weights);
-        let bias = Vector::new(bias);
-        let components = Linear { prev: self.components, weights, bias };
-        Builder { components, _out: PhantomData, ..self }
-    }
-}
+impl GradComponent for () {}
+
+impl TrainData for () {}

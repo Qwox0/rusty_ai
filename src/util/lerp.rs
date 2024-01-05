@@ -1,3 +1,4 @@
+/*
 use matrix::Float;
 
 pub trait Lerp<Rhs = Self>: Sized {
@@ -17,3 +18,4 @@ impl<F: Float> Lerp<F> for F {
         self
     }
 }
+*/
