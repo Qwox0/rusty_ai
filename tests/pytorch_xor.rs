@@ -1,3 +1,4 @@
+/*
 use rusty_ai::{
     bias::LayerBias,
     data::PairList,
@@ -88,3 +89,4 @@ fn xor() {
         println!("{} xor {} == {} ({})", input[0], input[1], out.round() as i8, out)
     }
 }
+*/

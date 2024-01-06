@@ -1,14 +1,9 @@
-use crate::{vector, Element, Num, Tensor};
+use crate::{vector, Element, Float, Num, Tensor};
 use core::{mem, slice};
 use std::iter::Map;
 
-pub unsafe trait ToArr<Elem>: Sized {
+pub unsafe trait AsArr<Elem>: Sized {
     type Arr: AsRef<[Elem]> + AsMut<[Elem]>;
-
-    fn to_arr(self) -> Self::Arr {
-        let t = mem::ManuallyDrop::new(self);
-        unsafe { mem::transmute_copy(&t) }
-    }
 
     fn as_arr(&self) -> &Self::Arr {
         unsafe { mem::transmute(self) }
@@ -19,11 +14,11 @@ pub unsafe trait ToArr<Elem>: Sized {
     }
 }
 
-unsafe impl<T> ToArr<T> for T {
+unsafe impl<T: Element> AsArr<T> for T {
     type Arr = [T; 1];
 }
 
-unsafe impl<T, const N: usize> ToArr<T> for [T; N] {
+unsafe impl<T, const N: usize> AsArr<T> for [T; N] {
     type Arr = [T; N];
 }
 
@@ -48,9 +43,12 @@ pub unsafe trait TensorData<X: Element>: Sized {
     type Owned: Tensor<X, Data = Self>;
     /// Internal Shape of the tensor data. Usually an array `[[[[X; A]; B]; ...]; Z]` with the same
     /// dimensions as the tensor.
-    type Shape: Copy + ToArr<<Self::SubData as TensorData<X>>::Shape>;
+    type Shape: Copy + AsArr<<Self::SubData as TensorData<X>>::Shape>;
     /// The [`TensorData`] one dimension lower.
     type SubData: TensorData<X>;
+
+    /// `Self` but with another [`Element`] type.
+    type Mapped<E: Element>: TensorData<E, Owned = <Self::Owned as Tensor<X>>::Mapped<E>>;
 
     /// The dimension of the tensor.
     const DIM: usize;
@@ -148,11 +146,28 @@ pub unsafe trait TensorData<X: Element>: Sized {
 
     /// Changes the Shape of the Tensor.
     #[inline]
-    fn transmute_as<T2: TensorData<X> + Len<{ Self::LEN }>>(&self) -> &T2 {
+    fn transmute_as<U, const LEN: usize>(&self) -> &U
+    where
+        Self: Len<LEN>,
+        U: TensorData<X> + Len<LEN>,
+    {
         unsafe { mem::transmute(self) }
     }
 
     /// Creates an [`Iterator`] over the references to the elements of `self`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use const_tensor::{Matrix, Tensor, TensorData};
+    /// let mat = Matrix::new([[1, 2], [3, 4]]);
+    /// let mut iter = mat.iter_elem();
+    /// assert_eq!(iter.next(), Some(&1));
+    /// assert_eq!(iter.next(), Some(&2));
+    /// assert_eq!(iter.next(), Some(&3));
+    /// assert_eq!(iter.next(), Some(&4));
+    /// assert_eq!(iter.next(), None);
+    /// ```
     #[inline]
     fn iter_elem<const LEN: usize>(&self) -> slice::Iter<'_, X>
     where Self: Len<LEN> {
@@ -192,15 +207,153 @@ pub unsafe trait TensorData<X: Element>: Sized {
             .map(Self::SubData::wrap_ref_mut)
     }
 
-    /// Multiplies the tensor by a scalar value.
+    /// Applies a function to every element of the tensor.
+    #[inline]
+    fn map_elem_mut<const LEN: usize>(&mut self, f: impl FnMut(&mut X))
+    where Self: Len<LEN> {
+        self.iter_elem_mut().for_each(f);
+    }
+
+    /// Applies a function to every element of the tensor.
+    #[inline]
+    fn map_clone<Y: Element, const LEN: usize>(
+        &self,
+        mut f: impl FnMut(X) -> Y,
+    ) -> <Self::Mapped<Y> as TensorData<Y>>::Owned
+    where
+        Self: Len<LEN>,
+        Self::Mapped<Y>: Len<LEN>,
+    {
+        let mut out: <Self::Mapped<Y> as TensorData<Y>>::Owned = Default::default();
+        for (o, &x) in out.iter_elem_mut().zip(self.iter_elem()) {
+            *o = f(x);
+        }
+        out
+    }
+
+    /// Multiplies the tensor by a scalar value inplace.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use const_tensor::{Matrix, Tensor, TensorData};
+    /// let mut mat = Matrix::new([[1, 2], [3, 4]]);
+    /// mat.scalar_mul_mut(10);
+    /// assert_eq!(mat._as_inner(), &[[10, 20], [30, 40]]);
+    /// ```
     #[inline]
     fn scalar_mul_mut<const LEN: usize>(&mut self, scalar: X)
     where
         Self: Len<LEN>,
         X: Num,
     {
-        for x in self.iter_elem_mut() {
+        for x in TensorData::<X>::iter_elem_mut(self) {
             *x *= scalar;
         }
+    }
+
+    /// Adds `other` to `self` elementwise and inplace.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use const_tensor::{Matrix, Tensor, TensorData};
+    /// let mut mat1 = Matrix::new([[1, 2], [3, 4]]);
+    /// let mat2 = Matrix::new([[4, 3], [2, 1]]);
+    /// mat1.add_elem_mut(&mat2);
+    /// assert_eq!(mat1._as_inner(), &[[5, 5], [5, 5]]);
+    /// ```
+    #[inline]
+    fn add_elem_mut<const LEN: usize>(&mut self, other: &Self)
+    where
+        Self: Len<LEN>,
+        X: Num,
+    {
+        for (x, y) in TensorData::<X>::iter_elem_mut(self).zip(other.iter_elem()) {
+            *x += *y;
+        }
+    }
+
+    /// Subtracts `other` from `self` elementwise and inplace.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// # use const_tensor::{Matrix, Tensor, TensorData};
+    /// let mut mat1 = Matrix::new([[5, 5], [5, 5]]);
+    /// let mat2 = Matrix::new([[4, 3], [2, 1]]);
+    /// mat1.sub_elem_mut(&mat2);
+    /// assert_eq!(mat1._as_inner(), &[[1, 2], [3, 4]]);
+    /// ```
+    #[inline]
+    fn sub_elem_mut<const LEN: usize>(&mut self, other: &Self)
+    where
+        Self: Len<LEN>,
+        X: Num,
+    {
+        for (x, y) in TensorData::<X>::iter_elem_mut(self).zip(other.iter_elem()) {
+            *x -= *y;
+        }
+    }
+
+    /// Multiplies `other` to `self` elementwise and inplace.
+    #[inline]
+    fn mul_elem_mut<const LEN: usize>(&mut self, other: &Self)
+    where
+        Self: Len<LEN>,
+        X: Num,
+    {
+        for (x, y) in TensorData::<X>::iter_elem_mut(self).zip(other.iter_elem()) {
+            *x *= *y;
+        }
+    }
+
+    /// Calculates the reciprocal of every element in `self` inplace.
+    #[inline]
+    fn recip_elem_mut<const LEN: usize>(&mut self)
+    where
+        Self: Len<LEN>,
+        X: Float,
+    {
+        for x in TensorData::<X>::iter_elem_mut(self) {
+            *x = x.recip();
+        }
+    }
+
+    /// Calculates the negative of the tensor inplace.
+    #[inline]
+    fn neg_mut<const LEN: usize>(&mut self)
+    where
+        Self: Len<LEN>,
+        X: Float,
+    {
+        for x in TensorData::<X>::iter_elem_mut(self) {
+            *x = x.neg();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Matrix;
+
+    #[test]
+    fn as_arr() {
+        let mat = Matrix::new([[1, 2], [3, 4]]);
+        let arr = mat._as_inner().as_arr();
+        assert_eq!(arr, &[[1, 2], [3, 4]]);
+    }
+
+    #[test]
+    fn doc_test() {
+        use crate::{Matrix, Tensor, TensorData};
+        let mat = Matrix::new([[1, 2], [3, 4]]);
+        let mut iter = mat.iter_elem();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), Some(&4));
+        assert_eq!(iter.next(), None);
     }
 }

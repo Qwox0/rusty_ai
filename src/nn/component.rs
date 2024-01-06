@@ -11,13 +11,15 @@ pub trait NNComponent<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>>: Debug + Size
     /// The data which is saved during `train_prop` and used in `backprop`.
     type StoredData: TrainData;
 
-    /// Propagates the `input` [`Tensor`] first through the entire sub network and then through
-    /// this component.
+    /// Propagates the `input` [`Tensor`] through the entire sub network and then through this
+    /// component.
     fn prop(&self, input: NNIN) -> OUT;
 
     /// Like `prop` but also returns the required data for backpropagation.
     fn train_prop(&self, input: NNIN) -> (OUT, Self::StoredData);
 
+    /// Backpropagates the output gradient through this component and then backwards through the
+    /// previous components.
     fn backprop(&self, data: Self::StoredData, out_grad: OUT, grad: &mut Self::Grad);
 }
 

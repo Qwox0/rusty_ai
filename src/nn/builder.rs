@@ -113,7 +113,7 @@ impl<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>, PREV: NNComponent<X, NNIN, OUT
     }
 
     pub fn build(self) -> NN<X, NNIN, OUT, PREV> {
-        NN { components: self.components, _marker: PhantomData }
+        NN::new(self.components)
     }
 }
 
@@ -124,6 +124,7 @@ where
     PREV: NNComponent<X, NNIN, Vector<X, IN>>,
     RNG: rand::Rng,
 {
+    /// Adds a new [`Linear`] layer to the neural network.
     pub fn layer_from_parts<const N: usize>(
         self,
         weights: Matrix<X, IN, N>,
@@ -133,6 +134,7 @@ where
         NNBuilder { components, _out: PhantomData, ..self }
     }
 
+    /// Adds a new [`Linear`] layer to the neural network.
     pub fn layer_from_arr<const N: usize>(
         self,
         weights: [[X; IN]; N],
@@ -142,7 +144,7 @@ where
     }
 
     /// Uses [`Initializer`] to add a new [`Linear`] layer to the neural network.
-    fn layer<const N: usize>(
+    pub fn layer<const N: usize>(
         mut self,
         weights_init: Initializer<X, Matrix<X, IN, N>>,
         bias_init: Initializer<X, Vector<X, N>>,

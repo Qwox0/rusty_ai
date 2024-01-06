@@ -4,6 +4,24 @@ macro_rules! count {
 }
 pub(crate) use count;
 
+pub trait ArrDefault {
+    fn arr_default() -> Self;
+}
+
+impl<T: ArrDefault + Copy, const N: usize> ArrDefault for [T; N] {
+    #[inline]
+    fn arr_default() -> Self {
+        [T::arr_default(); N]
+    }
+}
+
+impl<T: Element> ArrDefault for T {
+    #[inline]
+    fn arr_default() -> Self {
+        T::default()
+    }
+}
+
 macro_rules! make_tensor {
     (
         $name:ident $data_name:ident : $($dim_name:ident)* => $shape:ty,
@@ -25,11 +43,15 @@ macro_rules! make_tensor {
             type Shape = $shape;
             type SubData = $sub_data;
 
+            type Mapped<X_: Element> = $data_name<X_, $( $dim_name ),*>;
+
             const DIM: usize = count!($($dim_name)*);
             const LEN: usize = $($dim_name * )* 1;
 
             #[inline]
-            fn new_boxed(data: Self::Shape) -> Box<Self> { Box::new(Self { data }) }
+            fn new_boxed(data: Self::Shape) -> Box<Self> {
+                Box::new(Self { data })
+            }
         }
 
         /// Owned [`Tensor`].
@@ -39,8 +61,16 @@ macro_rules! make_tensor {
             data: Box<$data_name<X, $( $dim_name ),*>>,
         }
 
+        impl<X: Element, $( const $dim_name: usize ),*> Default for $name<X, $( $dim_name ),*> {
+            fn default() -> Self {
+                Self::new(ArrDefault::arr_default())
+            }
+        }
+
         unsafe impl<X: Element, $( const $dim_name: usize ),*> Tensor<X> for $name<X, $( $dim_name ),*> {
             type Data = $data_name<X, $( $dim_name ),*>;
+
+            type Mapped<X_: Element> = $name<X_, $( $dim_name ),*>;
 
             #[inline]
             fn from_box(data: Box<Self::Data>) -> Self {
@@ -81,4 +111,5 @@ macro_rules! make_tensor {
         }
     };
 }
+use crate::Element;
 pub(crate) use make_tensor;

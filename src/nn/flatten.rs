@@ -26,13 +26,16 @@ where
         input.into_1d()
     }
 
+    #[inline]
     fn train_prop(&self, input: NNIN) -> (Vector<X, LEN>, Self::StoredData) {
-        todo!()
+        let (input, data) = self.prev.train_prop(input);
+        (input.into_1d(), data)
     }
 
+    #[inline]
     fn backprop(&self, data: PREV::StoredData, out_grad: Vector<X, LEN>, grad: &mut PREV::Grad) {
-        let t = T::from_1d(out_grad);
-        self.prev.backprop(data, t, grad)
+        let input_grad = T::from_1d(out_grad);
+        self.prev.backprop(data, input_grad, grad)
     }
 }
 

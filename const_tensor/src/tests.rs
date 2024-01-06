@@ -11,7 +11,7 @@ fn basic_usage() {
     println!("\n# transmute_as:");
     let vec = Vector::new([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     let vec = vec.as_ref(); // Optional
-    let mat = vec.transmute_as::<tensor3<i32, 3, 2, 2>>();
+    let mat: &tensor3<i32, 3, 2, 2> = vec.transmute_as();
     println!("{:#?}", mat);
     assert_eq!(mat, tensor3::literal([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]));
 
@@ -50,6 +50,4 @@ fn basic_usage() {
     let res = mat.mul_vec(&vec);
     println!("{:#?}", res);
     assert_eq!(res, Tensor::new([7, 13, 19]));
-
-    panic!("It works!");
 }

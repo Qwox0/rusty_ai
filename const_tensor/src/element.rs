@@ -1,6 +1,7 @@
 use core::fmt;
 use half::{bf16, f16};
 use inline_closure::inline_closure;
+use num::Zero;
 use rand_distr::uniform::SampleUniform;
 use std::{
     iter::{Product, Sum},
@@ -53,6 +54,8 @@ pub trait Num:
     fn lit(lit: i32) -> Self;
 
     /// Returns `true` if `self` is positive and `false` if the number is zero or negative.
+    ///
+    /// For floats `0` counts as positive and `-0` counts as negative.
     fn is_positive(self) -> bool;
 
     /// Defines the overflow behavior of the `cast` method.
@@ -67,7 +70,7 @@ pub trait Num:
     /// like `as` cast. Results aren't always the same:
     ///
     /// ```rust
-    /// # use matrix::Num;
+    /// # use const_tensor::Num;
     /// assert_eq!(-1i8 as u8, 255);
     /// assert_eq!((-1i8).cast::<u8>(), 0);
     /// ```
@@ -134,7 +137,7 @@ impl_num! {
     usize u8 u16 u32 u64 u128,
     0, 1,
     lit: |lit| lit as Self,
-    is_positive: |_| true,
+    is_positive: |self| !self.is_zero(),
     clamp_overflow: Self::signed_max,
 }
 
@@ -194,3 +197,20 @@ pub trait Float: Num + num::Float {
 }
 
 impl<T: Num + num::Float> Float for T {}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn is_zero() {
+        assert!(!num::Zero::is_zero(&1i32), "1i32 must not be zero");
+        assert!(num::Zero::is_zero(&0i32), "0i32 must be zero");
+
+        assert!(!num::Zero::is_zero(&1u32), "1u32 must not be zero");
+        assert!(num::Zero::is_zero(&0u32), "0u32 must be zero");
+
+        assert!(!num::Zero::is_zero(&1f32), "1f32 must not be zero");
+        assert!(num::Zero::is_zero(&0f32), "0f32 must be zero");
+        assert!(num::Zero::is_zero(&-0f32), "-0f32 must be zero");
+        assert!(0.0 == -0.0);
+    }
+}

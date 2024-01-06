@@ -13,7 +13,7 @@
 
 use std::{
     borrow::{Borrow, BorrowMut},
-    ops::{Add, Deref, DerefMut},
+    ops::{Add, Deref, DerefMut, IndexMut},
 };
 
 mod data;
@@ -21,9 +21,10 @@ mod element;
 mod macros;
 mod tensor;
 
+use data::AsArr;
 pub use data::{Len, TensorData};
 pub use element::{Element, Float, MoreNumOps, Num};
-use macros::{count, make_tensor};
+use macros::{count, make_tensor, ArrDefault};
 pub use tensor::Tensor;
 
 make_tensor! { Scalar scalar : => X, Sub: Self }
@@ -66,6 +67,21 @@ where vector<X, LEN>: Len<LEN>
         self.iter_elem_mut().zip(rhs.iter_elem()).for_each(|(l, r)| *l += *r);
         self
     }
+
+    /// Calculates `self * other^T`
+    pub fn span_mat<const LEN2: usize>(&self, other: &vector<X, LEN2>) -> Matrix<X, LEN2, LEN>
+    where
+        matrix<X, LEN2, LEN>: Len<{ LEN2 * LEN }>,
+        vector<X, LEN2>: Len<LEN2>,
+    {
+        let mut mat = Matrix::zeros();
+        for (row, &y) in self.iter_elem().enumerate() {
+            for (col, &x) in other.iter_elem().enumerate() {
+                mat._as_inner_mut()[row][col] = x * y
+            }
+        }
+        mat
+    }
 }
 
 impl<X: Num, const LEN: usize> Add<&Self> for Vector<X, LEN>
@@ -89,6 +105,42 @@ where vector<X, W>: Len<W>
             out.set(row.dot_product(vec));
         }
         out
+    }
+}
+
+impl<X: Num, const W: usize, const H: usize> Matrix<X, W, H> {
+    /// Transposes the [`Matrix`].
+    pub fn transpose<const LEN: usize>(self) -> Matrix<X, H, W>
+    where matrix<X, H, W>: Len<LEN> {
+        let inner = self._as_inner().as_arr();
+        let mut transposed = Matrix::zeros();
+        let transposed_inner = transposed._as_inner_mut();
+        for (y, row) in inner.iter().enumerate() {
+            for (x, el) in row.iter().enumerate() {
+                transposed_inner[x][y] = *el
+            }
+        }
+        transposed
+    }
+}
+
+impl<X: Num, const LEN: usize> vector<X, LEN> {
+    /// Transmutes the [`vector`] as a [`matrix`] with height equal to `1`.
+    pub fn as_row_mat(&self) -> &matrix<X, LEN, 1>
+    where
+        Self: Len<LEN>,
+        matrix<X, LEN, 1>: Len<LEN>,
+    {
+        self.transmute_as()
+    }
+
+    /// Transmutes the [`vector`] as a [`matrix`] with width equal to `1`.
+    pub fn as_col_mat(&self) -> &matrix<X, 1, LEN>
+    where
+        Self: Len<LEN>,
+        matrix<X, 1, LEN>: Len<LEN>,
+    {
+        self.transmute_as()
     }
 }
 
