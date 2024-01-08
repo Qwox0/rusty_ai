@@ -1,9 +1,13 @@
 use crate::{vector, Element, Float, Num, Tensor};
 use core::{mem, slice};
-use std::iter::Map;
+use std::{
+    iter::Map,
+    mem::ManuallyDrop,
+    ops::{Index, IndexMut},
+};
 
 pub unsafe trait AsArr<Elem>: Sized {
-    type Arr: AsRef<[Elem]> + AsMut<[Elem]>;
+    type Arr: AsRef<[Elem]> + AsMut<[Elem]> + IndexMut<usize>;
 
     fn as_arr(&self) -> &Self::Arr {
         unsafe { mem::transmute(self) }
@@ -30,6 +34,12 @@ unsafe impl<T, const N: usize> AsArr<T> for [T; N] {
 /// Otherwise undefined behavior might occur.
 pub unsafe trait Len<const LEN: usize> {}
 
+pub(crate) fn new_boxed_tensor_data<X: Element, T: TensorData<X>>(data: T::Shape) -> Box<T> {
+    let data = ManuallyDrop::new(data);
+    // SAFETY: see TensorData
+    Box::new(unsafe { mem::transmute_copy::<T::Shape, T>(&data) })
+}
+
 /// Trait for Tensor data. Types implementing this trait are similar to [`str`] and `slice` and
 /// should only be accessed behind a reference.
 ///
@@ -38,7 +48,7 @@ pub unsafe trait Len<const LEN: usize> {}
 /// * The data structure must be equivalent to [`Box<Self::Data>`] as [`mem::transmute`] and
 /// [`mem::transmute_copy`] are used to convert between [`Tensor`] types.
 /// * The `LEN` constant has to equal the length of the tensor in its 1D representation.
-pub unsafe trait TensorData<X: Element>: Sized {
+pub unsafe trait TensorData<X: Element>: Sized + IndexMut<usize> {
     /// [`Tensor`] type owning `Self`.
     type Owned: Tensor<X, Data = Self>;
     /// Internal Shape of the tensor data. Usually an array `[[[[X; A]; B]; ...]; Z]` with the same
@@ -55,9 +65,6 @@ pub unsafe trait TensorData<X: Element>: Sized {
     /// The length of the tensor in its 1D representation.
     const LEN: usize;
 
-    /// Creates a new tensor data in a [`Box`].
-    fn new_boxed(data: Self::Shape) -> Box<Self>;
-
     /// Transmutes `self` into the inner value.
     #[inline]
     fn _as_inner(&self) -> &Self::Shape {
@@ -73,7 +80,7 @@ pub unsafe trait TensorData<X: Element>: Sized {
     /// similar to `&str` and `&[]` literals.
     #[inline]
     fn literal<'a>(data: Self::Shape) -> &'a Self {
-        Box::leak(Self::new_boxed(data))
+        Box::leak(new_boxed_tensor_data(data))
     }
 
     /// Transmutes a reference to the shape into tensor data.
@@ -91,8 +98,19 @@ pub unsafe trait TensorData<X: Element>: Sized {
     /// Clones `self` into a new [`Box`].
     #[inline]
     fn to_box(&self) -> Box<Self> {
-        //Box::new(tensor { data: self.data.clone() });
-        Self::new_boxed(self._as_inner().clone())
+        new_boxed_tensor_data(self._as_inner().clone())
+    }
+
+    /// Clones `self` into a new owned [`Tensor`].
+    #[inline]
+    fn to_owned(&self) -> Self::Owned {
+        Self::Owned::from_box(self.to_box())
+    }
+
+    /// Returns the length of the tensor in its 1D representation.
+    #[inline]
+    fn len(&self) -> usize {
+        Self::LEN
     }
 
     /// Creates a reference to the elements of the tensor in its 1D representation.
@@ -152,6 +170,33 @@ pub unsafe trait TensorData<X: Element>: Sized {
         U: TensorData<X> + Len<LEN>,
     {
         unsafe { mem::transmute(self) }
+    }
+
+    #[inline]
+    fn get_sub_tensor(&self, idx: usize) -> Option<&Self::SubData> {
+        Some(Self::SubData::wrap_ref(self._as_inner().as_arr().as_ref().get(idx)?))
+    }
+
+    #[inline]
+    fn get_sub_tensor_mut(&mut self, idx: usize) -> Option<&mut Self::SubData> {
+        Some(Self::SubData::wrap_ref_mut(self._as_inner_mut().as_arr_mut().as_mut().get_mut(idx)?))
+    }
+
+    /// # Panics
+    ///
+    /// Panics if `idx` is not in range of the outermost dimension.
+    #[inline]
+    fn index_sub_tensor(&self, idx: usize) -> &Self::SubData {
+        self.get_sub_tensor(idx).expect("`idx` is in range of the outermost dimenstion")
+    }
+
+    /// # Panics
+    ///
+    /// Panics if `idx` is not in range of the outermost dimension.
+    #[inline]
+    fn index_sub_tensor_mut(&mut self, idx: usize) -> &mut Self::SubData {
+        self.get_sub_tensor_mut(idx)
+            .expect("`idx` is in range of the outermost dimenstion")
     }
 
     /// Creates an [`Iterator`] over the references to the elements of `self`.

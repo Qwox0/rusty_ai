@@ -1,4 +1,4 @@
-use crate::{Element, Float, Len, Num, TensorData, Vector};
+use crate::{data::new_boxed_tensor_data, Element, Float, Len, Num, TensorData, Vector};
 use core::fmt;
 use std::{
     borrow::{Borrow, BorrowMut},
@@ -36,7 +36,7 @@ pub unsafe trait Tensor<X: Element>:
     /// Creates a new Tensor.
     #[inline]
     fn new(data: <Self::Data as TensorData<X>>::Shape) -> Self {
-        Self::from_box(Self::Data::new_boxed(data))
+        Self::from_box(new_boxed_tensor_data(data))
     }
 
     /// Creates a new Tensor filled with the values in `iter`.
@@ -45,9 +45,9 @@ pub unsafe trait Tensor<X: Element>:
     fn from_iter<const LEN: usize>(iter: impl IntoIterator<Item = X>) -> Self
     where
         Self::Data: Len<LEN>,
-        X: Num,
+        X: Element,
     {
-        let mut tensor = Self::zeros();
+        let mut tensor = Self::default();
         tensor.iter_elem_mut().zip(iter).for_each(|(x, val)| *x = val);
         tensor
     }

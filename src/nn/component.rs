@@ -20,7 +20,7 @@ pub trait NNComponent<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>>: Debug + Size
 
     /// Backpropagates the output gradient through this component and then backwards through the
     /// previous components.
-    fn backprop(&self, data: Self::StoredData, out_grad: OUT, grad: &mut Self::Grad);
+    fn backprop(&self, out_grad: OUT, data: Self::StoredData, grad: &mut Self::Grad);
 }
 
 pub trait GradComponent {}
@@ -52,7 +52,7 @@ impl<X: Element, NNIN: Tensor<X>> NNComponent<X, NNIN, NNIN> for () {
     }
 
     #[inline]
-    fn backprop(&self, _data: (), _out_grad: NNIN, _grad: &mut ()) {}
+    fn backprop(&self, _out_grad: NNIN, _data: (), _grad: &mut ()) {}
 }
 
 impl GradComponent for () {}

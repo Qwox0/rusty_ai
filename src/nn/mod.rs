@@ -10,6 +10,7 @@ use const_tensor::{Element, Tensor};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display},
+    iter::Map,
     marker::PhantomData,
 };
 
@@ -46,23 +47,19 @@ impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X
     */
 }
 
-/*
-impl<X: Float, const IN: usize, const OUT: usize> NN<X, IN, OUT> {
+impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
+    /*
     /// Creates a [`Gradient`] with the same dimensions as `self` and every element initialized to
     /// `0.0`
     pub fn init_zero_gradient(&self) -> Gradient<X> {
         self.layers.iter().map(Layer::init_zero_gradient).collect()
     }
+    */
 
-    /// Propagates an [`Input`] through the neural network and returns its output.
-    pub fn propagate(&self, input: &Input<X, IN>) -> [X; OUT] {
-        let input = Cow::from(input.as_slice());
-        self.layers
-            .iter()
-            .fold(input, |acc, layer| layer.propagate(&acc).into())
-            .into_owned()
-            .try_into()
-            .expect("last layer should have `OUT` neurons")
+    /// Propagates a [`Tensor`] through the neural network and returns the output [`Tensor`].
+    pub fn propagate(&self, input: &IN) -> OUT {
+        // the compiler should inline all prop functions.
+        self.components.prop(input.clone())
     }
 
     /// Iterates over a `batch` of inputs, propagates them and returns an [`Iterator`] over the
@@ -76,57 +73,42 @@ impl<X: Float, const IN: usize, const OUT: usize> NN<X, IN, OUT> {
     pub fn propagate_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> [X; OUT] + 'a>
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> OUT + 'a>
     where
-        B: IntoIterator<Item = &'a Input<X, IN>>,
+        B: IntoIterator<Item = &'a IN>,
     {
         batch.into_iter().map(|i| self.propagate(i))
     }
 
-    /// Propagates an [`Input`] through the neural network and returns the input and the outputs of
-    /// every layer.
+    /// Propagates a [`Tensor`] through the neural network and returns the output [`Tensor`] and
+    /// additional data which is required for backpropagation.
     ///
-    /// If only the final output is needed, use `propagate` instead.
-    ///
-    /// This is used internally during training.
-    pub fn verbose_propagate(&self, input: &Input<X, IN>) -> VerbosePropagation<X, OUT> {
-        let mut outputs = Vec::with_capacity(self.layers.len() + 1);
-        let nn_out = self.layers.iter().fold(input.to_vec(), |input, layer| {
-            let out = layer.propagate(&input);
-            outputs.push(input);
-            out
-        });
-        outputs.push(nn_out);
-        VerbosePropagation::new(outputs)
+    /// If only the output is needed, use the normal `propagate` method instead.
+    pub fn training_propagate(&self, input: &IN) -> (OUT, C::StoredData) {
+        self.components.train_prop(input.clone())
     }
 
     /// # Params
     ///
-    /// `verbose_prop`: input and activation of every layer
-    /// `nn_output_gradient`: gradient of the loss with respect to the network output (input to
-    /// loss function)
-    /// `gradient`: stores the changes to each parameter. Has to have the same dimensions as
-    /// `self`.
+    /// `output_gradient`: gradient of the loss with respect to the network output.
+    /// `train_data`: additional data create by `training_propagate` and required for
+    /// backpropagation.
+    /// `gradient`: stores the changes to each parameter. Has to have the same
+    /// dimensions as `self`.
     pub fn backpropagate(
         &self,
-        verbose_prop: &VerbosePropagation<X, OUT>,
-        nn_output_gradient: OutputGradient<X>,
-        gradient: &mut Gradient<X>,
+        output_gradient: OUT,
+        train_data: C::StoredData,
+        gradient: &mut C::Grad,
     ) {
-        self.layers
-            .iter()
-            .zip(&mut gradient.layers)
-            .zip(verbose_prop.iter_layers())
-            .rev()
-            .fold(nn_output_gradient, |output_gradient, ((layer, gradient), [input, output])| {
-                layer.backpropagate(input, output, output_gradient, gradient)
-            });
+        self.components.backprop(output_gradient, train_data, gradient)
     }
 
+    /*
     /// Tests the neural network.
     pub fn test<L: LossFunction<X, OUT>>(
         &self,
-        input: &Input<X, IN>,
+        input: IN,
         expected_output: &L::ExpectedOutput,
         loss_function: &L,
     ) -> ([X; OUT], X) {
@@ -153,18 +135,10 @@ impl<X: Float, const IN: usize, const OUT: usize> NN<X, IN, OUT> {
     {
         batch.into_iter().map(|(input, eo)| self.test(input, eo, loss_fn))
     }
+    */
 }
 
-impl<X: Element, const IN: usize, const OUT: usize> ParamsIter<X> for NN<X, IN, OUT> {
-    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a X> {
-        self.layers.iter().map(Layer::iter).flatten()
-    }
-
-    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut X> {
-        self.layers.iter_mut().map(Layer::iter_mut).flatten()
-    }
-}
-
+/*
 impl<'a, X, const IN: usize, const OUT: usize> Default for NN<X, IN, OUT>
 where
     X: Float,

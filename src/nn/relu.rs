@@ -59,13 +59,13 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop(&self, data: Self::StoredData, out_grad: T, grad: &mut PREV::Grad) {
+    fn backprop(&self, out_grad: T, data: Self::StoredData, grad: &mut PREV::Grad) {
         let Data { prev: prev_data, data } = data;
         let mut input_grad = out_grad;
         for (out, &is_pos) in input_grad.iter_elem_mut().zip(data.iter_elem()) {
             *out *= X::from_bool(is_pos);
         }
-        self.prev.backprop(prev_data, input_grad, grad)
+        self.prev.backprop(input_grad, prev_data, grad)
     }
 }
 
@@ -106,13 +106,12 @@ where
     }
 
     #[inline]
-    fn backprop(&self, data: Self::StoredData, out_grad: T, grad: &mut PREV::Grad) {
+    fn backprop(&self, out_grad: T, data: Self::StoredData, grad: &mut PREV::Grad) {
         let Data { prev: prev_data, data } = data;
         let mut input_grad = out_grad;
         for (out, &is_pos) in input_grad.iter_elem_mut().zip(data.iter_elem()) {
             *out *= if is_pos { X::ONE } else { self.leak_rate }
         }
-        self.prev.backprop(prev_data, input_grad, grad)
+        self.prev.backprop(input_grad, prev_data, grad)
     }
 }
-

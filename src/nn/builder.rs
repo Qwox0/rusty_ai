@@ -122,7 +122,6 @@ where
     X: Element,
     NNIN: Tensor<X>,
     PREV: NNComponent<X, NNIN, Vector<X, IN>>,
-    RNG: rand::Rng,
 {
     /// Adds a new [`Linear`] layer to the neural network.
     pub fn layer_from_parts<const N: usize>(
@@ -142,7 +141,15 @@ where
     ) -> NNBuilder<X, NNIN, Vector<X, N>, Linear<X, IN, N, PREV>, RNG> {
         self.layer_from_parts(Matrix::new(weights), Vector::new(bias))
     }
+}
 
+impl<X, NNIN, const IN: usize, PREV, RNG> NNBuilder<X, NNIN, Vector<X, IN>, PREV, RNG>
+where
+    X: Element,
+    NNIN: Tensor<X>,
+    PREV: NNComponent<X, NNIN, Vector<X, IN>>,
+    RNG: rand::Rng,
+{
     /// Uses [`Initializer`] to add a new [`Linear`] layer to the neural network.
     pub fn layer<const N: usize>(
         mut self,

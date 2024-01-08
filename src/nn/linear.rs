@@ -55,7 +55,7 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop(&self, data: Self::StoredData, out_grad: Vector<X, OUT>, grad: &mut Self::Grad) {
+    fn backprop(&self, out_grad: Vector<X, OUT>, data: Self::StoredData, grad: &mut Self::Grad) {
         let Data { prev: prev_data, data: input } = data;
 
         // TODO: bench
@@ -63,7 +63,7 @@ where
         grad.weights.add_elem_mut(&out_grad.span_mat(&input));
         let input_grad = self.weights.clone().transpose().mul_vec(&out_grad);
 
-        self.prev.backprop(prev_data, input_grad, &mut grad.prev)
+        self.prev.backprop(input_grad, prev_data, &mut grad.prev)
     }
 }
 

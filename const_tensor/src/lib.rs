@@ -13,7 +13,7 @@
 
 use std::{
     borrow::{Borrow, BorrowMut},
-    ops::{Add, Deref, DerefMut, IndexMut},
+    ops::{Add, Deref, DerefMut, Index, IndexMut},
 };
 
 mod data;
@@ -27,7 +27,7 @@ pub use element::{Element, Float, MoreNumOps, Num};
 use macros::{count, make_tensor, ArrDefault};
 pub use tensor::Tensor;
 
-make_tensor! { Scalar scalar : => X, Sub: Self }
+make_tensor! { Scalar scalar : => pub X, Sub: Self }
 make_tensor! { Vector vector : LEN => [X; LEN], Sub: scalar<X> }
 make_tensor! { Matrix matrix : W H => [[X; W]; H], Sub: vector<X, W> }
 make_tensor! { Tensor3 tensor3: A B C => [[[X; A]; B]; C], Sub: matrix<X, A, B> }

@@ -24,7 +24,7 @@ impl<T: Element> ArrDefault for T {
 
 macro_rules! make_tensor {
     (
-        $name:ident $data_name:ident : $($dim_name:ident)* => $shape:ty,
+        $name:ident $data_name:ident : $($dim_name:ident)* => $vis:vis $shape:ty,
         Sub: $sub_data:ty
         $(,)?
     ) => {
@@ -33,7 +33,7 @@ macro_rules! make_tensor {
         #[allow(non_camel_case_types)]
         #[repr(transparent)]
         pub struct $data_name<X: Element, $( const $dim_name: usize ),*> {
-            data: $shape
+            $vis data: $shape
         }
 
         unsafe impl<X: Element, $( const $dim_name: usize ),*> Len<{ $($dim_name * )* 1 }> for $data_name<X, $( $dim_name ),*> {}
@@ -47,10 +47,19 @@ macro_rules! make_tensor {
 
             const DIM: usize = count!($($dim_name)*);
             const LEN: usize = $($dim_name * )* 1;
+        }
 
-            #[inline]
-            fn new_boxed(data: Self::Shape) -> Box<Self> {
-                Box::new(Self { data })
+        impl<X: Element, $( const $dim_name: usize ),*> Index<usize> for $data_name<X, $( $dim_name ),*> {
+            type Output = <Self as TensorData<X>>::SubData;
+
+            fn index(&self, idx: usize) -> &Self::Output {
+                self.index_sub_tensor(idx)
+            }
+        }
+
+        impl<X: Element, $( const $dim_name: usize ),*> IndexMut<usize> for $data_name<X, $( $dim_name ),*> {
+            fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+                self.index_sub_tensor_mut(idx)
             }
         }
 
@@ -75,6 +84,15 @@ macro_rules! make_tensor {
             #[inline]
             fn from_box(data: Box<Self::Data>) -> Self {
                 Self { data }
+            }
+        }
+
+        impl<X: Element, $( const $dim_name: usize ),*> FromIterator<X> for $name<X, $( $dim_name ),*>
+        where
+            <Self as Tensor<X>>::Data: Len<{ $($dim_name * )* 1 }>,
+        {
+            fn from_iter<I: IntoIterator<Item = X>>(iter: I) -> Self {
+                Tensor::from_iter(iter)
             }
         }
 

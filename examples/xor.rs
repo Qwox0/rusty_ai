@@ -1,7 +1,7 @@
 #![feature(test)]
 #![feature(iter_array_chunks)]
 
-use matrix::{Float, Num};
+use const_tensor::{Float, Num};
 use rand::Rng;
 use rand_distr::{Bernoulli, Distribution};
 use rusty_ai::{
@@ -24,7 +24,7 @@ impl<F: Float> LossFunction<F, 1> for XorLoss {
         LOSS_FUNCTION.propagate(output, [F::from_bool(expected_output.borrow().clone())])
     }
 
-    fn backpropagate_arr(
+    fn backpropagate(
         &self,
         output: &[F; 1],
         expected_output: impl Borrow<Self::ExpectedOutput>,
@@ -36,9 +36,7 @@ impl<F: Float> LossFunction<F, 1> for XorLoss {
 fn get_nn<F: Float>(hidden_neurons: usize) -> NNTrainer<F, 2, 1, XorLoss, SGD_<F>>
 where rand_distr::StandardNormal: Distribution<F> {
     NNBuilder::default()
-        .double_precision()
         .element_type::<F>()
-        .input::<2>()
         .layer(hidden_neurons, Initializer::PytorchDefault, Initializer::PytorchDefault)
         .activation_function(ActivationFn::ReLU)
         .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)

@@ -33,9 +33,9 @@ where
     }
 
     #[inline]
-    fn backprop(&self, data: PREV::StoredData, out_grad: Vector<X, LEN>, grad: &mut PREV::Grad) {
+    fn backprop(&self, out_grad: Vector<X, LEN>, data: PREV::StoredData, grad: &mut PREV::Grad) {
         let input_grad = T::from_1d(out_grad);
-        self.prev.backprop(data, input_grad, grad)
+        self.prev.backprop(input_grad, data, grad)
     }
 }
 

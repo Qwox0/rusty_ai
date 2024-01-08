@@ -3,10 +3,8 @@
 #![feature(array_chunks)]
 #![feature(test)]
 
-use matrix::Num;
 use mnist_util::{get_mnist, image_to_string, Mnist};
 use rusty_ai::{
-    data::{Pair, PairList},
     loss_function::NLLLoss,
     nn::NNBuilder,
     optimizer::sgd::SGD,
