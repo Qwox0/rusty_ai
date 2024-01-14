@@ -11,42 +11,21 @@
 #![feature(generic_const_exprs)]
 #![warn(missing_docs)]
 
-use std::{
-    borrow::{Borrow, BorrowMut},
-    ops::{Add, Deref, DerefMut, Index, IndexMut},
-};
-
 mod data;
 mod element;
-mod macros;
-mod tensor;
+mod maybe_uninit;
+mod owned;
+mod shape;
+mod shape_data;
 
-use data::AsArr;
-pub use data::{Len, TensorData};
+pub use data::{aliases::*, tensor, TensorData};
 pub use element::{Element, Float, MoreNumOps, Num};
-use macros::{count, make_tensor, ArrDefault};
-pub use tensor::Tensor;
-
-make_tensor! { Scalar scalar : => pub X, Sub: Self }
-make_tensor! { Vector vector : LEN => [X; LEN], Sub: scalar<X> }
-make_tensor! { Matrix matrix : W H => [[X; W]; H], Sub: vector<X, W> }
-make_tensor! { Tensor3 tensor3: A B C => [[[X; A]; B]; C], Sub: matrix<X, A, B> }
-make_tensor! { Tensor4 tensor4: A B C D => [[[[X; A]; B]; C]; D], Sub: tensor3<X, A, B, C> }
-make_tensor! {
-    Tensor5 tensor5: A B C D E => [[[[[X; A]; B]; C]; D]; E],
-    Sub: tensor4<X, A, B, C, D>
-}
-make_tensor! {
-    Tensor6 tensor6: A B C D E F => [[[[[[X; A]; B]; C]; D]; E]; F],
-    Sub: tensor5<X, A, B, C, D, E>
-}
-make_tensor! {
-    Tensor7 tensor7: A B C D E F G => [[[[[[[X; A]; B]; C]; D]; E]; F]; G],
-    Sub: tensor6<X, A, B, C, D, E, F>
-}
+pub use owned::{aliases::*, Tensor};
+pub use shape::{Len, Shape};
+use std::mem;
 
 impl<X: Num, const LEN: usize> vector<X, LEN>
-where Self: Len<LEN>
+where [(); LEN]: Len<LEN>
 {
     /// Calculates the dot product of the [`vector`]s `self` and `other`.
     /// <https://en.wikipedia.org/wiki/Dot_product>
@@ -60,7 +39,7 @@ where Self: Len<LEN>
 }
 
 impl<X: Num, const LEN: usize> Vector<X, LEN>
-where vector<X, LEN>: Len<LEN>
+where [(); LEN]: Len<LEN>
 {
     /// Adds the [`Vector`]s `self` and `rhs`.
     pub fn add_vec(mut self, rhs: &Self) -> Self {
@@ -71,31 +50,38 @@ where vector<X, LEN>: Len<LEN>
     /// Calculates `self * other^T`
     pub fn span_mat<const LEN2: usize>(&self, other: &vector<X, LEN2>) -> Matrix<X, LEN2, LEN>
     where
-        matrix<X, LEN2, LEN>: Len<{ LEN2 * LEN }>,
-        vector<X, LEN2>: Len<LEN2>,
+        [[(); LEN2]; LEN]: Len<{ LEN2 * LEN }>,
+        [(); LEN2]: Len<LEN2>,
     {
         let mut mat = Matrix::zeros();
         for (row, &y) in self.iter_elem().enumerate() {
             for (col, &x) in other.iter_elem().enumerate() {
-                mat._as_inner_mut()[row][col] = x * y
+                mat[row][col].set(x * y)
             }
         }
         mat
     }
 }
 
-impl<X: Num, const LEN: usize> Add<&Self> for Vector<X, LEN>
-where vector<X, LEN>: Len<LEN>
+pub fn span_mat<X: Num, const LEN: usize, const LEN2: usize>(
+    s: &vector<X, LEN>,
+    other: &vector<X, LEN2>,
+) -> matrix<X, LEN2, LEN>
+where
+    [(); LEN]: Len<LEN>,
+    [(); LEN2]: Len<LEN2>,
 {
-    type Output = Self;
-
-    fn add(self, rhs: &Self) -> Self::Output {
-        self.add_vec(rhs)
+    let mut mat = matrix::new([[X::ZERO; LEN2]; LEN]);
+    for (row, &y) in s.iter_elem().enumerate() {
+        for (col, &x) in other.iter_elem().enumerate() {
+            mat[row][col].set(x * y);
+        }
     }
+    mat
 }
 
 impl<X: Num, const W: usize, const H: usize> matrix<X, W, H>
-where vector<X, W>: Len<W>
+where [(); W]: Len<W>
 {
     /// Multiplies the [`matrix`] `self` by the [`vector`] `vec` and returns a newly allocated
     /// [`Vector`] containing the result.
@@ -111,16 +97,14 @@ where vector<X, W>: Len<W>
 impl<X: Num, const W: usize, const H: usize> Matrix<X, W, H> {
     /// Transposes the [`Matrix`].
     pub fn transpose<const LEN: usize>(self) -> Matrix<X, H, W>
-    where matrix<X, H, W>: Len<LEN> {
-        let inner = self._as_inner().as_arr();
-        let mut transposed = Matrix::zeros();
-        let transposed_inner = transposed._as_inner_mut();
-        for (y, row) in inner.iter().enumerate() {
-            for (x, el) in row.iter().enumerate() {
-                transposed_inner[x][y] = *el
+    where [[(); H]; W]: Len<LEN> {
+        let mut transposed = Matrix::<X, H, W>::new_uninit(); // bench vs zeros
+        for y in 0..H {
+            for x in 0..W {
+                transposed[x][y].0.write(self[y][x].0);
             }
         }
-        transposed
+        unsafe { mem::transmute(transposed) }
     }
 }
 
@@ -128,8 +112,8 @@ impl<X: Num, const LEN: usize> vector<X, LEN> {
     /// Transmutes the [`vector`] as a [`matrix`] with height equal to `1`.
     pub fn as_row_mat(&self) -> &matrix<X, LEN, 1>
     where
-        Self: Len<LEN>,
-        matrix<X, LEN, 1>: Len<LEN>,
+        [(); LEN]: Len<LEN>,
+        [[(); LEN]; 1]: Len<LEN>,
     {
         self.transmute_as()
     }
@@ -137,8 +121,8 @@ impl<X: Num, const LEN: usize> vector<X, LEN> {
     /// Transmutes the [`vector`] as a [`matrix`] with width equal to `1`.
     pub fn as_col_mat(&self) -> &matrix<X, 1, LEN>
     where
-        Self: Len<LEN>,
-        matrix<X, 1, LEN>: Len<LEN>,
+        [(); LEN]: Len<LEN>,
+        [[(); 1]; LEN]: Len<LEN>,
     {
         self.transmute_as()
     }

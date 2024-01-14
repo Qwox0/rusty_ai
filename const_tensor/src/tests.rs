@@ -34,7 +34,7 @@ fn basic_usage() {
 
     println!("\n# add one:");
     let mat = Matrix::new([[1i32, 2], [3, 4], [5, 6]]);
-    let mat = mat.map_elem(|x| x + 1);
+    let mat = mat.map_inplace(|x| x + 1);
     println!("{:#?}", mat);
     assert_eq!(mat, Tensor::new([[2, 3], [4, 5], [6, 7]]));
 

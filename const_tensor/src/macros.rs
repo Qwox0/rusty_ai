@@ -33,6 +33,7 @@ macro_rules! make_tensor {
         #[allow(non_camel_case_types)]
         #[repr(transparent)]
         pub struct $data_name<X: Element, $( const $dim_name: usize ),*> {
+            /// The internal value of the tensor.
             $vis data: $shape
         }
 
