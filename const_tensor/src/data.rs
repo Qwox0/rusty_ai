@@ -461,3 +461,22 @@ const DIM: usize;
 const LEN: usize;
 }
 */
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Matrix;
+
+    /*
+    #[test]
+    fn serde_test() {
+        let a: &matrix<i32, 2, 2> = tensor::literal([[1, 2], [3, 4]]);
+        println!("{:?}", a);
+        let json = serde_json::to_string(a).unwrap();
+        println!("{:?}", json);
+        let a: Matrix<i32, 2, 2> = serde_json::from_str(&json).unwrap();
+        println!("{:?}", a);
+        panic!()
+    }
+    */
+}

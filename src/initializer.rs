@@ -1,12 +1,12 @@
-use const_tensor::{Element, Float, Len, Num, Tensor};
+use const_tensor::{Element, Float, Len, Num, Shape, Tensor};
 use rand::Rng;
 
 /// see [tensorflow docs](https://www.tensorflow.org/api_docs/python/tf/keras/initializers)
 /// or [pytorch docs](https://pytorch.org/docs/stable/nn.init.html)
 #[derive(Debug, Clone)]
-pub enum Initializer<X: Element, T: Tensor<X>> {
+pub enum Initializer<X: Element, S: Shape> {
     /// Fixed value
-    Initialized(T),
+    Initialized(Tensor<X, S>),
 
     /// Initializes all values with the fixed value `self.0`
     Constant(X),
@@ -42,7 +42,7 @@ pub enum Initializer<X: Element, T: Tensor<X>> {
 
 // pub type DataInitializer<const DIM: usize> = Initializer<[f64; DIM]>;
 
-impl<X: Num, T: Tensor<X>> Initializer<X, T> {
+impl<X: Num, S: Shape> Initializer<X, S> {
     /// Initializes all values with the fixed value `1`.
     #[allow(non_upper_case_globals)]
     pub const Ones: Self = Initializer::Constant(X::ONE);
@@ -51,12 +51,19 @@ impl<X: Num, T: Tensor<X>> Initializer<X, T> {
     pub const Zeros: Self = Initializer::Constant(X::ZERO);
 }
 
-impl<F: Float, T: Tensor<F>> Initializer<F, T>
+impl<F: Float, S: Shape> Initializer<F, S>
 where rand_distr::StandardNormal: rand_distr::Distribution<F>
 {
     /// Uses `self` to create a weights [`Matrix`].
-    pub fn init<const LEN: usize>(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> T
-    where T::Data: Len<LEN> {
+    pub fn init<const LEN: usize>(
+        self,
+        rng: &mut impl Rng,
+        inputs: usize,
+        outputs: usize,
+    ) -> Tensor<F, S>
+    where
+        S: Len<LEN>,
+    {
         use Initializer as I;
         match self {
             I::Initialized(t) => t,

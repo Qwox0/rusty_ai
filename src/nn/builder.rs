@@ -1,8 +1,10 @@
 //! # Neural network builder module
 
-use super::{flatten::Flatten, linear::Linear, relu::ReLU, NNComponent, NN};
+use super::{flatten::Flatten, linear::Linear, relu::ReLU, LeakyReLU, NNComponent, Sigmoid, NN};
 use crate::Initializer;
-use const_tensor::{matrix, vector, Element, Float, Len, Matrix, Tensor, TensorData, Vector};
+use const_tensor::{
+    matrix, vector, Element, Float, Len, Matrix, Shape, Tensor, TensorData, Vector,
+};
 use half::{bf16, f16};
 use markers::*;
 use rand::{
@@ -13,84 +15,102 @@ use std::marker::PhantomData;
 
 /// Markers uses by [`NNBuilder`].
 pub mod markers {
-    /// Seed used for RNG.
+    #[allow(unused_imports)]
+    use super::NNBuilder;
+
+    /// Marker for [`NNBuilder`] without RNG.
     pub struct NoRng;
+
+    /// Marker for [`NNBuilder`] without Shape.
+    pub struct NoShape;
 }
 
 /// Neural Network Builder
 #[derive(Debug, Clone)]
-pub struct NNBuilder<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>, C, RNG> {
+pub struct NNBuilder<X, NNIN, OUT, C, RNG> {
     components: C,
     rng: RNG,
+    _element: PhantomData<X>,
+    _nnin: PhantomData<NNIN>,
     _out: PhantomData<OUT>,
-    _marker: PhantomData<(X, NNIN)>,
 }
 
-impl<X: Element, NNIN: Tensor<X>> Default for NNBuilder<X, NNIN, NNIN, (), NoRng> {
+impl Default for NNBuilder<f32, NoShape, NoShape, (), NoRng> {
     #[inline]
     fn default() -> Self {
-        Self { components: (), rng: NoRng, _out: PhantomData, _marker: PhantomData }
+        Self {
+            components: (),
+            rng: NoRng,
+            _element: PhantomData,
+            _nnin: PhantomData,
+            _out: PhantomData,
+        }
     }
 }
 
-impl<X: Element, NNIN: Tensor<X>, RNG> NNBuilder<X, NNIN, NNIN, (), RNG> {
+impl<X: Element, NNIN, OUT, C, RNG> NNBuilder<X, NNIN, OUT, C, RNG> {
     /// Sets the [`rand::Rng`] used during initialization.
     #[inline]
-    pub fn rng<R: rand::Rng>(self, rng: R) -> NNBuilder<X, NNIN, NNIN, (), R> {
+    pub fn rng<R: rand::Rng>(self, rng: R) -> NNBuilder<X, NNIN, OUT, C, R> {
         NNBuilder { rng, ..self }
     }
 
     /// Uses [`rand::thread_rng`] for during initialization.
     #[inline]
-    pub fn thread_rng(self) -> NNBuilder<X, NNIN, NNIN, (), ThreadRng> {
+    pub fn thread_rng(self) -> NNBuilder<X, NNIN, OUT, C, ThreadRng> {
         self.rng(rand::thread_rng())
     }
 
     /// Note: currently the same as `.thread_rng()`
     #[inline]
-    pub fn default_rng(self) -> NNBuilder<X, NNIN, NNIN, (), ThreadRng> {
+    pub fn default_rng(self) -> NNBuilder<X, NNIN, OUT, C, ThreadRng> {
         self.thread_rng()
     }
 
     /// Uses seeded rng during initialization.
     #[inline]
-    pub fn seeded_rng(self, seed: u64) -> NNBuilder<X, NNIN, NNIN, (), StdRng> {
+    pub fn seeded_rng(self, seed: u64) -> NNBuilder<X, NNIN, OUT, C, StdRng> {
         self.rng(StdRng::seed_from_u64(seed))
     }
+}
 
+impl<X: Element, RNG> NNBuilder<X, NoShape, NoShape, (), RNG> {
     /// Sets `NX` as nn element type.
-    pub fn element_type<X2: Element, NNIN2: Tensor<X2>>(
-        self,
-    ) -> NNBuilder<X2, NNIN2, NNIN2, (), RNG> {
-        NNBuilder { _marker: PhantomData, _out: PhantomData, ..self }
+    pub fn element_type<X2: Element>(self) -> NNBuilder<X2, NoShape, NoShape, (), RNG> {
+        NNBuilder { _element: PhantomData, ..self }
     }
 
     /// Sets [`f32`] as nn element type.
-    pub fn normal_precision<NNIN2: Tensor<f32>>(self) -> NNBuilder<f32, NNIN2, NNIN2, (), RNG> {
+    pub fn normal_precision(self) -> NNBuilder<f32, NoShape, NoShape, (), RNG> {
         self.element_type()
     }
 
     /// Sets [`f64`] as nn element type.
-    pub fn double_precision<NNIN2: Tensor<f64>>(self) -> NNBuilder<f64, NNIN2, NNIN2, (), RNG> {
+    pub fn double_precision(self) -> NNBuilder<f64, NoShape, NoShape, (), RNG> {
         self.element_type()
     }
 
     /// Sets [`half::f16`] as nn element type.
-    pub fn half_precision<NNIN2: Tensor<f16>>(self) -> NNBuilder<f16, NNIN2, NNIN2, (), RNG> {
+    pub fn half_precision(self) -> NNBuilder<f16, NoShape, NoShape, (), RNG> {
         self.element_type()
     }
 
     /// Sets [`half::bf16`] as nn element type.
-    pub fn bhalf_precision<NNIN2: Tensor<bf16>>(self) -> NNBuilder<bf16, NNIN2, NNIN2, (), RNG> {
+    pub fn bhalf_precision(self) -> NNBuilder<bf16, NoShape, NoShape, (), RNG> {
         self.element_type()
+    }
+
+    /// Sets the [`Shape`] of the input tensor.
+    pub fn input_shape<S: Shape>(self) -> NNBuilder<X, S, S, (), RNG> {
+        NNBuilder { _nnin: PhantomData, _out: PhantomData, ..self }
     }
 }
 
-impl<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>, PREV: NNComponent<X, NNIN, OUT>, RNG>
+impl<X: Element, NNIN: Shape, OUT: Shape, PREV: NNComponent<X, NNIN, OUT>, RNG>
     NNBuilder<X, NNIN, OUT, PREV, RNG>
 {
     #[inline]
-    pub fn add_component<C: NNComponent<X, NNIN, OUT2>, OUT2: Tensor<X>>(
+    pub fn add_component<C: NNComponent<X, NNIN, OUT2>, OUT2: Shape>(
         self,
         c: impl FnOnce(PREV) -> C,
     ) -> NNBuilder<X, NNIN, OUT2, C, RNG> {
@@ -101,15 +121,16 @@ impl<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>, PREV: NNComponent<X, NNIN, OUT
         NNBuilder { components: ReLU { prev: self.components }, ..self }
     }
 
-    pub fn flatten(
-        self,
-    ) -> NNBuilder<X, NNIN, Vector<X, { <OUT::Data as TensorData<X>>::LEN }>, Flatten<OUT, PREV>, RNG>
-    {
-        NNBuilder {
-            components: Flatten { prev: self.components, _tensor: PhantomData },
-            _out: PhantomData,
-            ..self
-        }
+    pub fn leaky_relu(self, leak_rate: X) -> NNBuilder<X, NNIN, OUT, LeakyReLU<X, PREV>, RNG> {
+        NNBuilder { components: LeakyReLU { prev: self.components, leak_rate }, ..self }
+    }
+
+    pub fn sigmoid(self) -> NNBuilder<X, NNIN, OUT, Sigmoid<PREV>, RNG> {
+        NNBuilder { components: Sigmoid { prev: self.components }, ..self }
+    }
+
+    pub fn flatten(self) -> NNBuilder<X, NNIN, [(); OUT::LEN], Flatten<OUT, PREV>, RNG> {
+        NNBuilder { components: Flatten::with_prev(self.components), _out: PhantomData, ..self }
     }
 
     pub fn build(self) -> NN<X, NNIN, OUT, PREV> {
@@ -117,18 +138,18 @@ impl<X: Element, NNIN: Tensor<X>, OUT: Tensor<X>, PREV: NNComponent<X, NNIN, OUT
     }
 }
 
-impl<X, NNIN, const IN: usize, PREV, RNG> NNBuilder<X, NNIN, Vector<X, IN>, PREV, RNG>
+impl<X, NNIN, const IN: usize, PREV, RNG> NNBuilder<X, NNIN, [(); IN], PREV, RNG>
 where
     X: Element,
-    NNIN: Tensor<X>,
-    PREV: NNComponent<X, NNIN, Vector<X, IN>>,
+    NNIN: Shape,
+    PREV: NNComponent<X, NNIN, [(); IN]>,
 {
     /// Adds a new [`Linear`] layer to the neural network.
     pub fn layer_from_parts<const N: usize>(
         self,
         weights: Matrix<X, IN, N>,
         bias: Vector<X, N>,
-    ) -> NNBuilder<X, NNIN, Vector<X, N>, Linear<X, IN, N, PREV>, RNG> {
+    ) -> NNBuilder<X, NNIN, [(); N], Linear<X, IN, N, PREV>, RNG> {
         let components = Linear { prev: self.components, weights, bias };
         NNBuilder { components, _out: PhantomData, ..self }
     }
@@ -138,29 +159,28 @@ where
         self,
         weights: [[X; IN]; N],
         bias: [X; N],
-    ) -> NNBuilder<X, NNIN, Vector<X, N>, Linear<X, IN, N, PREV>, RNG> {
+    ) -> NNBuilder<X, NNIN, [(); N], Linear<X, IN, N, PREV>, RNG> {
         self.layer_from_parts(Matrix::new(weights), Vector::new(bias))
     }
 }
 
-impl<X, NNIN, const IN: usize, PREV, RNG> NNBuilder<X, NNIN, Vector<X, IN>, PREV, RNG>
+impl<F, NNIN, const IN: usize, PREV, RNG> NNBuilder<F, NNIN, [(); IN], PREV, RNG>
 where
-    X: Element,
-    NNIN: Tensor<X>,
-    PREV: NNComponent<X, NNIN, Vector<X, IN>>,
+    F: Float,
+    NNIN: Shape,
+    PREV: NNComponent<F, NNIN, [(); IN]>,
     RNG: rand::Rng,
+    rand_distr::StandardNormal: rand_distr::Distribution<F>,
 {
     /// Uses [`Initializer`] to add a new [`Linear`] layer to the neural network.
     pub fn layer<const N: usize>(
         mut self,
-        weights_init: Initializer<X, Matrix<X, IN, N>>,
-        bias_init: Initializer<X, Vector<X, N>>,
-    ) -> NNBuilder<X, NNIN, Vector<X, N>, Linear<X, IN, N, PREV>, RNG>
+        weights_init: Initializer<F, [[(); IN]; N]>,
+        bias_init: Initializer<F, [(); N]>,
+    ) -> NNBuilder<F, NNIN, [(); N], Linear<F, IN, N, PREV>, RNG>
     where
-        X: Float,
-        matrix<X, IN, N>: Len<{ IN * N }>,
-        vector<X, N>: Len<N>,
-        rand_distr::StandardNormal: rand_distr::Distribution<X>,
+        [[(); IN]; N]: Len<{ IN * N }>,
+        [(); N]: Len<N>,
     {
         let weights = weights_init.init(&mut self.rng, IN, N);
         let bias = bias_init.init(&mut self.rng, IN, N);

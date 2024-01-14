@@ -1,9 +1,11 @@
 //! Module containing the [`SGD_`] [`Optimizer`].
-use super::{OptimizerValues, DEFAULT_LEARNING_RATE};
+/*
+use super::{Optimizer, OptimizerValues, DEFAULT_LEARNING_RATE};
 use crate::{layer::Layer, *};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
+/*
 /// configuration values for the stochastic gradient descent optimizer [`SGD_`].
 ///
 /// use [`OptimizerValues::init_with_layers`] to create the optimizer: [`SGD_`]
@@ -29,6 +31,7 @@ impl<X: Float> OptimizerValues<X> for SGD {
         SGD_ { val: self, prev_change }
     }
 }
+*/
 
 /// Stochastic gradient descent optimizer
 ///
@@ -43,6 +46,18 @@ pub struct SGD_<X> {
 }
 
 impl<X: Num> Optimizer<X> for SGD_<X> {
+    type State;
+
+    fn optimize<IN: const_tensor::Tensor<X>, OUT: const_tensor::Tensor<X>, C: nn::NNComponent<X, IN, OUT>>(
+        &self,
+        nn: C,
+        gradient: C::Grad,
+        state: Self::State,
+    ) -> C {
+        todo!()
+    }
+
+    /*
     fn optimize<'a, const IN: usize, const OUT: usize>(
         &mut self,
         nn: &mut NeuralNetwork<X, IN, OUT>,
@@ -55,6 +70,7 @@ impl<X: Num> Optimizer<X> for SGD_<X> {
             *x += *change;
         }
     }
+    */
 }
 
 impl<X> Display for SGD_<X> {
@@ -67,3 +83,4 @@ impl<X> Display for SGD_<X> {
         write!(f, " }}")
     }
 }
+*/

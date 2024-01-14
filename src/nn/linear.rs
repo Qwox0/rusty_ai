@@ -1,5 +1,6 @@
-use super::component::{Data, GradComponent, NNComponent};
-use const_tensor::{matrix, vector, Element, Len, Matrix, Num, Tensor, TensorData, Vector};
+use super::component::{Data, GradComponent, NNComponent, NNDisplay};
+use const_tensor::{Element, Len, Matrix, Num, Shape, Tensor, Vector};
+use core::fmt;
 
 #[derive(Debug)]
 pub struct Linear<X: Element, const IN: usize, const OUT: usize, PREV> {
@@ -8,30 +9,30 @@ pub struct Linear<X: Element, const IN: usize, const OUT: usize, PREV> {
     pub(super) bias: Vector<X, OUT>,
 }
 
-impl<X, PREV, const IN: usize, const OUT: usize, NNIN: Tensor<X>>
-    NNComponent<X, NNIN, Vector<X, OUT>> for Linear<X, IN, OUT, PREV>
+impl<X, const IN: usize, const OUT: usize, NNIN, PREV> NNComponent<X, NNIN, [(); OUT]>
+    for Linear<X, IN, OUT, PREV>
 where
     X: Num,
-    PREV: NNComponent<X, NNIN, Vector<X, IN>>,
-    vector<X, IN>: Len<IN>,
-    vector<X, OUT>: Len<OUT>,
-    matrix<X, IN, OUT>: Len<{ IN * OUT }>,
-    matrix<X, OUT, IN>: Len<{ IN * OUT }>,
+    NNIN: Shape,
+    PREV: NNComponent<X, NNIN, [(); IN]>,
+    [(); IN]: Len<IN>,
+    [(); OUT]: Len<OUT>,
+    [[(); IN]; OUT]: Len<{ IN * OUT }>,
+    [[(); OUT]; IN]: Len<{ IN * OUT }>,
 {
     type Grad = Linear<X, IN, OUT, PREV::Grad>;
-    type In = Vector<X, IN>;
     type StoredData = Data<Vector<X, IN>, PREV::StoredData>;
 
     #[inline]
-    fn prop(&self, input: NNIN) -> const_tensor::Vector<X, OUT> {
+    fn prop(&self, input: Tensor<X, NNIN>) -> Vector<X, OUT> {
         let input = self.prev.prop(input);
-        self.weights.mul_vec(&input) + &self.bias
+        self.weights.mul_vec(&input).add_elem(&self.bias)
     }
 
     #[inline]
-    fn train_prop(&self, input: NNIN) -> (Vector<X, OUT>, Self::StoredData) {
+    fn train_prop(&self, input: Tensor<X, NNIN>) -> (Vector<X, OUT>, Self::StoredData) {
         let (input, prev_data) = self.prev.train_prop(input);
-        let out = self.weights.mul_vec(&input) + &self.bias;
+        let out = self.weights.mul_vec(&input).add_vec(&self.bias);
         (out, Data { data: input, prev: prev_data })
     }
 
@@ -64,6 +65,18 @@ where
         let input_grad = self.weights.clone().transpose().mul_vec(&out_grad);
 
         self.prev.backprop(input_grad, prev_data, &mut grad.prev)
+    }
+}
+
+impl<'a, X, const IN: usize, const OUT: usize, PREV> fmt::Display
+    for NNDisplay<'a, Linear<X, IN, OUT, PREV>>
+where
+    X: Element,
+    NNDisplay<'a, PREV>: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}", NNDisplay(&self.0.prev))?;
+        write!(f, "Linear: {IN} -> {OUT}")
     }
 }
 

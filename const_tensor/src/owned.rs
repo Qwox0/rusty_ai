@@ -1,6 +1,6 @@
 use crate::{
     data, maybe_uninit::MaybeUninit, shape_data::ArrDefault, tensor, Element, Float, Len, Num,
-    Shape, TensorData,
+    Shape,
 };
 use std::{
     alloc,

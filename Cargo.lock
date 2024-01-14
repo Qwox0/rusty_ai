@@ -35,6 +35,8 @@ dependencies = [
  "num",
  "rand",
  "rand_distr",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -122,6 +124,7 @@ dependencies = [
  "num-traits",
  "rand",
  "rand_distr",
+ "serde",
 ]
 
 [[package]]

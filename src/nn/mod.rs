@@ -6,7 +6,8 @@ use crate::trainer::{
     NNTrainerBuilder,
 };
 */
-use const_tensor::{Element, Tensor};
+use const_tensor::{Element, Shape, Tensor};
+use core::fmt;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display},
@@ -19,17 +20,25 @@ mod component;
 mod flatten;
 mod linear;
 mod relu;
+mod sigmoid;
+mod softmax;
 
+use self::component::NNDisplay;
 pub use builder::NNBuilder;
 pub use component::NNComponent;
+pub use flatten::Flatten;
+pub use linear::Linear;
+pub use relu::{leaky_relu, relu, LeakyReLU, ReLU};
+pub use sigmoid::{sigmoid, Sigmoid};
+//pub use softmax::{LogSoftmax, Softmax};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NN<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> {
+pub struct NN<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> {
     components: C,
     _marker: PhantomData<(X, IN, OUT)>,
 }
 
-impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
+impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
     /// use [`NNBuilder`] instead!
     #[inline]
     fn new(components: C) -> NN<X, IN, OUT, C> {
@@ -47,7 +56,7 @@ impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X
     */
 }
 
-impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
+impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
     /*
     /// Creates a [`Gradient`] with the same dimensions as `self` and every element initialized to
     /// `0.0`
@@ -57,7 +66,7 @@ impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X
     */
 
     /// Propagates a [`Tensor`] through the neural network and returns the output [`Tensor`].
-    pub fn propagate(&self, input: &IN) -> OUT {
+    pub fn propagate(&self, input: &Tensor<X, IN>) -> Tensor<X, OUT> {
         // the compiler should inline all prop functions.
         self.components.prop(input.clone())
     }
@@ -73,9 +82,9 @@ impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X
     pub fn propagate_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> OUT + 'a>
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> Tensor<X, OUT> + 'a>
     where
-        B: IntoIterator<Item = &'a IN>,
+        B: IntoIterator<Item = &'a Tensor<X, IN>>,
     {
         batch.into_iter().map(|i| self.propagate(i))
     }
@@ -84,7 +93,7 @@ impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X
     /// additional data which is required for backpropagation.
     ///
     /// If only the output is needed, use the normal `propagate` method instead.
-    pub fn training_propagate(&self, input: &IN) -> (OUT, C::StoredData) {
+    pub fn training_propagate(&self, input: &Tensor<X, IN>) -> (Tensor<X, OUT>, C::StoredData) {
         self.components.train_prop(input.clone())
     }
 
@@ -97,7 +106,7 @@ impl<X: Element, IN: Tensor<X>, OUT: Tensor<X>, C: NNComponent<X, IN, OUT>> NN<X
     /// dimensions as `self`.
     pub fn backpropagate(
         &self,
-        output_gradient: OUT,
+        output_gradient: Tensor<X, OUT>,
         train_data: C::StoredData,
         gradient: &mut C::Grad,
     ) {
@@ -155,19 +164,40 @@ where
             .build()
     }
 }
+*/
 
-impl<X: Display, const IN: usize, const OUT: usize> Display for NN<X, IN, OUT> {
+impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> Display for NN<X, IN, OUT, C>
+where
+    [(); IN::DIM]: Sized,
+    [(); OUT::DIM]: Sized,
+    for<'a> NNDisplay<'a, C>: fmt::Display,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let get_plural_s = |x: usize| if x == 1 { "" } else { "s" };
-        writeln!(
-            f,
-            "Neural Network: {IN} Input{} -> {OUT} Output{}",
-            get_plural_s(IN),
-            get_plural_s(OUT),
-        )?;
-        let layers_text =
-            self.layers.iter().map(ToString::to_string).collect::<Vec<String>>().join("\n");
-        write!(f, "{}", layers_text)
+        writeln!(f, "NN: Tensor({:?}) -> Tensor({:?})", IN::get_dims_arr(), OUT::get_dims_arr())?;
+        write!(f, "{}", NNDisplay(&self.components))
     }
 }
-*/
+
+#[cfg(test)]
+mod tests {
+    use serde::{Deserialize, Serialize};
+
+    #[test]
+    fn display() {}
+
+    #[test]
+    fn serde() {
+        #[derive(Debug, Serialize, Deserialize)]
+        struct A {
+            val: Box<[i32; 10]>,
+        }
+
+        let a = A { val: Box::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) };
+        println!("{:?}", a);
+        let json = serde_json::to_string(&a).unwrap();
+        println!("{:?}", json);
+        let a: A = serde_json::from_str(&json).unwrap();
+        println!("{:?}", a);
+        panic!()
+    }
+}
