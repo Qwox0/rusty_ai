@@ -17,13 +17,14 @@ where
         let gradient = self
             .data
             .par_iter()
-            .map(|(input, eo)| {
-                let out = self.nn.verbose_propagate(input);
-                let mut gradient = self.nn.get_network().init_zero_gradient();
-                self.nn.backpropagate_into(&out, eo, &mut gradient);
-                gradient
-            })
-            .fold(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad)
+            .fold(
+                || self.nn.get_network().init_zero_gradient(),
+                |mut gradient, (input, eo)| {
+                    let out = self.nn.verbose_propagate(input);
+                    self.nn.backpropagate_into(&out, eo, &mut gradient);
+                    gradient
+                },
+            )
             .reduce(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad);
         self.nn.unchecked_add_gradient(gradient);
         self.nn.clip_gradient();
@@ -41,14 +42,15 @@ where
         let gradient = self
             .data
             .par_iter()
-            .map(|(input, eo)| {
-                let out = self.nn.verbose_propagate(input);
-                let mut gradient = self.nn.get_network().init_zero_gradient();
-                self.nn.backpropagate_into(&out, eo, &mut gradient);
-                sender.send(out.get_nn_output()).expect("could send output");
-                gradient
-            })
-            .fold(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad)
+            .fold(
+                || self.nn.get_network().init_zero_gradient(),
+                |mut gradient, (input, eo)| {
+                    let out = self.nn.verbose_propagate(input);
+                    self.nn.backpropagate_into(&out, eo, &mut gradient);
+                    sender.send(out.get_nn_output()).expect("could send output");
+                    gradient
+                },
+            )
             .reduce(|| self.nn.get_network().init_zero_gradient(), |acc, grad| acc + grad);
         self.nn.unchecked_set_gradient(gradient);
         self.nn.clip_gradient();
