@@ -3,15 +3,14 @@ use half::{bf16, f16};
 use inline_closure::inline_closure;
 use num::Zero;
 use rand_distr::uniform::SampleUniform;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
     iter::{Product, Sum},
     ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign},
 };
 
 /// Represents a single value in a multidimensional object. Like a 0D Tensor.
-///
-/// This trait is automatically implemented.
-pub trait Element: Copy + Default + fmt::Debug + fmt::Display + Send + Sync + 'static {}
+pub trait Element: Copy + Default + PartialEq + fmt::Debug + Send + Sync + 'static {}
 
 macro_rules! impl_element {
     ($($ty:ty)+) => {
@@ -22,6 +21,7 @@ macro_rules! impl_element {
 }
 
 impl_element! {
+    ()
     isize i8 i16 i32 i64 i128
     usize u8 u16 u32 u64 u128
     bool

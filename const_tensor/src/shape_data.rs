@@ -1,29 +1,43 @@
-use crate::Element;
+use crate::{Element, Shape};
 use core::fmt;
 use std::mem;
 
-pub trait ShapeData<SUB>: Sized + Copy + ArrDefault + fmt::Debug + Send + Sync + 'static {
-    fn as_slice(&self) -> &[SUB];
-    fn as_mut_slice(&mut self) -> &mut [SUB];
-}
+pub trait ShapeData: Sized + Copy + PartialEq + fmt::Debug + Send + Sync + 'static {
+    type Element: Element;
+    type Shape: Shape<Data<Self::Element> = Self>;
+    type Sub: ShapeData;
 
-impl<T: Element> ShapeData<T> for T {
-    #[inline]
-    fn as_slice(&self) -> &[T] {
-        // SAFETY: T == [T; 1]
-        unsafe { mem::transmute::<&Self, &[T; 1]>(self) }.as_slice()
-    }
+    fn as_slice(&self) -> &[Self::Sub];
+    fn as_mut_slice(&mut self) -> &mut [Self::Sub];
 
-    #[inline]
-    fn as_mut_slice(&mut self) -> &mut [T] {
-        // SAFETY: T == [T; 1]
-        unsafe { mem::transmute::<&mut Self, &mut [T; 1]>(self) }.as_mut_slice()
+    fn type_hint(self) -> <Self::Shape as Shape>::Data<Self::Element> {
+        self
     }
 }
 
-impl<SUB: Copy + ArrDefault + fmt::Debug + Send + Sync + 'static, const N: usize> ShapeData<SUB>
-    for [SUB; N]
-{
+impl<X: Element> ShapeData for X {
+    type Element = X;
+    type Shape = ();
+    type Sub = X;
+
+    #[inline]
+    fn as_slice(&self) -> &[X] {
+        // SAFETY: T == [T; 1]
+        unsafe { mem::transmute::<&Self, &[X; 1]>(self) }.as_slice()
+    }
+
+    #[inline]
+    fn as_mut_slice(&mut self) -> &mut [X] {
+        // SAFETY: T == [T; 1]
+        unsafe { mem::transmute::<&mut Self, &mut [X; 1]>(self) }.as_mut_slice()
+    }
+}
+
+impl<X: Element, SUB: ShapeData<Element = X>, const N: usize> ShapeData for [SUB; N] {
+    type Element = X;
+    type Shape = [SUB::Shape; N];
+    type Sub = SUB;
+
     #[inline]
     fn as_slice(&self) -> &[SUB] {
         self.as_slice()
@@ -35,6 +49,7 @@ impl<SUB: Copy + ArrDefault + fmt::Debug + Send + Sync + 'static, const N: usize
     }
 }
 
+/*
 pub trait ArrDefault {
     fn arr_default() -> Self;
 }
@@ -52,6 +67,7 @@ impl<T: Element> ArrDefault for T {
         T::default()
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {

@@ -109,6 +109,7 @@ impl<X: Element, RNG> NNBuilder<X, NoShape, NoShape, (), RNG> {
 impl<X: Element, NNIN: Shape, OUT: Shape, PREV: NNComponent<X, NNIN, OUT>, RNG>
     NNBuilder<X, NNIN, OUT, PREV, RNG>
 {
+    /// Adds a new [`NNComponent`] to the neural network.
     #[inline]
     pub fn add_component<C: NNComponent<X, NNIN, OUT2>, OUT2: Shape>(
         self,
@@ -117,22 +118,31 @@ impl<X: Element, NNIN: Shape, OUT: Shape, PREV: NNComponent<X, NNIN, OUT>, RNG>
         NNBuilder { components: c(self.components), _out: PhantomData, ..self }
     }
 
-    pub fn relu(self) -> NNBuilder<X, NNIN, OUT, ReLU<PREV>, RNG> {
-        NNBuilder { components: ReLU { prev: self.components }, ..self }
+    /// Adds a new [`ReLU`] component to the neural network.
+    pub fn relu(self) -> NNBuilder<X, NNIN, OUT, ReLU<PREV>, RNG>
+    where ReLU<PREV>: NNComponent<X, NNIN, OUT> {
+        self.add_component(ReLU::new)
     }
 
-    pub fn leaky_relu(self, leak_rate: X) -> NNBuilder<X, NNIN, OUT, LeakyReLU<X, PREV>, RNG> {
-        NNBuilder { components: LeakyReLU { prev: self.components, leak_rate }, ..self }
+    /// Adds a new [`LeakyReLU`] component to the neural network.
+    pub fn leaky_relu(self, leak_rate: X) -> NNBuilder<X, NNIN, OUT, LeakyReLU<X, PREV>, RNG>
+    where LeakyReLU<X, PREV>: NNComponent<X, NNIN, OUT> {
+        self.add_component(|prev| LeakyReLU { prev, leak_rate })
     }
 
-    pub fn sigmoid(self) -> NNBuilder<X, NNIN, OUT, Sigmoid<PREV>, RNG> {
-        NNBuilder { components: Sigmoid { prev: self.components }, ..self }
+    /// Adds a new [`Sigmoid`] component to the neural network.
+    pub fn sigmoid(self) -> NNBuilder<X, NNIN, OUT, Sigmoid<PREV>, RNG>
+    where Sigmoid<PREV>: NNComponent<X, NNIN, OUT> {
+        self.add_component(Sigmoid::new)
     }
 
-    pub fn flatten(self) -> NNBuilder<X, NNIN, [(); OUT::LEN], Flatten<OUT, PREV>, RNG> {
-        NNBuilder { components: Flatten::with_prev(self.components), _out: PhantomData, ..self }
+    /// Adds a new [`Flatten`] component to the neural network.
+    pub fn flatten(self) -> NNBuilder<X, NNIN, [(); OUT::LEN], Flatten<OUT, PREV>, RNG>
+    where Flatten<OUT, PREV>: NNComponent<X, NNIN, [(); OUT::LEN]> {
+        self.add_component(Flatten::new)
     }
 
+    /// Consumes the builder to create a new [`NN`].
     pub fn build(self) -> NN<X, NNIN, OUT, PREV> {
         NN::new(self.components)
     }

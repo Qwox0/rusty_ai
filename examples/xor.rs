@@ -241,6 +241,20 @@ mod benches {
     use rusty_ai::training::Training;
     use test::*;
 
+    #[bench]
+    fn epoch_datacount_100_neurons_003(b: &mut Bencher) {
+        let mut ai = get_nn::<f32>(3);
+        let mut rng = rand::thread_rng();
+        let mut training_data = gen_data(&mut rng, 100);
+        b.iter(|| {
+            black_box(NNTrainer::train_single_thread(
+                black_box(&mut ai),
+                black_box(&training_data),
+            ));
+            training_data.shuffle_rng(&mut rng);
+        })
+    }
+
     bench_example_epoch! {
         epoch_datacount_100_neurons_003: 3, 100;
         epoch_datacount_100_neurons_005: 5, 100;

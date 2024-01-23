@@ -1,7 +1,8 @@
 use crate::{
-    data, maybe_uninit::MaybeUninit, shape_data::ArrDefault, tensor, Element, Float, Len, Num,
-    Shape,
+    data, maybe_uninit::MaybeUninit, shape_data::ShapeData, tensor, Element, Float, Len, Num,
+    Shape, Vector,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     alloc,
     borrow::{Borrow, BorrowMut},
@@ -10,49 +11,18 @@ use std::{
     ptr,
 };
 
+/// An owned tensor.
 #[repr(transparent)]
 pub struct Tensor<X: Element, S: Shape> {
     /// [`Box`] pointer to the tensor data.
-    data: Box<data::tensor<X, S>>,
+    pub(crate) data: Box<data::tensor<X, S>>,
 }
-
-pub mod aliases {
-    use super::Tensor;
-
-    macro_rules! make_aliases {
-        ($($name:ident : $($dim_name:ident)* => $shape:ty),* $(,)?) => {
-            make_aliases! { inner $( $name : $( $dim_name )* => $shape; stringify!($shape) ),* }
-        };
-        (inner $($name:ident : $($dim_name:ident)* => $shape:ty; $shape_str:expr),*) => { $(
-            /// owned tensor
-            #[doc = "()"]
-            /// test
-            #[allow(non_camel_case_types)]
-            pub type $name<X, $(const $dim_name: usize),*> = Tensor<X, $shape>;
-        )* };
-    }
-
-    make_aliases! {
-        Scalar: => (),
-        Vector: N => [(); N],
-        Matrix: W H => [[(); W]; H],
-        Tensor3: A B C => [[[(); A]; B]; C],
-        Tensor4: A B C D => [[[[(); A]; B]; C]; D],
-        Tensor5: A B C D E => [[[[[(); A]; B]; C]; D]; E],
-        Tensor6: A B C D E F => [[[[[[(); A]; B]; C]; D]; E]; F],
-        Tensor7: A B C D E F G => [[[[[[[(); A]; B]; C]; D]; E]; F]; G],
-        Tensor8: A B C D E F G H => [[[[[[[[(); A]; B]; C]; D]; E]; F]; G]; H],
-        Tensor9: A B C D E F G H I => [[[[[[[[[(); A]; B]; C]; D]; E]; F]; G]; H]; I],
-        Tensor10: A B C D E F G H I J => [[[[[[[[[[(); A]; B]; C]; D]; E]; F]; G]; H]; I]; J],
-    }
-}
-use aliases::*;
 
 impl<X: Element, S: Shape> Tensor<X, S> {
     /// Creates a new [`Tensor`] on the heap.
     #[inline]
-    pub fn new(data: S::Data<X>) -> Self {
-        Self::from(data::tensor::new_boxed(data))
+    pub fn new(data: impl ShapeData<Element = X, Shape = S>) -> Self {
+        Self::from(data::tensor::new_boxed(data.type_hint()))
     }
 
     /// Allocates a new uninitialized [`Tensor`].
@@ -119,8 +89,7 @@ impl<X: Element, S: Shape> Tensor<X, S> {
     #[inline]
     pub fn into_1d<const LEN: usize>(self) -> Vector<X, LEN>
     where S: Len<LEN> {
-        let t = mem::ManuallyDrop::new(self);
-        unsafe { mem::transmute_copy(&t) }
+        unsafe { mem::transmute(self) }
     }
 
     /// Changes the Shape of the Tensor.
@@ -145,6 +114,28 @@ impl<X: Element, S: Shape> Tensor<X, S> {
         self
     }
 
+    /// Adds a scalar to every element of the tensor.
+    #[inline]
+    pub fn scalar_add<const LEN: usize>(mut self, scalar: X) -> Self
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        self.scalar_add_mut(scalar);
+        self
+    }
+
+    /// Subtracts a scalar from every element of the tensor.
+    #[inline]
+    pub fn scalar_sub<const LEN: usize>(mut self, scalar: X) -> Self
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        self.scalar_sub_mut(scalar);
+        self
+    }
+
     /// Multiplies the tensor by a scalar value.
     #[inline]
     pub fn scalar_mul<const LEN: usize>(mut self, scalar: X) -> Self
@@ -153,6 +144,17 @@ impl<X: Element, S: Shape> Tensor<X, S> {
         X: Num,
     {
         self.scalar_mul_mut(scalar);
+        self
+    }
+
+    /// Divides the tensor by a scalar value.
+    #[inline]
+    pub fn scalar_div<const LEN: usize>(mut self, scalar: X) -> Self
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        self.scalar_div_mut(scalar);
         self
     }
 
@@ -199,6 +201,28 @@ impl<X: Element, S: Shape> Tensor<X, S> {
         self
     }
 
+    /// Divides `other` to `self` elementwise.
+    #[inline]
+    pub fn div_elem<const LEN: usize>(mut self, other: &Self) -> Self
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        self.div_elem_mut(other);
+        self
+    }
+
+    /// Squares `self` elementwise.
+    #[inline]
+    pub fn square_elem<const LEN: usize>(mut self) -> Self
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        self.square_elem_mut();
+        self
+    }
+
     /// Calculates the reciprocal of every element in `self`.
     #[inline]
     pub fn recip_elem<const LEN: usize>(mut self) -> Self
@@ -220,6 +244,17 @@ impl<X: Element, S: Shape> Tensor<X, S> {
         self.neg_mut();
         self
     }
+
+    /// `self * t + other * (1 - t)` (same as `t * (self - other) + other`)
+    #[inline]
+    pub fn lerp<const LEN: usize>(mut self, other: &tensor<X, S>, blend: X) -> Self
+    where
+        S: Len<LEN>,
+        X: Float,
+    {
+        self.lerp_mut(other, blend);
+        self
+    }
 }
 
 impl<X: Element + fmt::Debug, S: Shape + fmt::Debug> fmt::Debug for Tensor<X, S> {
@@ -236,35 +271,35 @@ impl<X: Element, S: Shape> Clone for Tensor<X, S> {
 
 impl<X: Element, S: Shape> Default for Tensor<X, S> {
     fn default() -> Self {
-        Self::new(ArrDefault::arr_default())
+        Self::new(S::unwrap_data(S::WrappedData::default()))
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq for Tensor<X, S>
-where S: Len<{ S::LEN }>
-{
+impl<X: Element + PartialEq, S: Shape> PartialEq<Self> for Tensor<X, S> {
     fn eq(&self, other: &Self) -> bool {
         self.data == other.data
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq<&tensor<X, S>> for Tensor<X, S>
-where S: Len<{ S::LEN }>
-{
+impl<X: Element + PartialEq, S: Shape> PartialEq<&tensor<X, S>> for Tensor<X, S> {
     fn eq(&self, other: &&tensor<X, S>) -> bool {
-        self.data.as_ref() == *other
+        self.as_ref() == *other
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq<Tensor<X, S>> for &tensor<X, S>
-where S: Len<{ S::LEN }>
-{
+impl<X: Element + PartialEq, S: Shape> PartialEq<Tensor<X, S>> for &tensor<X, S> {
     fn eq(&self, other: &Tensor<X, S>) -> bool {
-        other.data.as_ref() == *self
+        other.as_ref() == *self
     }
 }
 
-impl<X: Element + Eq, S: Shape> Eq for Tensor<X, S> where S: Len<{ S::LEN }> {}
+impl<X: Element + PartialEq, const LEN: usize> PartialEq<&[X; LEN]> for Vector<X, LEN> {
+    fn eq(&self, other: &&[X; LEN]) -> bool {
+        &self.0 == *other
+    }
+}
+
+impl<X: Element + Eq, S: Shape> Eq for Tensor<X, S> {}
 
 impl<X: Element, S: Shape> From<Box<data::tensor<X, S>>> for Tensor<X, S> {
     fn from(data: Box<data::tensor<X, S>>) -> Self {
@@ -316,55 +351,28 @@ impl<X: Element, S: Shape> BorrowMut<data::tensor<X, S>> for Tensor<X, S> {
     }
 }
 
-/*
-impl<'de, X: Element, S: Shape> Deserialize<'de> for Tensor<X, S> {
+impl<X: Element + Serialize, S: Shape> Serialize for Tensor<X, S>
+where S::WrappedData<X>: Serialize
+{
+    fn serialize<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
+    where Ser: serde::Serializer {
+        tensor::<X, S>::serialize(&self, serializer)
+    }
+}
+
+impl<'de, X: Element + Deserialize<'de>, S: Shape> Deserialize<'de> for Tensor<X, S>
+where S::WrappedData<X>: Deserialize<'de>
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
-        todo!()
+        S::WrappedData::deserialize(deserializer).map(S::unwrap_data).map(Tensor::new)
     }
 }
-*/
-
-/*
-/// Trait for Owned Tensor types.
-///
-/// # SAFETY
-///
-/// The data structure should equal [`Box<Self::Data>`] as [`mem::transmute`] and
-/// [`mem::transmute_copy`] are used to convert between [`Tensor`] types.
-pub unsafe trait Tensor<X: Element>:
-    Sized
-    + Clone
-    + Default
-    + fmt::Debug
-    + Deref<Target = Self::Data>
-    + DerefMut
-    + AsRef<Self::Data>
-    + AsMut<Self::Data>
-    + Borrow<Self::Data>
-    + BorrowMut<Self::Data>
-{
-    /// The tensor data which represents the data type on the heap.
-    type Data: TensorData<X, Owned = Self>;
-
-    /// `Self` but with another [`Element`] type.
-    type Mapped<E: Element>: Tensor<E, Data = <Self::Data as TensorData<X>>::Mapped<E>>;
-
-    /// Creates a new Tensor.
-    fn from_box(data: Box<Self::Data>) -> Self;
-
-    /// Creates a new Tensor.
-    #[inline]
-    fn new(data: <Self::Data as TensorData<X>>::Shape) -> Self {
-        Self::from_box(new_boxed_tensor_data(data))
-    }
-
-}
-*/
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Matrix;
 
     #[test]
     fn safety_new_uninit() {

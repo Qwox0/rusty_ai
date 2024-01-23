@@ -1,14 +1,16 @@
 use crate::{
     maybe_uninit::MaybeUninit,
     owned::Tensor,
+    scalar,
     shape::{Len, Shape},
-    shape_data::{ArrDefault, ShapeData},
-    Element, Float, Num,
+    shape_data::ShapeData,
+    vector, Element, Float, Num,
 };
 use core::{mem, slice};
+use serde::Serialize;
 use std::{
     iter::Map,
-    ops::{Add, Index, IndexMut},
+    ops::{Index, IndexMut},
 };
 
 /// implements [`TensorData`]
@@ -20,7 +22,9 @@ pub struct tensor<X: Element, S: Shape>(
     pub(crate) S::Data<X>,
 );
 
+/// Helper trait for [`tensor`].
 pub trait TensorData<X: Element, S: Shape> {
+    /// one dimension lower
     type SubTensor: TensorData<X, S::SubShape>;
 }
 
@@ -28,38 +32,11 @@ impl<X: Element, S: Shape> TensorData<X, S> for tensor<X, S> {
     type SubTensor = tensor<X, S::SubShape>;
 }
 
-pub mod aliases {
-    use super::tensor;
-
-    macro_rules! make_aliases {
-        ($($name:ident : $($dim_name:ident)* => $shape:ty),* $(,)?) => { $(
-            /// tensor data
-            #[allow(non_camel_case_types)]
-            pub type $name<X, $(const $dim_name: usize),*> = tensor<X, $shape>;
-        )* };
-    }
-
-    make_aliases! {
-        scalar: => (),
-        vector: N => [(); N],
-        matrix: W H => [[(); W]; H],
-        tensor3: A B C => [[[(); A]; B]; C],
-        tensor4: A B C D => [[[[(); A]; B]; C]; D],
-        tensor5: A B C D E => [[[[[(); A]; B]; C]; D]; E],
-        tensor6: A B C D E F => [[[[[[(); A]; B]; C]; D]; E]; F],
-        tensor7: A B C D E F G => [[[[[[[(); A]; B]; C]; D]; E]; F]; G],
-        tensor8: A B C D E F G H => [[[[[[[[(); A]; B]; C]; D]; E]; F]; G]; H],
-        tensor9: A B C D E F G H I => [[[[[[[[[(); A]; B]; C]; D]; E]; F]; G]; H]; I],
-        tensor10: A B C D E F G H I J => [[[[[[[[[[(); A]; B]; C]; D]; E]; F]; G]; H]; I]; J],
-    }
-}
-use aliases::*;
-
 impl<X: Element, S: Shape> tensor<X, S> {
     /// a tensor must be allocated on the heap -> use `new_boxed` or [`Tensor`].
     #[inline]
-    pub(crate) fn new(data: S::Data<X>) -> Self {
-        Self(data)
+    pub(crate) fn new(data: impl ShapeData<Element = X, Shape = S>) -> Self {
+        Self(data.type_hint())
     }
 
     #[inline]
@@ -72,13 +49,13 @@ impl<X: Element, S: Shape> tensor<X, S> {
     ///
     /// You should probably use the [`Tensor`] wrapper instead.
     #[inline]
-    pub fn new_boxed(data: S::Data<X>) -> Box<Self> {
+    pub fn new_boxed(data: impl ShapeData<Element = X, Shape = S>) -> Box<Self> {
         Box::new(Self::new(data))
     }
 
     /// similar to `&str` and `&[]` literals.
     #[inline]
-    pub fn literal<'a>(data: S::Data<X>) -> &'a Self {
+    pub fn literal<'a>(data: impl ShapeData<Element = X, Shape = S>) -> &'a Self {
         Box::leak(Self::new_boxed(data))
     }
 
@@ -92,6 +69,16 @@ impl<X: Element, S: Shape> tensor<X, S> {
     #[inline]
     pub(crate) fn wrap_mut(data: &mut S::Data<X>) -> &mut Self {
         unsafe { mem::transmute(data) }
+    }
+
+    #[inline]
+    pub(crate) fn wrap_box(b: Box<S::Data<X>>) -> Box<Self> {
+        unsafe { mem::transmute(b) }
+    }
+
+    #[inline]
+    pub(crate) fn unwrap_box(b: Box<Self>) -> Box<S::Data<X>> {
+        unsafe { mem::transmute(b) }
     }
 
     /// Clones `self` into a new [`Box`].
@@ -249,6 +236,30 @@ impl<X: Element, S: Shape> tensor<X, S> {
         out
     }
 
+    /// Adds a scalar to every element of the tensor inplace.
+    #[inline]
+    pub fn scalar_add_mut<const LEN: usize>(&mut self, scalar: X)
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        for x in self.iter_elem_mut() {
+            *x += scalar;
+        }
+    }
+
+    /// Subtracts a scalar from every element of the tensor inplace.
+    #[inline]
+    pub fn scalar_sub_mut<const LEN: usize>(&mut self, scalar: X)
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        for x in self.iter_elem_mut() {
+            *x -= scalar;
+        }
+    }
+
     /// Multiplies the tensor by a scalar value inplace.
     ///
     /// # Example
@@ -267,6 +278,18 @@ impl<X: Element, S: Shape> tensor<X, S> {
     {
         for x in self.iter_elem_mut() {
             *x *= scalar;
+        }
+    }
+
+    /// Divides the tensor by a scalar value inplace.
+    #[inline]
+    pub fn scalar_div_mut<const LEN: usize>(&mut self, scalar: X)
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        for x in self.iter_elem_mut() {
+            *x /= scalar;
         }
     }
 
@@ -326,6 +349,30 @@ impl<X: Element, S: Shape> tensor<X, S> {
         }
     }
 
+    /// Divides `other` to `self` elementwise and inplace.
+    #[inline]
+    pub fn div_elem_mut<const LEN: usize>(&mut self, other: &Self)
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        for (x, y) in self.iter_elem_mut().zip(other.iter_elem()) {
+            *x /= *y;
+        }
+    }
+
+    /// Squares `self` elementwise and inplace.
+    #[inline]
+    pub fn square_elem_mut<const LEN: usize>(&mut self)
+    where
+        S: Len<LEN>,
+        X: Num,
+    {
+        for x in self.iter_elem_mut() {
+            *x *= *x;
+        }
+    }
+
     /// Calculates the reciprocal of every element in `self` inplace.
     #[inline]
     pub fn recip_elem_mut<const LEN: usize>(&mut self)
@@ -349,23 +396,44 @@ impl<X: Element, S: Shape> tensor<X, S> {
             *x = x.neg();
         }
     }
+
+    /// Linear interpolation between `self` and `other` with blend value `blend`.
+    ///
+    /// `self * t + other * (1 - t)` (same as `t * (self - other) + other`)
+    #[inline]
+    pub fn lerp_mut<const LEN: usize>(&mut self, other: &Self, blend: X)
+    where
+        S: Len<LEN>,
+        X: Float,
+    {
+        for (a, b) in self.iter_elem_mut().zip(other.iter_elem()) {
+            *a = blend.mul_add(*a - *b, *b)
+        }
+    }
 }
 
-impl<X: Element + Default, S: Shape + Default> Default for tensor<X, S> {
+impl<X: Element, S: Shape> Default for tensor<X, S> {
     fn default() -> Self {
-        Self::new(ArrDefault::arr_default())
+        Self::new(S::unwrap_data(S::WrappedData::default()))
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq for tensor<X, S>
-where S: Len<{ S::LEN }>
-{
+impl<X: Element + PartialEq, S: Shape> PartialEq<Self> for tensor<X, S> {
     fn eq(&self, other: &Self) -> bool {
-        self.as_1d().0 == other.as_1d().0
+        //self.as_1d().0 == other.as_1d().0
+        //self.iter_sub_tensors().zip(other.iter_sub_tensors()).all(|(l, r)| l.eq(r))
+        self.0 == other.0
     }
 }
 
-impl<X: Element + Eq, S: Shape> Eq for tensor<X, S> where S: Len<{ S::LEN }> {}
+impl<X: Element + PartialEq, S: Shape> PartialEq<&S::Data<X>> for tensor<X, S> {
+    fn eq(&self, other: &&S::Data<X>) -> bool {
+        &self.0 == *other
+    }
+}
+
+impl<X: Element + Eq> Eq for tensor<X, ()> {}
+impl<X: Element + Eq, SUB: Shape, const LEN: usize> Eq for tensor<X, [SUB; LEN]> {}
 
 impl<X: Element, S: Shape> ToOwned for tensor<X, S> {
     type Owned = Tensor<X, S>;
@@ -387,6 +455,17 @@ impl<X: Element, S: Shape> IndexMut<usize> for tensor<X, S> {
     fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
         self.get_sub_tensor_mut(idx)
             .expect("`idx` is in range of the outermost dimension")
+    }
+}
+
+impl<X: Element + Serialize, S: Shape> Serialize for tensor<X, S>
+where S::WrappedData<X>: Serialize
+{
+    fn serialize<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
+    where Ser: serde::Serializer {
+        //let wrapper = SerTensor::from(self);
+        //SerTensor::serialize(&wrapper, serializer)
+        S::wrap_ref_data(&self.0).serialize(serializer)
     }
 }
 

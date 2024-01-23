@@ -1,17 +1,67 @@
 use crate::{shape_data::ShapeData, Element};
 use core::fmt;
+use serde::{Deserialize, Serialize};
+use std::mem;
+
+/// This wrapper implements [`Default`], [`Serialize`] and [`Deserialize`] for any length `N`. This
+/// means that implementations for `Arr<T, 0>` might be overly restrictive.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[repr(transparent)]
+#[serde(transparent)]
+pub struct Arr<T, const N: usize> {
+    #[serde(with = "serde_arrays")]
+    #[serde(bound(serialize = "T: Serialize"))]
+    #[serde(bound(deserialize = "T: Deserialize<'de>"))]
+    arr: [T; N],
+}
+
+impl<T: fmt::Debug, const N: usize> fmt::Debug for Arr<T, N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.arr.fmt(f)
+    }
+}
+
+impl<T: Default + Copy, const N: usize> Default for Arr<T, N> {
+    fn default() -> Self {
+        Self { arr: [T::default(); N] }
+    }
+}
 
 /// The shape/dimensions of a tensor.
-pub trait Shape: Copy + fmt::Debug + Send + Sync + 'static {
+pub unsafe trait Shape: Copy + fmt::Debug + Send + Sync + 'static {
     /// multidimensional array with this shape and element `X`
-    type Data<X: Element>: ShapeData<<Self::SubShape as Shape>::Data<X>>;
+    type Data<X: Element>: ShapeData<Element = X, Shape = Self, Sub = <Self::SubShape as Shape>::Data<X>>;
+
     /// Next smaller shape
     type SubShape: Shape;
 
-    /// The dimensions of the tensor.
+    /// Same as `Self::Data` but using [`Arr`] instead of arrays.
+    ///
+    /// # SAFETY
+    ///
+    /// memory layout has to equal the layout of `Self::Data<X>`.
+    /// `mem::transmute::<Self::Data<X>, Self::WrappedData<X>>(data)` has to be valid.
+    type WrappedData<X: Element>: Copy + Default;
+
+    /// The dimension of the tensor.
     const DIM: usize;
+
     /// The total number of elements of a tensor having this shape.
     const LEN: usize;
+
+    fn wrap_data<X: Element>(data: Self::Data<X>) -> Self::WrappedData<X> {
+        let data = mem::ManuallyDrop::new(data);
+        unsafe { mem::transmute_copy(&data) }
+    }
+
+    fn wrap_ref_data<X: Element>(data: &Self::Data<X>) -> &Self::WrappedData<X> {
+        unsafe { mem::transmute(data) }
+    }
+
+    fn unwrap_data<X: Element>(data: Self::WrappedData<X>) -> Self::Data<X> {
+        let data = mem::ManuallyDrop::new(data);
+        unsafe { mem::transmute_copy(&data) }
+    }
 
     /// Returns the dimensions of the shape as an array.
     ///
@@ -29,9 +79,10 @@ pub trait Shape: Copy + fmt::Debug + Send + Sync + 'static {
     fn _set_dims_arr<const D: usize>(dims: &mut [usize; D]);
 }
 
-impl Shape for () {
+unsafe impl Shape for () {
     type Data<X: Element> = X;
     type SubShape = ();
+    type WrappedData<X: Element> = Arr<X, 1>;
 
     const DIM: usize = 0;
     const LEN: usize = 1;
@@ -45,9 +96,10 @@ impl Shape for () {
     fn _set_dims_arr<const D: usize>(_dims: &mut [usize; D]) {}
 }
 
-impl<SUB: Shape, const N: usize> Shape for [SUB; N] {
+unsafe impl<SUB: Shape, const N: usize> Shape for [SUB; N] {
     type Data<X: Element> = [SUB::Data<X>; N];
     type SubShape = SUB;
+    type WrappedData<X: Element> = Arr<SUB::WrappedData<X>, N>;
 
     const DIM: usize = SUB::DIM + 1;
     const LEN: usize = SUB::LEN * N;

@@ -1,6 +1,8 @@
-use super::component::{Data, NNComponent, NNDisplay};
+use super::component::{component_new, Data, NNComponent, NNDisplay};
+use crate::optimizer::Optimizer;
 use const_tensor::{Element, Len, Num, Shape, Tensor, TensorData};
 use core::fmt;
+use serde::{Deserialize, Serialize};
 
 #[inline]
 pub fn relu<X: Num>(x: X) -> X {
@@ -12,10 +14,13 @@ pub fn leaky_relu<X: Num>(x: X, leak_rate: X) -> X {
     if x.is_positive() { x } else { leak_rate }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct ReLU<PREV> {
     pub(super) prev: PREV,
 }
+
+component_new! { ReLU }
 
 impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for ReLU<PREV>
 where
@@ -25,6 +30,7 @@ where
     PREV: NNComponent<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
+    type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     /// The data which is saved during `train_prop` and used in `backprop`.
     ///
     /// Bool Tensor contains whether propagation output elements where unequal to zero or not.
@@ -65,6 +71,31 @@ where
         }
         self.prev.backprop(input_grad, prev_data, grad)
     }
+
+    #[inline]
+    fn optimize<O: Optimizer<X>>(
+        &mut self,
+        grad: &Self::Grad,
+        optimizer: &O,
+        mut opt_state: Self::OptState<O>,
+    ) -> Self::OptState<O> {
+        self.prev.optimize(grad, optimizer, opt_state)
+    }
+
+    #[inline]
+    fn init_zero_grad(&self) -> Self::Grad {
+        self.prev.init_zero_grad()
+    }
+
+    #[inline]
+    fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O> {
+        self.prev.init_opt_state()
+    }
+
+    #[inline]
+    fn iter_param(&self) -> impl Iterator<Item = &X> {
+        self.prev.iter_param()
+    }
 }
 
 impl<'a, PREV> fmt::Display for NNDisplay<'a, ReLU<PREV>>
@@ -76,11 +107,13 @@ where NNDisplay<'a, PREV>: fmt::Display
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LeakyReLU<X, PREV> {
     pub(super) prev: PREV,
     pub(super) leak_rate: X,
 }
+
+component_new! { LeakyReLU<X, PREV> -> leak_rate: X }
 
 impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for LeakyReLU<X, PREV>
 where
@@ -90,6 +123,7 @@ where
     PREV: NNComponent<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
+    type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     /// The data which is saved during `train_prop` and used in `backprop`.
     ///
     /// Bool Tensor contains whether propagation output elements where unequal to zero or not.
@@ -118,6 +152,31 @@ where
         }
         self.prev.backprop(input_grad, prev_data, grad)
     }
+
+    #[inline]
+    fn optimize<O: Optimizer<X>>(
+        &mut self,
+        grad: &Self::Grad,
+        optimizer: &O,
+        mut opt_state: Self::OptState<O>,
+    ) -> Self::OptState<O> {
+        self.prev.optimize(grad, optimizer, opt_state)
+    }
+
+    #[inline]
+    fn init_zero_grad(&self) -> Self::Grad {
+        self.prev.init_zero_grad()
+    }
+
+    #[inline]
+    fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O> {
+        self.prev.init_opt_state()
+    }
+
+    #[inline]
+    fn iter_param(&self) -> impl Iterator<Item = &X> {
+        self.prev.iter_param()
+    }
 }
 
 impl<'a, X: Element, PREV> fmt::Display for NNDisplay<'a, LeakyReLU<X, PREV>>
@@ -125,6 +184,6 @@ where NNDisplay<'a, PREV>: fmt::Display
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "{}", NNDisplay(&self.0.prev))?;
-        write!(f, "LeakyReLU (leak_rate: {})", self.0.leak_rate)
+        write!(f, "LeakyReLU (leak_rate: {:?})", self.0.leak_rate)
     }
 }

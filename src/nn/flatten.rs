@@ -1,23 +1,20 @@
 use super::component::NNComponent;
-use crate::nn::component::NNDisplay;
+use crate::{nn::component::NNDisplay, optimizer::Optimizer};
 use const_tensor::{Element, Len, Shape, Tensor, Vector};
 use core::fmt;
+use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Flatten<S, PREV> {
     pub(super) prev: PREV,
+    #[serde(skip)]
     pub(super) _shape: PhantomData<S>,
 }
 
-impl<S: Shape> Flatten<S, ()> {
-    pub fn new() -> Flatten<S, ()> {
-        Self::with_prev(())
-    }
-}
-
 impl<S: Shape, PREV> Flatten<S, PREV> {
-    pub fn with_prev(prev: PREV) -> Flatten<S, PREV> {
+    pub fn new(prev: PREV) -> Flatten<S, PREV> {
         Flatten { prev, _shape: PhantomData }
     }
 }
@@ -31,6 +28,7 @@ where
     PREV: NNComponent<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
+    type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     type StoredData = PREV::StoredData;
 
     #[inline]
@@ -49,6 +47,31 @@ where
     fn backprop(&self, out_grad: Vector<X, LEN>, data: PREV::StoredData, grad: &mut PREV::Grad) {
         let input_grad = Tensor::from_1d(out_grad);
         self.prev.backprop(input_grad, data, grad)
+    }
+
+    #[inline]
+    fn optimize<O: Optimizer<X>>(
+        &mut self,
+        grad: &Self::Grad,
+        optimizer: &O,
+        mut opt_state: Self::OptState<O>,
+    ) -> Self::OptState<O> {
+        self.prev.optimize(grad, optimizer, opt_state)
+    }
+
+    #[inline]
+    fn init_zero_grad(&self) -> Self::Grad {
+        self.prev.init_zero_grad()
+    }
+
+    #[inline]
+    fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O> {
+        self.prev.init_opt_state()
+    }
+
+    #[inline]
+    fn iter_param(&self) -> impl Iterator<Item = &X> {
+        self.prev.iter_param()
     }
 }
 
@@ -72,7 +95,7 @@ mod tests {
         use const_tensor::Tensor4;
         let tensor = Tensor4::new([[[[1, 2], [3, 4]]], [[[5, 6], [7, 8]]]]);
         println!("tensor = {:?}", tensor);
-        let flatten = Flatten::new();
+        let flatten = Flatten::new(());
         let vec = flatten.prop(tensor);
         println!("vec = {:?}", vec);
     }

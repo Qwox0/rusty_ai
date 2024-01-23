@@ -1,10 +1,14 @@
 use super::component::{Data, GradComponent, NNComponent, NNDisplay};
-use const_tensor::{Element, Len, Matrix, Num, Shape, Tensor, Vector};
+use crate::optimizer::Optimizer;
+use const_tensor::{Element, Len, Matrix, MatrixShape, Num, Shape, Tensor, Vector, VectorShape};
 use core::fmt;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug)]
+/// A fully connected layer. Calculates `y = weights * x + bias`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Linear<X: Element, const IN: usize, const OUT: usize, PREV> {
     pub(super) prev: PREV,
+    //#[serde(bound = "X: Serialize + DeserializeOwned")]
     pub(super) weights: Matrix<X, IN, OUT>,
     pub(super) bias: Vector<X, OUT>,
 }
@@ -21,6 +25,7 @@ where
     [[(); OUT]; IN]: Len<{ IN * OUT }>,
 {
     type Grad = Linear<X, IN, OUT, PREV::Grad>;
+    type OptState<O: Optimizer<X>> = LinearOptState<O, X, IN, OUT, PREV::OptState<O>>;
     type StoredData = Data<Vector<X, IN>, PREV::StoredData>;
 
     #[inline]
@@ -66,7 +71,62 @@ where
 
         self.prev.backprop(input_grad, prev_data, &mut grad.prev)
     }
+
+    #[inline]
+    fn optimize<O: Optimizer<X>>(
+        &mut self,
+        grad: &Self::Grad,
+        optimizer: &O,
+        mut state: Self::OptState<O>,
+    ) -> Self::OptState<O> {
+        state.weights = optimizer.optimize_tensor(&mut self.weights, &grad.weights, state.weights);
+        state.bias = optimizer.optimize_tensor(&mut self.bias, &grad.bias, state.bias);
+        state.prev = self.prev.optimize(&grad.prev, optimizer, state.prev);
+        state
+    }
+
+    #[inline]
+    fn init_zero_grad(&self) -> Self::Grad {
+        let prev = self.prev.init_zero_grad();
+        Linear { prev, weights: Matrix::zeros(), bias: Vector::zeros() }
+    }
+
+    fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O> {
+        LinearOptState {
+            prev: self.prev.init_opt_state(),
+            weights: O::new_state(Matrix::zeros()),
+            bias: O::new_state(Vector::zeros()),
+        }
+    }
+
+    #[inline]
+    fn iter_param(&self) -> impl Iterator<Item = &X> {
+        self.prev
+            .iter_param()
+            .chain(self.weights.iter_elem().chain(self.bias.iter_elem()))
+    }
 }
+
+pub struct LinearOptState<O: Optimizer<X>, X: Element, const IN: usize, const OUT: usize, PREV> {
+    pub(super) prev: PREV,
+    pub(super) weights: O::State<MatrixShape<IN, OUT>>,
+    pub(super) bias: O::State<VectorShape<OUT>>,
+}
+
+/*
+impl<X: Element + Serialize, const IN: usize, const OUT: usize, PREV: Serialize> Serialize
+    for Linear<X, IN, OUT, PREV>
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        let mut s = serializer.serialize_struct(std::any::type_name::<Self>(), 3)?;
+        s.serialize_field("prev", &self.prev)?;
+        s.serialize_field("weights", &self.weights)?;
+        s.serialize_field("bias", &self.bias)?;
+        s.end()
+    }
+}
+*/
 
 impl<'a, X, const IN: usize, const OUT: usize, PREV> fmt::Display
     for NNDisplay<'a, Linear<X, IN, OUT, PREV>>
@@ -80,7 +140,34 @@ where
     }
 }
 
-impl<X: Element, const IN: usize, const OUT: usize, PREV: GradComponent> GradComponent
+impl<X: Num, const IN: usize, const OUT: usize, PREV: GradComponent<X>> GradComponent<X>
     for Linear<X, IN, OUT, PREV>
+where
+    [[(); IN]; OUT]: Len<{ IN * OUT }>,
+    [(); OUT]: Len<OUT>,
 {
+    fn set_zero(&mut self) {
+        self.weights.fill_zero();
+        self.bias.fill_zero();
+    }
+
+    #[inline]
+    fn add_mut(&mut self, other: &Self) {
+        self.weights.add_elem_mut(&other.weights);
+        self.bias.add_elem_mut(&other.bias);
+    }
+
+    #[inline]
+    fn iter_param(&self) -> impl Iterator<Item = &X> {
+        self.prev
+            .iter_param()
+            .chain(self.weights.iter_elem().chain(self.bias.iter_elem()))
+    }
+
+    #[inline]
+    fn iter_param_mut(&mut self) -> impl Iterator<Item = &mut X> {
+        self.prev
+            .iter_param_mut()
+            .chain(self.weights.iter_elem_mut().chain(self.bias.iter_elem_mut()))
+    }
 }

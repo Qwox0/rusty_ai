@@ -4,12 +4,7 @@
 #![feature(test)]
 
 use mnist_util::{get_mnist, image_to_string, Mnist};
-use rusty_ai::{
-    loss_function::NLLLoss,
-    nn::NNBuilder,
-    optimizer::sgd::SGD,
-    ActivationFn, BuildLayer, Initializer, Norm,
-};
+use rusty_ai::{loss_function::NLLLoss, nn::NNBuilder, optimizer::sgd::SGD, Initializer};
 use std::{ops::Range, time::Instant};
 
 const IMAGE_SIDE: usize = 28;

@@ -1,6 +1,7 @@
-#![feature(test)]
+#![allow(incomplete_features)]
+#![feature(generic_const_exprs)]
 
-use rusty_ai::{data::DataBuilder, loss_function::SquaredError, optimizer::sgd::SGD, *};
+use rusty_ai::{loss_function::SquaredError, optimizer::sgd::SGD, Initializer, NN};
 use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
 
 fn get_out_js_path() -> &'static str {
@@ -23,16 +24,18 @@ pub fn main() {
         .open(out_js_path)
         .expect("could open file");
 
-    let mut ai = NNBuilder::default()
+    let mut ai = NN::builder()
         .double_precision()
-        .default_activation_function(ActivationFn::ReLU)
-        .input::<1>()
-        .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .layer(20, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .identity()
-        .build::<1>()
+        .default_rng()
+        .input_shape::<[(); 1]>()
+        .layer::<20>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .relu()
+        .layer::<20>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .relu()
+        .layer::<20>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .relu()
+        .layer::<1>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .build()
         .to_trainer()
         .loss_function(SquaredError)
         .optimizer(SGD { learning_rate: 0.01, ..SGD::default() })

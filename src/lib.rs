@@ -12,14 +12,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-mod activation_function;
 pub mod bias;
 pub mod clip_gradient_norm;
 pub mod data;
-pub mod gradient;
 mod initializer;
-//mod input;
-//pub mod layer;
 pub mod loss_function;
 pub mod nn;
 mod norm;
@@ -31,9 +27,7 @@ pub mod training;
 mod traits;
 mod util;
 
-//pub use activation_function::{ActivationFn, ActivationFunction};
 pub use const_tensor::{self, Element, Float, Num};
-//pub use gradient::{Gradient, GradientLayer};
 pub use initializer::Initializer;
 //pub use input::Input;
 pub use nn::{NNBuilder, NN};

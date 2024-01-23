@@ -1,15 +1,24 @@
 use super::component::{Data, NNComponent, NNDisplay};
+use crate::optimizer::Optimizer;
 use const_tensor::{Float, Len, Num, Shape, Tensor, TensorData};
 use core::fmt;
+use serde::{Deserialize, Serialize};
 
 #[inline]
 pub fn sigmoid<X: Float>(x: X) -> X {
     x.neg().exp().add(X::ONE).recip()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Sigmoid<PREV> {
     pub(super) prev: PREV,
+}
+
+impl<PREV> Sigmoid<PREV> {
+    pub fn new(prev: PREV) -> Sigmoid<PREV> {
+        Sigmoid { prev }
+    }
 }
 
 impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for Sigmoid<PREV>
@@ -20,6 +29,7 @@ where
     PREV: NNComponent<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
+    type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     /// The data which is saved during `train_prop` and used in `backprop`.
     ///
     /// Bool Tensor contains whether propagation output elements where unequal to zero or not.
@@ -55,6 +65,30 @@ where
         let Data { prev: prev_data, data: output } = data;
         let input_grad = out_grad.mul_elem(&output.map_inplace(|x| x * (X::ONE - x)));
         self.prev.backprop(input_grad, prev_data, grad)
+    }
+
+    #[inline]
+    fn optimize<O: crate::optimizer::Optimizer<X>>(
+        &mut self,
+        grad: &Self::Grad,
+        optimizer: &O,
+        mut opt_state: Self::OptState<O>,
+    ) -> Self::OptState<O> {
+        self.prev.optimize(grad, optimizer, opt_state)
+    }
+
+    #[inline]
+    fn init_zero_grad(&self) -> Self::Grad {
+        self.prev.init_zero_grad()
+    }
+
+    fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O> {
+        self.prev.init_opt_state()
+    }
+
+    #[inline]
+    fn iter_param(&self) -> impl Iterator<Item = &X> {
+        self.prev.iter_param()
     }
 }
 

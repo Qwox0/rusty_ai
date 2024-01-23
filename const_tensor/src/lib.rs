@@ -11,16 +11,21 @@
 #![feature(generic_const_exprs)]
 #![warn(missing_docs)]
 
+mod aliases;
 mod data;
 mod element;
 mod maybe_uninit;
+mod multidim_arr;
+mod multidimensional;
 mod owned;
+mod serde_wrapper;
 mod shape;
 mod shape_data;
 
-pub use data::{aliases::*, tensor, TensorData};
+pub use aliases::*;
+pub use data::{tensor, TensorData};
 pub use element::{Element, Float, MoreNumOps, Num};
-pub use owned::{aliases::*, Tensor};
+pub use owned::Tensor;
 pub use shape::{Len, Shape};
 use std::mem;
 

@@ -1,4 +1,67 @@
 //! Module containing the [`SGD_`] [`Optimizer`].
+
+use super::{Optimizer, DEFAULT_LEARNING_RATE};
+use const_tensor::{Element, Len, Num, Shape, Tensor, VectorShape};
+use core::fmt;
+use serde::{Deserialize, Serialize};
+
+/// Stochastic gradient descent optimizer
+///
+/// this type implements [`Optimizer`]
+///
+/// use [`OptimizerValues::init_with_layers`] on [`SGD`] to create this
+/// optimizer.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SGD<X> {
+    /// The learning rate used by the sgd optimizer.
+    pub learning_rate: X,
+    /// The `momentum` constant used by the sgd optimizer.
+    pub momentum: X,
+}
+
+impl<X: Num> Default for SGD<X> {
+    fn default() -> Self {
+        Self { learning_rate: DEFAULT_LEARNING_RATE.cast(), momentum: X::ZERO }
+    }
+}
+
+pub struct SGDState<X: Element, S: Shape> {
+    prev_grad: Tensor<X, S>,
+}
+
+impl<X: Num> Optimizer<X> for SGD<X> {
+    type State<S: Shape> = SGDState<X, S>;
+
+    fn optimize_tensor<S: Shape + Len<LEN>, const LEN: usize>(
+        &self,
+        tensor: &mut Tensor<X, S>,
+        gradient: &const_tensor::tensor<X, S>,
+        state: Self::State<S>,
+    ) -> Self::State<S> {
+        let change = state
+            .prev_grad
+            .scalar_mul(self.momentum)
+            .sub_elem(&gradient.to_owned().scalar_mul(self.learning_rate));
+        tensor.add_elem_mut(&change);
+        SGDState { prev_grad: change }
+    }
+
+    fn new_state<S: Shape>(tensor: Tensor<X, S>) -> Self::State<S> {
+        SGDState { prev_grad: tensor }
+    }
+}
+
+impl<X: Num> fmt::Display for SGD<X> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let SGD { learning_rate, momentum } = self;
+        write!(f, "SGD {{ learning_rate: {:?}", learning_rate)?;
+        if *momentum != X::ZERO {
+            write!(f, ", momentum: {:?}", momentum)?;
+        }
+        write!(f, " }}")
+    }
+}
+
 /*
 use super::{Optimizer, OptimizerValues, DEFAULT_LEARNING_RATE};
 use crate::{layer::Layer, *};

@@ -6,7 +6,7 @@ use crate::trainer::{
     NNTrainerBuilder,
 };
 */
-use const_tensor::{Element, Shape, Tensor};
+use const_tensor::{tensor, Element, Shape, Tensor};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -16,14 +16,24 @@ use std::{
 };
 
 pub mod builder;
-mod component;
+pub mod component;
 mod flatten;
 mod linear;
 mod relu;
 mod sigmoid;
 mod softmax;
 
-use self::component::NNDisplay;
+use self::{
+    builder::markers::{NoRng, NoShape},
+    component::NNDisplay,
+};
+use crate::{
+    optimizer::Optimizer,
+    trainer::{
+        markers::{NoLossFunction, NoOptimizer},
+        NNTrainerBuilder,
+    },
+};
 pub use builder::NNBuilder;
 pub use component::NNComponent;
 pub use flatten::Flatten;
@@ -32,9 +42,12 @@ pub use relu::{leaky_relu, relu, LeakyReLU, ReLU};
 pub use sigmoid::{sigmoid, Sigmoid};
 //pub use softmax::{LogSoftmax, Softmax};
 
+/// A neural network.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NN<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> {
+#[serde(transparent)]
+pub struct NN<X, IN, OUT, C> {
     components: C,
+    #[serde(skip)]
     _marker: PhantomData<(X, IN, OUT)>,
 }
 
@@ -45,30 +58,41 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
         NN { components, _marker: PhantomData }
     }
 
-    /*
     /// Converts `self` to a [`NNTrainerBuilder`] that can be used to create a [`NNTrainer`]
     ///
     /// Used to
     #[inline]
-    pub fn to_trainer(self) -> NNTrainerBuilder<X, IN, OUT, NoLossFunction, NoOptimizer> {
+    pub fn to_trainer(self) -> NNTrainerBuilder<X, NoLossFunction, NoOptimizer, Self> {
         NNTrainerBuilder::new(self)
     }
-    */
+
+    pub fn iter_param(&self) -> impl Iterator<Item = &X> {
+        self.components.iter_param()
+    }
+}
+
+impl NN<f32, NoShape, NoShape, ()> {
+    /// Creates a new [`NNBuilder`].
+    pub fn builder() -> NNBuilder<f32, NoShape, NoShape, (), NoRng> {
+        NNBuilder::default()
+    }
 }
 
 impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
-    /*
     /// Creates a [`Gradient`] with the same dimensions as `self` and every element initialized to
     /// `0.0`
-    pub fn init_zero_gradient(&self) -> Gradient<X> {
-        self.layers.iter().map(Layer::init_zero_gradient).collect()
+    pub fn init_zero_gradient(&self) -> C::Grad {
+        self.components.init_zero_grad()
     }
-    */
+
+    pub fn init_opt_state<O: Optimizer<X>>(&self) -> C::OptState<O> {
+        self.components.init_opt_state()
+    }
 
     /// Propagates a [`Tensor`] through the neural network and returns the output [`Tensor`].
-    pub fn propagate(&self, input: &Tensor<X, IN>) -> Tensor<X, OUT> {
+    pub fn propagate(&self, input: &tensor<X, IN>) -> Tensor<X, OUT> {
         // the compiler should inline all prop functions.
-        self.components.prop(input.clone())
+        self.components.prop(input.to_owned())
     }
 
     /// Iterates over a `batch` of inputs, propagates them and returns an [`Iterator`] over the
@@ -84,7 +108,7 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
         batch: B,
     ) -> Map<B::IntoIter, impl FnMut(B::Item) -> Tensor<X, OUT> + 'a>
     where
-        B: IntoIterator<Item = &'a Tensor<X, IN>>,
+        B: IntoIterator<Item = &'a tensor<X, IN>>,
     {
         batch.into_iter().map(|i| self.propagate(i))
     }
@@ -93,8 +117,8 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
     /// additional data which is required for backpropagation.
     ///
     /// If only the output is needed, use the normal `propagate` method instead.
-    pub fn training_propagate(&self, input: &Tensor<X, IN>) -> (Tensor<X, OUT>, C::StoredData) {
-        self.components.train_prop(input.clone())
+    pub fn training_propagate(&self, input: &tensor<X, IN>) -> (Tensor<X, OUT>, C::StoredData) {
+        self.components.train_prop(input.to_owned())
     }
 
     /// # Params
@@ -108,9 +132,28 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
         &self,
         output_gradient: Tensor<X, OUT>,
         train_data: C::StoredData,
+        mut gradient: C::Grad,
+    ) -> C::Grad {
+        self.backpropagate_inplace(output_gradient, train_data, &mut gradient);
+        gradient
+    }
+
+    pub fn backpropagate_inplace(
+        &self,
+        output_gradient: Tensor<X, OUT>,
+        train_data: C::StoredData,
         gradient: &mut C::Grad,
     ) {
-        self.components.backprop(output_gradient, train_data, gradient)
+        self.components.backprop(output_gradient, train_data, gradient);
+    }
+
+    pub fn optimize<O: Optimizer<X>>(
+        &mut self,
+        gradient: &C::Grad,
+        optimizer: &O,
+        mut opt_state: C::OptState<O>,
+    ) -> C::OptState<O> {
+        self.components.optimize(gradient, optimizer, opt_state)
     }
 
     /*
@@ -147,25 +190,6 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
     */
 }
 
-/*
-impl<'a, X, const IN: usize, const OUT: usize> Default for NN<X, IN, OUT>
-where
-    X: Float,
-    rand_distr::StandardNormal: rand_distr::Distribution<X>,
-{
-    /// creates a [`NN`] with one layer. Every parameter is equal to `0.0`.
-    ///
-    /// This is probably only useful for testing.
-    fn default() -> Self {
-        NNBuilder::default()
-            .element_type()
-            .input()
-            .layer_from_parameters(Matrix::with_zeros(IN, OUT), vec![X::zero(); OUT].into())
-            .build()
-    }
-}
-*/
-
 impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> Display for NN<X, IN, OUT, C>
 where
     [(); IN::DIM]: Sized,
@@ -173,31 +197,12 @@ where
     for<'a> NNDisplay<'a, C>: fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "NN: Tensor({:?}) -> Tensor({:?})", IN::get_dims_arr(), OUT::get_dims_arr())?;
+        write!(
+            f,
+            "NN {{ Tensor({:?}) -> Tensor({:?}) }}:",
+            IN::get_dims_arr(),
+            OUT::get_dims_arr()
+        )?;
         write!(f, "{}", NNDisplay(&self.components))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use serde::{Deserialize, Serialize};
-
-    #[test]
-    fn display() {}
-
-    #[test]
-    fn serde() {
-        #[derive(Debug, Serialize, Deserialize)]
-        struct A {
-            val: Box<[i32; 10]>,
-        }
-
-        let a = A { val: Box::new([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) };
-        println!("{:?}", a);
-        let json = serde_json::to_string(&a).unwrap();
-        println!("{:?}", json);
-        let a: A = serde_json::from_str(&json).unwrap();
-        println!("{:?}", a);
-        panic!()
     }
 }

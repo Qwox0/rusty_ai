@@ -1,9 +1,8 @@
 //! # Optimizer module
 
-use crate::nn::NNComponent;
-use const_tensor::{Element, Shape, Tensor};
-//pub mod adam;
-//pub mod sgd;
+use const_tensor::{Element, Len, Shape, Tensor};
+pub mod adam;
+pub mod sgd;
 
 /// Default learning rate used by [`Optimizer`]s in `rusty_ai::optimizer::*`.
 pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
@@ -12,16 +11,17 @@ pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 ///
 /// This is only used by [`NNTrainer`]. Thus the dimensions of `nn` and `gradient` will always
 /// match.
-pub trait Optimizer<X: Element> {
-    type State;
+pub trait Optimizer<X: Element>: Send + Sync + 'static {
+    type State<S: Shape>;
 
-    /// Optimize the parameters of a [`NeuralNetwork`] based on a [`Gradient`].
-    fn optimize<IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>>(
+    fn optimize_tensor<S: Shape + Len<LEN>, const LEN: usize>(
         &self,
-        nn: C,
-        gradient: C::Grad,
-        state: Self::State,
-    ) -> C;
+        tensor: &mut Tensor<X, S>,
+        gradient: &const_tensor::tensor<X, S>,
+        state: Self::State<S>,
+    ) -> Self::State<S>;
+
+    fn new_state<S: Shape>(tensor: Tensor<X, S>) -> Self::State<S>;
 }
 
 /*

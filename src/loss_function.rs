@@ -8,7 +8,7 @@ use derive_more::Display;
 /// See `rusty_ai::loss_function::*` for some implementations.
 ///
 /// `vector<X,N>`: output dimension of the [`NeuralNetwork`].
-pub trait LossFunction<X: Element, S: Shape> {
+pub trait LossFunction<X: Element, S: Shape>: Send + Sync + 'static {
     /// The type of the expected output used by the loss function.
     ///
     /// For a non default example, see [`NLLLoss`].
