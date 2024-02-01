@@ -6,13 +6,13 @@ use crate::trainer::{
     NNTrainerBuilder,
 };
 */
-use const_tensor::{tensor, Element, Shape, Tensor};
+use crate::loss_function::LossFunction;
+use const_tensor::{tensor, Element, MultidimArr, Shape, Tensor};
 use core::fmt;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::{
     fmt::{Debug, Display},
     iter::Map,
-    marker::PhantomData,
 };
 
 pub mod builder;
@@ -23,19 +23,12 @@ mod relu;
 mod sigmoid;
 mod softmax;
 
-use self::{
-    builder::markers::{NoRng, NoShape},
-    component::NNDisplay,
-};
-use crate::{
-    optimizer::Optimizer,
-    trainer::{
-        markers::{NoLossFunction, NoOptimizer},
-        NNTrainerBuilder,
-    },
+use crate::trainer::{
+    markers::{NoLossFunction, NoOptimizer},
+    NNTrainerBuilder,
 };
 pub use builder::NNBuilder;
-pub use component::NNComponent;
+pub use component::{NNComponent, NNHead};
 pub use flatten::Flatten;
 pub use linear::Linear;
 pub use relu::{leaky_relu, relu, LeakyReLU, ReLU};
@@ -43,56 +36,19 @@ pub use sigmoid::{sigmoid, Sigmoid};
 //pub use softmax::{LogSoftmax, Softmax};
 
 /// A neural network.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct NN<X, IN, OUT, C> {
-    components: C,
-    #[serde(skip)]
-    _marker: PhantomData<(X, IN, OUT)>,
-}
-
-impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
-    /// use [`NNBuilder`] instead!
-    #[inline]
-    fn new(components: C) -> NN<X, IN, OUT, C> {
-        NN { components, _marker: PhantomData }
-    }
-
+pub trait NN<X: Element, IN: Shape, OUT: Shape>: NNComponent<X, IN, OUT> + Serialize {
     /// Converts `self` to a [`NNTrainerBuilder`] that can be used to create a [`NNTrainer`]
     ///
     /// Used to
     #[inline]
-    pub fn to_trainer(self) -> NNTrainerBuilder<X, NoLossFunction, NoOptimizer, Self> {
+    fn to_trainer(self) -> NNTrainerBuilder<X, IN, OUT, NoLossFunction, NoOptimizer, Self> {
         NNTrainerBuilder::new(self)
     }
 
-    pub fn iter_param(&self) -> impl Iterator<Item = &X> {
-        self.components.iter_param()
-    }
-}
-
-impl NN<f32, NoShape, NoShape, ()> {
-    /// Creates a new [`NNBuilder`].
-    pub fn builder() -> NNBuilder<f32, NoShape, NoShape, (), NoRng> {
-        NNBuilder::default()
-    }
-}
-
-impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OUT, C> {
-    /// Creates a [`Gradient`] with the same dimensions as `self` and every element initialized to
-    /// `0.0`
-    pub fn init_zero_gradient(&self) -> C::Grad {
-        self.components.init_zero_grad()
-    }
-
-    pub fn init_opt_state<O: Optimizer<X>>(&self) -> C::OptState<O> {
-        self.components.init_opt_state()
-    }
-
     /// Propagates a [`Tensor`] through the neural network and returns the output [`Tensor`].
-    pub fn propagate(&self, input: &tensor<X, IN>) -> Tensor<X, OUT> {
+    fn propagate(&self, input: &tensor<X, IN>) -> Tensor<X, OUT> {
         // the compiler should inline all prop functions.
-        self.components.prop(input.to_owned())
+        self.prop(input.to_owned())
     }
 
     /// Iterates over a `batch` of inputs, propagates them and returns an [`Iterator`] over the
@@ -103,7 +59,7 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
     /// If you also want to calculate losses use `test` or `prop_with_test`.
     #[must_use = "`Iterators` must be consumed to do work."]
     #[inline]
-    pub fn propagate_batch<'a, B>(
+    fn propagate_batch<'a, B>(
         &'a self,
         batch: B,
     ) -> Map<B::IntoIter, impl FnMut(B::Item) -> Tensor<X, OUT> + 'a>
@@ -117,8 +73,8 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
     /// additional data which is required for backpropagation.
     ///
     /// If only the output is needed, use the normal `propagate` method instead.
-    pub fn training_propagate(&self, input: &tensor<X, IN>) -> (Tensor<X, OUT>, C::StoredData) {
-        self.components.train_prop(input.to_owned())
+    fn training_propagate(&self, input: &tensor<X, IN>) -> (Tensor<X, OUT>, Self::StoredData) {
+        self.train_prop(input.to_owned())
     }
 
     /// # Params
@@ -128,45 +84,35 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
     /// backpropagation.
     /// `gradient`: stores the changes to each parameter. Has to have the same
     /// dimensions as `self`.
-    pub fn backpropagate(
+    fn backpropagate(
         &self,
         output_gradient: Tensor<X, OUT>,
-        train_data: C::StoredData,
-        mut gradient: C::Grad,
-    ) -> C::Grad {
+        train_data: Self::StoredData,
+        mut gradient: Self::Grad,
+    ) -> Self::Grad {
         self.backpropagate_inplace(output_gradient, train_data, &mut gradient);
         gradient
     }
 
-    pub fn backpropagate_inplace(
+    fn backpropagate_inplace(
         &self,
         output_gradient: Tensor<X, OUT>,
-        train_data: C::StoredData,
-        gradient: &mut C::Grad,
+        train_data: Self::StoredData,
+        gradient: &mut Self::Grad,
     ) {
-        self.components.backprop(output_gradient, train_data, gradient);
+        self.backprop(output_gradient, train_data, gradient);
     }
 
-    pub fn optimize<O: Optimizer<X>>(
-        &mut self,
-        gradient: &C::Grad,
-        optimizer: &O,
-        mut opt_state: C::OptState<O>,
-    ) -> C::OptState<O> {
-        self.components.optimize(gradient, optimizer, opt_state)
-    }
-
-    /*
     /// Tests the neural network.
-    pub fn test<L: LossFunction<X, OUT>>(
+    fn test<L: LossFunction<X, OUT>>(
         &self,
-        input: IN,
-        expected_output: &L::ExpectedOutput,
+        pair: &Pair<X, IN, L::ExpectedOutput>,
         loss_function: &L,
-    ) -> ([X; OUT], X) {
+    ) -> TestResult<X, OUT> {
+        let (input, expected_output) = pair.as_tuple();
         let out = self.propagate(input);
         let loss = loss_function.propagate(&out, expected_output);
-        (out, loss)
+        TestResult::new(out, loss)
     }
 
     /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
@@ -176,33 +122,81 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> NN<X, IN, OU
     ///
     /// If you also want to get the outputs use `prop_with_test`.
     #[must_use = "`Iterators` must be consumed to do work."]
-    pub fn test_batch<'a, B, L, EO: 'a>(
+    fn test_batch<'a, B, L, EO: 'a>(
         &'a self,
         batch: B,
         loss_fn: &'a L,
-    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> ([X; OUT], X) + 'a>
+    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO>) -> TestResult<X, OUT>>
     where
-        B: IntoIterator<Item = (&'a Input<X, IN>, &'a EO)>,
+        B: IntoIterator<Item = &'a Pair<X, IN, EO>>,
         L: LossFunction<X, OUT, ExpectedOutput = EO>,
     {
-        batch.into_iter().map(|(input, eo)| self.test(input, eo, loss_fn))
+        batch.into_iter().map(|p| self.test(p, loss_fn))
     }
-    */
+
+    fn init_zero_gradient(&self) -> Self::Grad {
+        self.init_zero_grad()
+    }
+
+    /// TODO: lazy
+    fn deserialize_hint(&self, deserialized: Self) -> Self {
+        deserialized
+    }
 }
 
-impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT>> Display for NN<X, IN, OUT, C>
-where
-    [(); IN::DIM]: Sized,
-    [(); OUT::DIM]: Sized,
-    for<'a> NNDisplay<'a, C>: fmt::Display,
+impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT> + Serialize> NN<X, IN, OUT>
+    for C
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "NN {{ Tensor({:?}) -> Tensor({:?}) }}:",
-            IN::get_dims_arr(),
-            OUT::get_dims_arr()
-        )?;
-        write!(f, "{}", NNDisplay(&self.components))
+}
+
+pub struct Pair<X: Element, IN: Shape, EO> {
+    input: Tensor<X, IN>,
+    expected_output: EO,
+}
+
+impl<X: Element, IN: Shape, EO> Pair<X, IN, EO> {
+    pub fn new(input: Tensor<X, IN>, expected_output: EO) -> Self {
+        Self { input, expected_output }
+    }
+
+    pub fn get_input(&self) -> &tensor<X, IN> {
+        &self.input
+    }
+
+    pub fn get_expected_output(&self) -> &EO {
+        &self.expected_output
+    }
+
+    pub fn as_tuple(&self) -> (&tensor<X, IN>, &EO) {
+        (self.get_input(), self.get_expected_output())
+    }
+
+    pub fn into_tuple(self) -> (Tensor<X, IN>, EO) {
+        (self.input, self.expected_output)
+    }
+}
+
+impl<X: Element, IN: Shape, EO> From<(Tensor<X, IN>, EO)> for Pair<X, IN, EO> {
+    fn from(value: (Tensor<X, IN>, EO)) -> Self {
+        Self::new(value.0, value.1)
+    }
+}
+
+pub struct TestResult<X: Element, OUT: Shape> {
+    output: Tensor<X, OUT>,
+    loss: X,
+}
+
+impl<X: Element, OUT: Shape> TestResult<X, OUT> {
+    pub fn new(output: Tensor<X, OUT>, loss: X) -> Self {
+        Self { output, loss }
+    }
+
+    pub fn get_output(&self) -> &Tensor<X, OUT> {
+        &self.output
+    }
+
+    pub fn get_loss(&self) -> X {
+        self.loss
     }
 }

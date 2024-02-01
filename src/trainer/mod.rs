@@ -3,14 +3,11 @@
 use crate::{
     clip_gradient_norm::ClipGradientNorm,
     loss_function::LossFunction,
-    nn::{
-        component::{GradComponent, NNDisplay},
-        NNComponent,
-    },
+    nn::{component::GradComponent, NNComponent, Pair, TestResult},
     optimizer::Optimizer,
     NN,
 };
-use const_tensor::{tensor, Element, Float, Num, Shape, Tensor};
+use const_tensor::{tensor, Element, Float, Shape, Tensor};
 use core::fmt;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -23,35 +20,28 @@ pub use builder::{markers, NNTrainerBuilder};
 ///
 /// Can be constructed using a [`NNTrainerBuilder`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NNTrainer<
-    X: Element,
-    IN: Shape,
-    OUT: Shape,
-    L,
-    O: Optimizer<X>,
-    C: NNComponent<X, IN, OUT>,
-> {
-    network: NN<X, IN, OUT, C>,
-    gradient: C::Grad,
+pub struct NNTrainer<X: Element, IN: Shape, OUT: Shape, L, O: Optimizer<X>, NN_: NN<X, IN, OUT>> {
+    network: NN_,
+    gradient: NN_::Grad,
     loss_function: L,
     retain_gradient: bool,
     optimizer: O,
-    opt_state: C::OptState<O>,
+    opt_state: NN_::OptState<O>,
     clip_gradient_norm: Option<ClipGradientNorm<X>>,
     // training_threads: usize,
 }
 
-impl<X, IN, OUT, L, EO, O, C> NNTrainer<X, IN, OUT, L, O, C>
+impl<X, IN, OUT, L, EO, O, NN_> NNTrainer<X, IN, OUT, L, O, NN_>
 where
     X: Element,
     IN: Shape,
     OUT: Shape,
-    C: NNComponent<X, IN, OUT>,
     L: LossFunction<X, OUT, ExpectedOutput = EO>,
     O: Optimizer<X>,
+    NN_: NN<X, IN, OUT>,
 {
     fn new(
-        network: NN<X, IN, OUT, C>,
+        network: NN_,
         loss_function: L,
         optimizer: O,
         retain_gradient: bool,
@@ -72,11 +62,11 @@ where
 
     /// Converts `self` into the underlying [`NeuralNetwork`]. This can be used after the training
     /// is finished.
-    pub fn into_nn(self) -> NN<X, IN, OUT, C> {
+    pub fn into_nn(self) -> NN_ {
         self.network
     }
 
-    pub fn get_network(&self) -> &NN<X, IN, OUT, C> {
+    pub fn get_network(&self) -> &NN_ {
         &self.network
     }
 
@@ -107,7 +97,7 @@ where
     /// [`Tensor`] and additional data which is required for backpropagation.
     ///
     /// If only the output is needed, use the normal `propagate` method instead.
-    pub fn training_propagate(&self, input: &tensor<X, IN>) -> (Tensor<X, OUT>, C::StoredData) {
+    pub fn training_propagate(&self, input: &tensor<X, IN>) -> (Tensor<X, OUT>, NN_::StoredData) {
         self.network.training_propagate(input)
     }
 
@@ -126,7 +116,7 @@ where
         &mut self,
         output: Tensor<X, OUT>,
         expected_output: &EO,
-        train_data: C::StoredData,
+        train_data: NN_::StoredData,
     ) {
         // gradient of the cost function with respect to the neuron output of the last layer.
         let output_gradient = self.loss_function.backpropagate(&output, expected_output);
@@ -138,8 +128,8 @@ where
         &self,
         output: Tensor<X, OUT>,
         expected_output: &EO,
-        train_data: C::StoredData,
-        gradient: &mut C::Grad,
+        train_data: NN_::StoredData,
+        gradient: &mut NN_::Grad,
     ) {
         // gradient of the cost function with respect to the neuron output of the last layer.
         let output_gradient = self.loss_function.backpropagate(&output, expected_output);
@@ -150,18 +140,17 @@ where
         &self,
         output: Tensor<X, OUT>,
         expected_output: &EO,
-        train_data: C::StoredData,
-        mut gradient: C::Grad,
-    ) -> C::Grad {
+        train_data: NN_::StoredData,
+        mut gradient: NN_::Grad,
+    ) -> NN_::Grad {
         self.backpropagate_inplace(output, expected_output, train_data, &mut gradient);
         gradient
     }
 
-    /*
     /// To test a batch of multiple pairs use `test_batch`.
     #[inline]
-    pub fn test(&self, input: &Tensor<X, IN>, expected_output: &EO) -> (Tensor<X, OUT>, X) {
-        self.network.test(input, expected_output, &self.loss_function)
+    pub fn test(&self, pair: &Pair<X, IN, EO>) -> TestResult<X, OUT> {
+        self.network.test(pair, &self.loss_function)
     }
 
     /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
@@ -173,27 +162,26 @@ where
     pub fn test_batch<'a, B>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO>) -> (Tensor<X, OUT>, X)>
+    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO>) -> TestResult<X, OUT>>
     where
         B: IntoIterator<Item = &'a Pair<X, IN, EO>>,
         EO: 'a,
     {
-        batch.into_iter().map(|(input, eo)| self.test(input, eo))
+        batch.into_iter().map(|p| self.test(p))
     }
-    */
 
     #[inline]
     pub fn optimize_trainee(&mut self) {
-        self.opt_state = self.network.optimize(&self.gradient, &self.optimizer, self.opt_state);
+        self.network.optimize(&self.gradient, &self.optimizer, &mut self.opt_state);
     }
 }
 
-impl<X, IN, OUT, L, EO, O, C> NNTrainer<X, IN, OUT, L, O, C>
+impl<X, IN, OUT, L, EO, O, NN_> NNTrainer<X, IN, OUT, L, O, NN_>
 where
     X: Float,
     IN: Shape,
     OUT: Shape,
-    C: NNComponent<X, IN, OUT>,
+    NN_: NN<X, IN, OUT>,
     L: LossFunction<X, OUT, ExpectedOutput = EO>,
     O: Optimizer<X>,
 {
@@ -249,8 +237,8 @@ where
         &'a mut self,
         batch: impl IntoParallelIterator<Item = &'a (Tensor<X, IN>, EO)>,
     ) where
-        C::Grad: Send + Sync,
-        C::OptState<O>: Send + Sync,
+        NN_::Grad: Send + Sync,
+        NN_::OptState<O>: Send + Sync,
         EO: 'a,
     {
         if !self.retain_gradient {
@@ -262,7 +250,7 @@ where
                 || self.network.init_zero_gradient(),
                 |grad, (input, eo)| {
                     let (out, data) = self.training_propagate(input);
-                    self.backpropagate(out, &eo, data, grad)
+                    NNTrainer::backpropagate(self, out, &eo, data, grad)
                 },
             )
             .reduce(|| self.network.init_zero_gradient(), |acc, grad| acc.add(&grad));
@@ -279,8 +267,11 @@ where
     ) -> impl Iterator<Item = TrainOut<X, OUT>>
     where
         EO: 'a,
-        C::Grad: Send + Sync,
-        C::OptState<O>: Send + Sync,
+        IN: Send + Sync,
+        OUT: Send + Sync,
+        NN_::Grad: Send + Sync,
+        NN_::OptState<O>: Send + Sync,
+        TrainOut<X, OUT>: Send,
     {
         if !self.retain_gradient {
             self.gradient.set_zero();
@@ -293,7 +284,7 @@ where
                 |grad, (input, eo)| {
                     let (output, data) = self.training_propagate(input);
                     let loss = self.loss_function.propagate(&output, eo);
-                    let grad = self.backpropagate(output.clone(), &eo, data, grad);
+                    let grad = NNTrainer::backpropagate(self, output.clone(), &eo, data, grad);
 
                     send.send(TrainOut { output, loss }).expect("could send output and loss");
                     grad
@@ -313,17 +304,16 @@ pub struct TrainOut<X: Element, S: Shape> {
     loss: X,
 }
 
-impl<X, IN, OUT, L, O, C> fmt::Display for NNTrainer<X, IN, OUT, L, O, C>
+impl<X, IN, OUT, L, O, NN_> fmt::Display for NNTrainer<X, IN, OUT, L, O, NN_>
 where
     X: Element,
     IN: Shape,
     OUT: Shape,
     L: fmt::Display,
     O: Optimizer<X> + fmt::Debug,
-    C: NNComponent<X, IN, OUT>,
+    NN_: NN<X, IN, OUT>,
     [(); IN::DIM]: Sized,
     [(); OUT::DIM]: Sized,
-    for<'a> NNDisplay<'a, C>: fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.network)?;
@@ -337,9 +327,13 @@ mod benches;
 #[cfg(test)]
 mod seeded_tests {
     use crate::{
-        nn::NNComponent, norm::Norm, optimizer::sgd::SGD, prelude::SquaredError, Initializer, NN,
+        nn::{component::GradComponent, NNComponent},
+        norm::Norm,
+        optimizer::sgd::SGD,
+        prelude::SquaredError,
+        Initializer, NNBuilder, NN,
     };
-    use const_tensor::{tensor, Vector, VectorShape};
+    use const_tensor::{tensor, Multidimensional, Vector, VectorShape};
     use rand::{rngs::StdRng, Rng, SeedableRng};
 
     #[test]
@@ -347,7 +341,7 @@ mod seeded_tests {
         const SEED: u64 = 69420;
         let mut rng = StdRng::seed_from_u64(SEED);
 
-        let ai = NN::builder()
+        let ai = NNBuilder::default()
             .double_precision()
             .rng(&mut rng)
             .input_shape::<VectorShape<2>>()
@@ -370,7 +364,7 @@ mod seeded_tests {
         const SEED: u64 = 69420;
         let mut rng = StdRng::seed_from_u64(SEED);
 
-        let mut ai = NN::builder()
+        let mut ai = NNBuilder::default()
             .double_precision()
             .rng(&mut rng)
             .input_shape::<VectorShape<2>>()
@@ -394,8 +388,8 @@ mod seeded_tests {
         assert_eq!(&params, expected, "incorrect seed");
 
         let pairs = (0..5)
-            .map(|_| Vector::new(rng.gen()))
             .map(|input| {
+                let input = Vector::new(rng.gen());
                 let sum = input.iter_elem().sum();
                 let prod = input.iter_elem().product();
                 (input, Vector::new([sum, prod, 0.0]))
@@ -423,7 +417,7 @@ mod seeded_tests {
         const SEED: u64 = 69420;
         let mut rng = StdRng::seed_from_u64(SEED);
 
-        let mut ai = NN::builder()
+        let mut ai = NNBuilder::default()
             .double_precision()
             .rng(&mut rng)
             .input_shape::<VectorShape<2>>()
@@ -448,14 +442,14 @@ mod seeded_tests {
         assert_eq!(&params, expected, "incorrect seed");
 
         let input = Vector::new(rng.gen());
-        let eo = rng.gen();
+        let eo = Vector::new(rng.gen());
         let pair = (input, eo);
 
         // propagation pre training
         let prop_out = ai.propagate(&pair.0);
         #[rustfmt::skip]
-        let expected = &[0.5571132267977859, 0.3835754220312069, 0.5254153762665995];
-        assert_eq!(&prop_out, expected, "incorrect propagation (pre training)");
+        let expected = [0.5571132267977859, 0.3835754220312069, 0.5254153762665995];
+        assert_eq!(prop_out, tensor::literal(expected), "incorrect propagation (pre training)");
 
         // do training
         //let res = ai.train([&pair]).execute();
@@ -465,16 +459,16 @@ mod seeded_tests {
         assert!(res_iter.count() == 0);
 
         // gradient
-        let gradient = ai.get_gradient().iter().copied();
+        let gradient = ai.gradient.iter_param().copied();
         #[rustfmt::skip]
-        let expected = &[-0.003572457096879446, -0.0002794669624026194, 0.0, 0.0, 0.0, 0.0, 0.0004427478746224825, 3.463537847355607e-5, 0.0, 0.0, -0.0038284717751311454, 0.0, 0.0, 0.0004744767244292752, 0.0, -0.00580726500680219, 0.0, 0.0, -0.009380821731006066, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.022005357571517076, 0.0, 0.0, 0.0, 0.0, 0.008226304898399563, 0.0, 0.0, 0.0, 0.0, 0.06395275520239677, 0.0, 0.0, 0.0, 0.0, -0.013618442087793855, 0.0, 0.0, 0.0, 0.0, 0.018289699457633535, 0.1421873716797208, -0.030278140178756956];
+        let expected = [-0.003572457096879446, -0.0002794669624026194, 0.0, 0.0, 0.0, 0.0, 0.0004427478746224825, 3.463537847355607e-5, 0.0, 0.0, -0.0038284717751311454, 0.0, 0.0, 0.0004744767244292752, 0.0, -0.00580726500680219, 0.0, 0.0, -0.009380821731006066, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.022005357571517076, 0.0, 0.0, 0.0, 0.0, 0.008226304898399563, 0.0, 0.0, 0.0, 0.0, 0.06395275520239677, 0.0, 0.0, 0.0, 0.0, -0.013618442087793855, 0.0, 0.0, 0.0, 0.0, 0.018289699457633535, 0.1421873716797208, -0.030278140178756956];
 
         let err = gradient.zip(expected).map(|(p, e)| (p - e).abs()).sum::<f64>();
         assert!(err < 1e-15, "incorrect gradient elements (err: {})", err);
 
         // training output
-        let expected = &[0.5571132267977859, 0.3835754220312069, 0.5254153762665995];
-        assert_eq!(&res.output, expected, "incorrect output");
+        let expected = [0.5571132267977859, 0.3835754220312069, 0.5254153762665995];
+        assert_eq!(res.output, tensor::literal(expected), "incorrect output");
 
         // training loss
         assert_eq!(res.loss, 0.09546645303826229, "incorrect loss");
@@ -482,15 +476,15 @@ mod seeded_tests {
         // propagation post training
         let prop_out = ai.propagate(&pair.0);
         #[rustfmt::skip]
-        let expected = &[0.5570843934685307, 0.38315307990347475, 0.525483857537024];
-        assert_eq!(&prop_out, expected, "incorrect propagation (post training)");
+        let expected = [0.5570843934685307, 0.38315307990347475, 0.525483857537024];
+        assert_eq!(prop_out, tensor::literal(expected), "incorrect propagation (post training)");
 
         #[rustfmt::skip]
         const TRAINED_PARAMS: &[f64] = &[0.006923563018772624, 0.6394027251638263, 0.34936912393918684, -0.4047589840789866, -0.37941201236065963, -0.06972914538603359, 0.4338005056392426, 0.2808268284950572, -0.16417981196958276, -0.2391556648674174, 0.2108390906551984, -0.5508539013658884, 0.30609095651501483, 0.0009970300061099876, -0.2439626553503762, 0.1740371485495925, -0.35504329049611705, 0.2807057469930026, -0.021468064744182752, -0.2224985097439988, 0.18025297158732995, -0.3118176626548729, 0.26646269895835534, -0.4111905543260018, 0.07174135969857715, -0.3910179151410674, -0.14027757282776454, 0.39256214288992813, -0.1804116593475944, -0.06183204149127286, 0.30148591157620747, -0.07045111402421522, 0.15330561621693045, -0.05987140494810189, 0.16392997905786127, -0.41157175802213586, 0.06448666319062674, 0.3549482907502232, -0.1752947400236416, 0.17664346553608495, 0.41327636150634567, 0.12362639119103341, -0.4340562639542757, -0.09883618080186729, -0.05709696039076012, 0.3577021351880676, 0.1972113234741723, -0.2053210678418987, -0.03384982362548067, -0.32891932430635185, -0.2675398913944368, -0.24283061456061486, 0.23016935417459677, 0.23254520394702988, 0.3651839637543794, -0.3103430753259401, -0.3017997213731933, 0.08646500039777222, -0.17584424522752867, 0.29123399909249675, 0.06834789558685518, -0.3557756621890464, 0.24169872717461338];
 
         let err = ai
             .get_network()
-            .iter()
+            .iter_param()
             .copied()
             .zip(TRAINED_PARAMS)
             .map(|(p, e)| (p - e).abs())
@@ -498,7 +492,7 @@ mod seeded_tests {
         println!("error = {:?}", err);
         assert!(err < 1e-15, "incorrect trained parameters (err: {})", err);
 
-        let trained_params = ai.get_network().iter().copied().collect::<Vec<_>>();
+        let trained_params = ai.get_network().iter_param().copied().collect::<Vec<_>>();
         assert_eq!(&trained_params, TRAINED_PARAMS, "incorrect trained parameters");
     }
 }

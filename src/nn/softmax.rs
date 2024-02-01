@@ -1,6 +1,9 @@
 use super::component::{component_new, Data, NNComponent};
 use crate::optimizer::Optimizer;
-use const_tensor::{Float, Len, Num, Shape, Tensor, Vector};
+use const_tensor::{
+    Float, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor, Vector,
+};
+use core::fmt;
 use serde::{Deserialize, Serialize};
 
 /// TODO: higher dimensions
@@ -12,22 +15,22 @@ pub struct Softmax<PREV> {
 
 component_new! { Softmax }
 
-impl<F, const LEN: usize, NNIN, PREV> NNComponent<F, NNIN, [(); LEN]> for Softmax<PREV>
+impl<X, const LEN: usize, NNIN, PREV> NNComponent<X, NNIN, [(); LEN]> for Softmax<PREV>
 where
-    F: Float,
-    [(); LEN]: Len<LEN>,
+    X: Float,
     NNIN: Shape,
-    PREV: NNComponent<F, NNIN, [(); LEN]>,
+    PREV: NNComponent<X, NNIN, [(); LEN]>,
 {
     type Grad = PREV::Grad;
-    type OptState<O: Optimizer<F>> = PREV::OptState<O>;
+    type In = [(); LEN];
+    type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     /// Bool Tensor contains whether propagation output elements where unequal to zero or not.
     type StoredData = Data<Vector<bool, LEN>, PREV::StoredData>;
 
     #[inline]
-    fn prop(&self, input: Tensor<F, NNIN>) -> Tensor<F, [(); LEN]> {
+    fn prop(&self, input: Tensor<X, NNIN>) -> Tensor<X, [(); LEN]> {
         let mut input = self.prev.prop(input);
-        let mut sum = F::ZERO;
+        let mut sum = X::ZERO;
         for x in input.iter_elem_mut() {
             *x = x.exp();
             sum += *x;
@@ -36,9 +39,9 @@ where
     }
 
     #[inline]
-    fn train_prop(&self, input: Tensor<F, NNIN>) -> (Vector<F, LEN>, Self::StoredData) {
+    fn train_prop(&self, input: Tensor<X, NNIN>) -> (Vector<X, LEN>, Self::StoredData) {
         let (mut input, prev_data) = self.prev.train_prop(input);
-        let mut sum = F::ZERO;
+        let mut sum = X::ZERO;
         let mut data = Vector::default();
         for x in input.iter_elem_mut() {
             *x = x.exp();
@@ -63,25 +66,25 @@ where
     #[inline]
     fn backprop(
         &self,
-        out_grad: Tensor<F, [(); LEN]>,
+        out_grad: Tensor<X, [(); LEN]>,
         data: Self::StoredData,
         grad: &mut Self::Grad,
     ) {
         let Data { prev: prev_data, data } = data;
         let mut input_grad = out_grad;
         for (out, &is_pos) in input_grad.iter_elem_mut().zip(data.iter_elem()) {
-            *out *= F::from_bool(is_pos);
+            *out *= X::from_bool(is_pos);
         }
         self.prev.backprop(input_grad, prev_data, grad)
     }
 
     #[inline]
-    fn optimize<O: Optimizer<F>>(
+    fn optimize<O: Optimizer<X>>(
         &mut self,
         grad: &Self::Grad,
         optimizer: &O,
-        mut opt_state: Self::OptState<O>,
-    ) -> Self::OptState<O> {
+        opt_state: &mut Self::OptState<O>,
+    ) {
         self.prev.optimize(grad, optimizer, opt_state)
     }
 
@@ -91,13 +94,20 @@ where
     }
 
     #[inline]
-    fn init_opt_state<O: Optimizer<F>>(&self) -> Self::OptState<O> {
+    fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O> {
         self.prev.init_opt_state()
     }
 
     #[inline]
-    fn iter_param(&self) -> impl Iterator<Item = &F> {
+    fn iter_param(&self) -> impl Iterator<Item = &X> {
         self.prev.iter_param()
+    }
+}
+
+impl<PREV: fmt::Display> fmt::Display for Softmax<PREV> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}", &self.prev)?;
+        write!(f, "Softmax")
     }
 }
 
@@ -109,29 +119,29 @@ pub struct LogSoftmax<PREV> {
 
 component_new! { LogSoftmax }
 
-impl<F, const LEN: usize, NNIN, PREV> NNComponent<F, NNIN, [(); LEN]> for LogSoftmax<PREV>
+impl<X, const LEN: usize, NNIN, PREV> NNComponent<X, NNIN, [(); LEN]> for LogSoftmax<PREV>
 where
-    F: Float,
-    [(); LEN]: Len<LEN>,
+    X: Float,
     NNIN: Shape,
-    PREV: NNComponent<F, NNIN, [(); LEN]>,
+    PREV: NNComponent<X, NNIN, [(); LEN]>,
 {
     type Grad = PREV::Grad;
-    type OptState<O: Optimizer<F>> = PREV::OptState<O>;
-    type StoredData = Data<Vector<F, LEN>, PREV::StoredData>;
+    type In = [(); LEN];
+    type OptState<O: Optimizer<X>> = PREV::OptState<O>;
+    type StoredData = Data<Vector<X, LEN>, PREV::StoredData>;
 
     #[inline]
-    fn prop(&self, input: Tensor<F, NNIN>) -> Tensor<F, [(); LEN]> {
+    fn prop(&self, input: Tensor<X, NNIN>) -> Tensor<X, [(); LEN]> {
         // ln(e^(x_i)/exp_sum) == x_i - ln(exp_sum)
         let input = self.prev.prop(input);
-        let ln_sum = input.iter_elem().copied().map(F::exp).sum::<F>().ln();
+        let ln_sum = input.iter_elem().copied().map(X::exp).sum::<X>().ln();
         input.scalar_sub(ln_sum)
     }
 
     #[inline]
-    fn train_prop(&self, input: Tensor<F, NNIN>) -> (Vector<F, LEN>, Self::StoredData) {
+    fn train_prop(&self, input: Tensor<X, NNIN>) -> (Vector<X, LEN>, Self::StoredData) {
         let (input, prev_data) = self.prev.train_prop(input);
-        let ln_sum = input.iter_elem().copied().map(F::exp).sum::<F>().ln();
+        let ln_sum = input.iter_elem().copied().map(X::exp).sum::<X>().ln();
         let out = input.scalar_sub(ln_sum);
         (out.clone(), Data { data: out, prev: prev_data })
     }
@@ -152,22 +162,22 @@ where
     #[inline]
     fn backprop(
         &self,
-        out_grad: Tensor<F, [(); LEN]>,
+        out_grad: Tensor<X, [(); LEN]>,
         data: Self::StoredData,
         grad: &mut Self::Grad,
     ) {
         let Data { prev: prev_data, data: prop_out } = data;
-        let input_grad = prop_out.map_inplace(F::exp).add_elem(&out_grad);
+        let input_grad = prop_out.map_inplace(X::exp).add_elem(&out_grad);
         self.prev.backprop(input_grad, prev_data, grad)
     }
 
     #[inline]
-    fn optimize<O: Optimizer<F>>(
+    fn optimize<O: Optimizer<X>>(
         &mut self,
         grad: &Self::Grad,
         optimizer: &O,
-        mut opt_state: Self::OptState<O>,
-    ) -> Self::OptState<O> {
+        opt_state: &mut Self::OptState<O>,
+    ) {
         self.prev.optimize(grad, optimizer, opt_state)
     }
 
@@ -177,25 +187,34 @@ where
     }
 
     #[inline]
-    fn init_opt_state<O: Optimizer<F>>(&self) -> Self::OptState<O> {
+    fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O> {
         self.prev.init_opt_state()
     }
 
     #[inline]
-    fn iter_param(&self) -> impl Iterator<Item = &F> {
+    fn iter_param(&self) -> impl Iterator<Item = &X> {
         self.prev.iter_param()
+    }
+}
+
+impl<PREV: fmt::Display> fmt::Display for LogSoftmax<PREV> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}", &self.prev)?;
+        write!(f, "LogSoftmax")
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::nn::NNHead;
+
     use super::*;
     use const_tensor::vector;
 
     #[test]
     fn logsoftmax_prop()
     where [(); 3]: Len<3> {
-        let log_softmax = LogSoftmax::new(());
+        let log_softmax = LogSoftmax::new(NNHead);
 
         let input = Vector::new([2.0, 0.0, 0.35]);
 

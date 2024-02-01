@@ -14,12 +14,12 @@ pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 pub trait Optimizer<X: Element>: Send + Sync + 'static {
     type State<S: Shape>;
 
-    fn optimize_tensor<S: Shape + Len<LEN>, const LEN: usize>(
+    fn optimize_tensor<S: Shape>(
         &self,
         tensor: &mut Tensor<X, S>,
         gradient: &const_tensor::tensor<X, S>,
-        state: Self::State<S>,
-    ) -> Self::State<S>;
+        state: &mut Self::State<S>,
+    );
 
     fn new_state<S: Shape>(tensor: Tensor<X, S>) -> Self::State<S>;
 }

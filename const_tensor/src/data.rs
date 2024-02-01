@@ -1,42 +1,33 @@
 use crate::{
     maybe_uninit::MaybeUninit,
+    multidim_arr::{Len, MultidimArr},
+    multidimensional::{Multidimensional, MultidimensionalOwned},
     owned::Tensor,
-    scalar,
-    shape::{Len, Shape},
-    shape_data::ShapeData,
-    vector, Element, Float, Num,
+    scalar, vector, Element, Float, Num, Shape,
 };
-use core::{mem, slice};
+use core::mem;
 use serde::Serialize;
 use std::{
+    alloc,
     iter::Map,
+    marker::PhantomData,
     ops::{Index, IndexMut},
+    ptr, slice,
 };
 
-/// implements [`TensorData`]
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 #[repr(transparent)]
 pub struct tensor<X: Element, S: Shape>(
-    /// inner [`TensorData`] value
-    pub(crate) S::Data<X>,
+    /// inner tensor data value
+    pub(crate) S::Mapped<X>,
 );
-
-/// Helper trait for [`tensor`].
-pub trait TensorData<X: Element, S: Shape> {
-    /// one dimension lower
-    type SubTensor: TensorData<X, S::SubShape>;
-}
-
-impl<X: Element, S: Shape> TensorData<X, S> for tensor<X, S> {
-    type SubTensor = tensor<X, S::SubShape>;
-}
 
 impl<X: Element, S: Shape> tensor<X, S> {
     /// a tensor must be allocated on the heap -> use `new_boxed` or [`Tensor`].
     #[inline]
-    pub(crate) fn new(data: impl ShapeData<Element = X, Shape = S>) -> Self {
-        Self(data.type_hint())
+    pub(crate) fn new(data: S::Mapped<X>) -> Self {
+        Self(data)
     }
 
     #[inline]
@@ -49,35 +40,55 @@ impl<X: Element, S: Shape> tensor<X, S> {
     ///
     /// You should probably use the [`Tensor`] wrapper instead.
     #[inline]
-    pub fn new_boxed(data: impl ShapeData<Element = X, Shape = S>) -> Box<Self> {
+    pub fn new_boxed(data: S::Mapped<X>) -> Box<Self> {
         Box::new(Self::new(data))
     }
 
+    #[inline]
+    pub(crate) fn new_boxed_uninit() -> Box<tensor<MaybeUninit<X>, S>> {
+        let ptr = if mem::size_of::<X>() == 0 {
+            ptr::NonNull::dangling()
+        } else {
+            let layout = alloc::Layout::new::<tensor<MaybeUninit<X>, S>>();
+            // SAFETY: layout.size != 0
+            let ptr = unsafe { alloc::alloc(layout) } as *mut tensor<MaybeUninit<X>, S>;
+            ptr::NonNull::new(ptr).unwrap_or_else(|| alloc::handle_alloc_error(layout))
+        };
+        // SAFETY: see [`Box`] Memory layout section and `Box::try_new_uninit_in`
+        unsafe { Box::from_raw(ptr.as_ptr()) }
+    }
+
+    /*
+    pub fn new_boxed(data: impl ShapeData<Element = X, Shape = S>) -> Box<Self> {
+        Box::new(Self::new(data.type_hint()))
+    }
+    */
+
     /// similar to `&str` and `&[]` literals.
     #[inline]
-    pub fn literal<'a>(data: impl ShapeData<Element = X, Shape = S>) -> &'a Self {
+    pub fn literal<'a>(data: S::Mapped<X>) -> &'a Self {
         Box::leak(Self::new_boxed(data))
     }
 
     /// Transmutes a reference to the shape into tensor data.
     #[inline]
-    pub(crate) fn wrap_ref(data: &S::Data<X>) -> &Self {
+    pub(crate) fn wrap_ref(data: &S::Mapped<X>) -> &Self {
         unsafe { mem::transmute(data) }
     }
 
     /// Transmutes a mutable reference to the shape into tensor data.
     #[inline]
-    pub(crate) fn wrap_mut(data: &mut S::Data<X>) -> &mut Self {
+    pub(crate) fn wrap_mut(data: &mut S::Mapped<X>) -> &mut Self {
         unsafe { mem::transmute(data) }
     }
 
     #[inline]
-    pub(crate) fn wrap_box(b: Box<S::Data<X>>) -> Box<Self> {
+    pub(crate) fn wrap_box(b: Box<S::Mapped<X>>) -> Box<Self> {
         unsafe { mem::transmute(b) }
     }
 
     #[inline]
-    pub(crate) fn unwrap_box(b: Box<Self>) -> Box<S::Data<X>> {
+    pub(crate) fn unwrap_box(b: Box<Self>) -> Box<S::Mapped<X>> {
         unsafe { mem::transmute(b) }
     }
 
@@ -89,8 +100,7 @@ impl<X: Element, S: Shape> tensor<X, S> {
 
     /// Creates a reference to the elements of the tensor in its 1D representation.
     #[inline]
-    pub fn as_1d<const LEN: usize>(&self) -> &vector<X, LEN>
-    where S: Len<LEN> {
+    pub fn as_1d(&self) -> &vector<X, { S::LEN }> {
         // TODO: test
         unsafe { mem::transmute(self) }
     }
@@ -119,41 +129,14 @@ impl<X: Element, S: Shape> tensor<X, S> {
         S::LEN
     }
 
-    /// Creates an [`Iterator`] over the references to the elements of `self`.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// # use const_tensor::{Matrix, Tensor, TensorData};
-    /// let mat = Matrix::new([[1, 2], [3, 4]]);
-    /// let mut iter = mat.iter_elem();
-    /// assert_eq!(iter.next(), Some(&1));
-    /// assert_eq!(iter.next(), Some(&2));
-    /// assert_eq!(iter.next(), Some(&3));
-    /// assert_eq!(iter.next(), Some(&4));
-    /// assert_eq!(iter.next(), None);
-    /// ```
     #[inline]
-    pub fn iter_elem<const LEN: usize>(&self) -> slice::Iter<'_, X>
-    where S: Len<LEN> {
-        self.as_1d().0.iter()
-    }
-
-    /// Creates an [`Iterator`] over the mutable references to the elements of `self`.
-    #[inline]
-    pub fn iter_elem_mut<const LEN: usize>(&mut self) -> slice::IterMut<'_, X>
-    where S: Len<LEN> {
-        self.as_1d_mut().0.iter_mut()
+    pub fn get_sub_tensor(&self, idx: usize) -> Option<&tensor<X, S::Sub>> {
+        self.0.as_sub_slice().get(idx).map(tensor::wrap_ref)
     }
 
     #[inline]
-    pub fn get_sub_tensor(&self, idx: usize) -> Option<&tensor<X, S::SubShape>> {
-        self.0.as_slice().get(idx).map(|a| unsafe { mem::transmute(a) })
-    }
-
-    #[inline]
-    pub fn get_sub_tensor_mut(&mut self, idx: usize) -> Option<&mut tensor<X, S::SubShape>> {
-        self.0.as_mut_slice().get_mut(idx).map(|a| unsafe { mem::transmute(a) })
+    pub fn get_sub_tensor_mut(&mut self, idx: usize) -> Option<&mut tensor<X, S::Sub>> {
+        self.0.as_mut_sub_slice().get_mut(idx).map(tensor::wrap_mut)
     }
 
     /// Creates an [`Iterator`] over references to the sub tensors of the
@@ -161,11 +144,14 @@ impl<X: Element, S: Shape> tensor<X, S> {
     #[inline]
     pub fn iter_sub_tensors<'a>(
         &'a self,
-    ) -> Map<
-        slice::Iter<'a, <S::SubShape as Shape>::Data<X>>,
-        impl FnMut(&'a <S::SubShape as Shape>::Data<X>) -> &'a tensor<X, S::SubShape>,
-    > {
-        self.0.as_slice().iter().map(tensor::<X, S::SubShape>::wrap_ref)
+        /*
+        ) -> Map<
+            slice::Iter<'a, <S::Sub as MultidimArr>::Mapped<X>>,
+            impl FnMut(&'a <S::Sub as MultidimArr>::Mapped<X>) -> &'a tensor<X, S::Sub>,
+        > {
+            */
+    ) -> impl Iterator<Item = &'a tensor<X, S::Sub>> {
+        self.0.as_sub_slice().iter().map(tensor::wrap_ref)
     }
 
     /// Creates an [`Iterator`] over mutable references to the sub tensors
@@ -174,266 +160,67 @@ impl<X: Element, S: Shape> tensor<X, S> {
     pub fn iter_sub_tensors_mut<'a>(
         &'a mut self,
     ) -> Map<
-        slice::IterMut<'a, <S::SubShape as Shape>::Data<X>>,
-        impl FnMut(&'a mut <S::SubShape as Shape>::Data<X>) -> &'a mut tensor<X, S::SubShape>,
+        slice::IterMut<'a, <S::Sub as MultidimArr>::Mapped<X>>,
+        impl FnMut(&'a mut <S::Sub as MultidimArr>::Mapped<X>) -> &'a mut tensor<X, S::Sub>,
     > {
-        self.0.as_mut_slice().iter_mut().map(tensor::<X, S::SubShape>::wrap_mut)
+        self.0.as_mut_sub_slice().iter_mut().map(tensor::wrap_mut)
     }
 
     /// Sets the tensor to `val`.
     #[inline]
-    pub fn set(&mut self, val: S::Data<X>) {
+    pub fn set(&mut self, val: S::Mapped<X>) {
         self.0 = val;
     }
 
-    /// Sets every element of the tensor to the scalar value `val`.
-    #[inline]
-    pub fn fill<const LEN: usize>(&mut self, val: X)
-    where S: Len<LEN> {
-        self.iter_elem_mut().for_each(|x| *x = val);
-    }
-
-    /// Sets every element of the tensor to the scalar value `0`.
-    #[inline]
-    pub fn fill_zero<const LEN: usize>(&mut self)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.fill(X::ZERO)
-    }
-
-    /// Sets every element of the tensor to the scalar value `1`.
-    #[inline]
-    pub fn fill_one<const LEN: usize>(&mut self)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.fill(X::ONE)
-    }
-
     /// Applies a function to every element of the tensor.
     #[inline]
-    pub fn map_mut<const LEN: usize>(&mut self, f: impl FnMut(&mut X))
-    where S: Len<LEN> {
-        self.iter_elem_mut().for_each(f);
-    }
-
-    /// Applies a function to every element of the tensor.
-    #[inline]
-    pub fn map_clone<Y: Element, const LEN: usize>(
-        &self,
-        mut f: impl FnMut(X) -> Y,
-    ) -> Tensor<Y, S>
-    where
-        S: Len<LEN>,
-    {
-        let mut out: Tensor<Y, S> = Default::default(); // TODO: uninit
+    pub fn map_clone<Y: Element>(&self, mut f: impl FnMut(X) -> Y) -> Tensor<Y, S> {
+        let mut out = Tensor::<Y, S>::new_uninit();
         for (y, &x) in out.iter_elem_mut().zip(self.iter_elem()) {
-            *y = f(x);
+            y.write(f(x));
         }
-        out
+        unsafe { mem::transmute(out) }
+    }
+}
+
+impl<X: Element, S: Shape> Multidimensional<X> for tensor<X, S> {
+    #[inline]
+    fn iter_elem(&self) -> slice::Iter<'_, X> {
+        let ptr = self.0.as_ptr();
+        unsafe { slice::from_raw_parts(ptr, S::LEN) }.iter()
     }
 
-    /// Adds a scalar to every element of the tensor inplace.
     #[inline]
-    pub fn scalar_add_mut<const LEN: usize>(&mut self, scalar: X)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for x in self.iter_elem_mut() {
-            *x += scalar;
-        }
-    }
-
-    /// Subtracts a scalar from every element of the tensor inplace.
-    #[inline]
-    pub fn scalar_sub_mut<const LEN: usize>(&mut self, scalar: X)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for x in self.iter_elem_mut() {
-            *x -= scalar;
-        }
-    }
-
-    /// Multiplies the tensor by a scalar value inplace.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// # use const_tensor::{Matrix, Tensor, TensorData};
-    /// let mut mat = Matrix::new([[1, 2], [3, 4]]);
-    /// mat.scalar_mul_mut(10);
-    /// assert_eq!(mat._as_inner(), &[[10, 20], [30, 40]]);
-    /// ```
-    #[inline]
-    pub fn scalar_mul_mut<const LEN: usize>(&mut self, scalar: X)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for x in self.iter_elem_mut() {
-            *x *= scalar;
-        }
-    }
-
-    /// Divides the tensor by a scalar value inplace.
-    #[inline]
-    pub fn scalar_div_mut<const LEN: usize>(&mut self, scalar: X)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for x in self.iter_elem_mut() {
-            *x /= scalar;
-        }
-    }
-
-    /// Adds `other` to `self` elementwise and inplace.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// # use const_tensor::{Matrix, Tensor, TensorData};
-    /// let mut mat1 = Matrix::new([[1, 2], [3, 4]]);
-    /// let mat2 = Matrix::new([[4, 3], [2, 1]]);
-    /// mat1.add_elem_mut(&mat2);
-    /// assert_eq!(mat1._as_inner(), &[[5, 5], [5, 5]]);
-    /// ```
-    #[inline]
-    pub fn add_elem_mut<const LEN: usize>(&mut self, other: &Self)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for (x, y) in self.iter_elem_mut().zip(other.iter_elem()) {
-            *x += *y;
-        }
-    }
-
-    /// Subtracts `other` from `self` elementwise and inplace.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// # use const_tensor::{Matrix, Tensor, TensorData};
-    /// let mut mat1 = Matrix::new([[5, 5], [5, 5]]);
-    /// let mat2 = Matrix::new([[4, 3], [2, 1]]);
-    /// mat1.sub_elem_mut(&mat2);
-    /// assert_eq!(mat1._as_inner(), &[[1, 2], [3, 4]]);
-    /// ```
-    #[inline]
-    pub fn sub_elem_mut<const LEN: usize>(&mut self, other: &Self)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for (x, y) in self.iter_elem_mut().zip(other.iter_elem()) {
-            *x -= *y;
-        }
-    }
-
-    /// Multiplies `other` to `self` elementwise and inplace.
-    #[inline]
-    pub fn mul_elem_mut<const LEN: usize>(&mut self, other: &Self)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for (x, y) in self.iter_elem_mut().zip(other.iter_elem()) {
-            *x *= *y;
-        }
-    }
-
-    /// Divides `other` to `self` elementwise and inplace.
-    #[inline]
-    pub fn div_elem_mut<const LEN: usize>(&mut self, other: &Self)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for (x, y) in self.iter_elem_mut().zip(other.iter_elem()) {
-            *x /= *y;
-        }
-    }
-
-    /// Squares `self` elementwise and inplace.
-    #[inline]
-    pub fn square_elem_mut<const LEN: usize>(&mut self)
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        for x in self.iter_elem_mut() {
-            *x *= *x;
-        }
-    }
-
-    /// Calculates the reciprocal of every element in `self` inplace.
-    #[inline]
-    pub fn recip_elem_mut<const LEN: usize>(&mut self)
-    where
-        S: Len<LEN>,
-        X: Float,
-    {
-        for x in self.iter_elem_mut() {
-            *x = x.recip();
-        }
-    }
-
-    /// Calculates the negative of the tensor inplace.
-    #[inline]
-    pub fn neg_mut<const LEN: usize>(&mut self)
-    where
-        S: Len<LEN>,
-        X: Float,
-    {
-        for x in self.iter_elem_mut() {
-            *x = x.neg();
-        }
-    }
-
-    /// Linear interpolation between `self` and `other` with blend value `blend`.
-    ///
-    /// `self * t + other * (1 - t)` (same as `t * (self - other) + other`)
-    #[inline]
-    pub fn lerp_mut<const LEN: usize>(&mut self, other: &Self, blend: X)
-    where
-        S: Len<LEN>,
-        X: Float,
-    {
-        for (a, b) in self.iter_elem_mut().zip(other.iter_elem()) {
-            *a = blend.mul_add(*a - *b, *b)
-        }
+    fn iter_elem_mut(&mut self) -> slice::IterMut<'_, X> {
+        let ptr = self.0.as_mut_ptr();
+        unsafe { slice::from_raw_parts_mut(ptr, S::LEN) }.iter_mut()
     }
 }
 
 impl<X: Element, S: Shape> Default for tensor<X, S> {
     fn default() -> Self {
-        Self::new(S::unwrap_data(S::WrappedData::default()))
+        Self::new(S::Mapped::<X>::unwrap(<S::Mapped<X> as MultidimArr>::Wrapped::default()))
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq<Self> for tensor<X, S> {
+impl<X: Element, S: Shape> PartialEq<Self> for tensor<X, S>
+where S::Mapped<X>: PartialEq
+{
     fn eq(&self, other: &Self) -> bool {
-        //self.as_1d().0 == other.as_1d().0
-        //self.iter_sub_tensors().zip(other.iter_sub_tensors()).all(|(l, r)| l.eq(r))
         self.0 == other.0
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq<&S::Data<X>> for tensor<X, S> {
-    fn eq(&self, other: &&S::Data<X>) -> bool {
-        &self.0 == *other
+impl<X: Element, S: Shape> Eq for tensor<X, S> where S::Mapped<X>: Eq {}
+
+impl<X: Element, S: Shape, D: MultidimArr<Element = X, Mapped<()> = S>> PartialEq<D>
+    for tensor<X, S>
+where S::Mapped<X>: PartialEq
+{
+    fn eq(&self, other: &D) -> bool {
+        self.0 == other.type_hint()
     }
 }
-
-impl<X: Element + Eq> Eq for tensor<X, ()> {}
-impl<X: Element + Eq, SUB: Shape, const LEN: usize> Eq for tensor<X, [SUB; LEN]> {}
 
 impl<X: Element, S: Shape> ToOwned for tensor<X, S> {
     type Owned = Tensor<X, S>;
@@ -444,7 +231,7 @@ impl<X: Element, S: Shape> ToOwned for tensor<X, S> {
 }
 
 impl<X: Element, S: Shape> Index<usize> for tensor<X, S> {
-    type Output = tensor<X, S::SubShape>;
+    type Output = tensor<X, S::Sub>;
 
     fn index(&self, idx: usize) -> &Self::Output {
         self.get_sub_tensor(idx).expect("`idx` is in range of the outermost dimension")
@@ -459,13 +246,11 @@ impl<X: Element, S: Shape> IndexMut<usize> for tensor<X, S> {
 }
 
 impl<X: Element + Serialize, S: Shape> Serialize for tensor<X, S>
-where S::WrappedData<X>: Serialize
+where <S::Mapped<X> as MultidimArr>::Wrapped: Serialize
 {
     fn serialize<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
     where Ser: serde::Serializer {
-        //let wrapper = SerTensor::from(self);
-        //SerTensor::serialize(&wrapper, serializer)
-        S::wrap_ref_data(&self.0).serialize(serializer)
+        S::Mapped::wrap_ref(&self.0).serialize(serializer)
     }
 }
 

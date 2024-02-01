@@ -1,7 +1,9 @@
 //! Module containing the [`SGD_`] [`Optimizer`].
 
 use super::{Optimizer, DEFAULT_LEARNING_RATE};
-use const_tensor::{Element, Len, Num, Shape, Tensor, VectorShape};
+use const_tensor::{
+    Element, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor, VectorShape,
+};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -32,18 +34,17 @@ pub struct SGDState<X: Element, S: Shape> {
 impl<X: Num> Optimizer<X> for SGD<X> {
     type State<S: Shape> = SGDState<X, S>;
 
-    fn optimize_tensor<S: Shape + Len<LEN>, const LEN: usize>(
+    fn optimize_tensor<S: Shape>(
         &self,
         tensor: &mut Tensor<X, S>,
         gradient: &const_tensor::tensor<X, S>,
-        state: Self::State<S>,
-    ) -> Self::State<S> {
-        let change = state
+        state: &mut Self::State<S>,
+    ) {
+        state.prev_grad.scalar_mul_mut(self.momentum);
+        state
             .prev_grad
-            .scalar_mul(self.momentum)
-            .sub_elem(&gradient.to_owned().scalar_mul(self.learning_rate));
-        tensor.add_elem_mut(&change);
-        SGDState { prev_grad: change }
+            .sub_elem_mut(&gradient.to_owned().scalar_mul(self.learning_rate));
+        tensor.add_elem_mut(&state.prev_grad);
     }
 
     fn new_state<S: Shape>(tensor: Tensor<X, S>) -> Self::State<S> {

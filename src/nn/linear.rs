@@ -1,6 +1,9 @@
-use super::component::{Data, GradComponent, NNComponent, NNDisplay};
+use super::component::{Data, GradComponent, NNComponent};
 use crate::optimizer::Optimizer;
-use const_tensor::{Element, Len, Matrix, MatrixShape, Num, Shape, Tensor, Vector, VectorShape};
+use const_tensor::{
+    Element, Len, Matrix, MatrixShape, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor,
+    Vector, VectorShape,
+};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -8,7 +11,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Linear<X: Element, const IN: usize, const OUT: usize, PREV> {
     pub(super) prev: PREV,
-    //#[serde(bound = "X: Serialize + DeserializeOwned")]
     pub(super) weights: Matrix<X, IN, OUT>,
     pub(super) bias: Vector<X, OUT>,
 }
@@ -19,12 +21,9 @@ where
     X: Num,
     NNIN: Shape,
     PREV: NNComponent<X, NNIN, [(); IN]>,
-    [(); IN]: Len<IN>,
-    [(); OUT]: Len<OUT>,
-    [[(); IN]; OUT]: Len<{ IN * OUT }>,
-    [[(); OUT]; IN]: Len<{ IN * OUT }>,
 {
     type Grad = Linear<X, IN, OUT, PREV::Grad>;
+    type In = [(); IN];
     type OptState<O: Optimizer<X>> = LinearOptState<O, X, IN, OUT, PREV::OptState<O>>;
     type StoredData = Data<Vector<X, IN>, PREV::StoredData>;
 
@@ -77,12 +76,11 @@ where
         &mut self,
         grad: &Self::Grad,
         optimizer: &O,
-        mut state: Self::OptState<O>,
-    ) -> Self::OptState<O> {
-        state.weights = optimizer.optimize_tensor(&mut self.weights, &grad.weights, state.weights);
-        state.bias = optimizer.optimize_tensor(&mut self.bias, &grad.bias, state.bias);
-        state.prev = self.prev.optimize(&grad.prev, optimizer, state.prev);
-        state
+        state: &mut Self::OptState<O>,
+    ) {
+        optimizer.optimize_tensor(&mut self.weights, &grad.weights, &mut state.weights);
+        optimizer.optimize_tensor(&mut self.bias, &grad.bias, &mut state.bias);
+        self.prev.optimize(&grad.prev, optimizer, &mut state.prev);
     }
 
     #[inline]
@@ -128,23 +126,19 @@ impl<X: Element + Serialize, const IN: usize, const OUT: usize, PREV: Serialize>
 }
 */
 
-impl<'a, X, const IN: usize, const OUT: usize, PREV> fmt::Display
-    for NNDisplay<'a, Linear<X, IN, OUT, PREV>>
+impl<'a, X, const IN: usize, const OUT: usize, PREV> fmt::Display for Linear<X, IN, OUT, PREV>
 where
     X: Element,
-    NNDisplay<'a, PREV>: fmt::Display,
+    PREV: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", NNDisplay(&self.0.prev))?;
+        writeln!(f, "{}", &self.prev)?;
         write!(f, "Linear: {IN} -> {OUT}")
     }
 }
 
 impl<X: Num, const IN: usize, const OUT: usize, PREV: GradComponent<X>> GradComponent<X>
     for Linear<X, IN, OUT, PREV>
-where
-    [[(); IN]; OUT]: Len<{ IN * OUT }>,
-    [(); OUT]: Len<OUT>,
 {
     fn set_zero(&mut self) {
         self.weights.fill_zero();

@@ -1,4 +1,4 @@
-use crate::{tensor, Element, Shape, Tensor};
+use crate::{tensor, Element, Tensor};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /*

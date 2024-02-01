@@ -1,12 +1,17 @@
 use crate::{
-    data, maybe_uninit::MaybeUninit, shape_data::ShapeData, tensor, Element, Float, Len, Num,
-    Shape, Vector,
+    data,
+    maybe_uninit::MaybeUninit,
+    multidim_arr::MultidimArr,
+    multidimensional::{Multidimensional, MultidimensionalOwned},
+    tensor, Element, Float, Len, Num, Shape, Vector,
 };
 use serde::{Deserialize, Serialize};
 use std::{
     alloc,
     borrow::{Borrow, BorrowMut},
-    fmt, mem,
+    fmt,
+    marker::PhantomData,
+    mem,
     ops::{Deref, DerefMut},
     ptr,
 };
@@ -15,72 +20,36 @@ use std::{
 #[repr(transparent)]
 pub struct Tensor<X: Element, S: Shape> {
     /// [`Box`] pointer to the tensor data.
-    pub(crate) data: Box<data::tensor<X, S>>,
+    pub(crate) data: Box<tensor<X, S>>,
 }
 
 impl<X: Element, S: Shape> Tensor<X, S> {
     /// Creates a new [`Tensor`] on the heap.
     #[inline]
-    pub fn new(data: impl ShapeData<Element = X, Shape = S>) -> Self {
-        Self::from(data::tensor::new_boxed(data.type_hint()))
+    pub fn new(data: S::Mapped<X>) -> Self {
+        Self::from(data::tensor::new_boxed(data))
     }
 
+    /*
     /// Allocates a new uninitialized [`Tensor`].
     #[inline]
     pub fn new_uninit() -> Tensor<MaybeUninit<X>, S> {
-        let ptr = if mem::size_of::<X>() == 0 {
-            ptr::NonNull::dangling()
-        } else {
-            let layout = alloc::Layout::new::<data::tensor<MaybeUninit<X>, S>>();
-            // SAFETY: layout.size != 0
-            let ptr = unsafe { alloc::alloc(layout) } as *mut data::tensor<MaybeUninit<X>, S>;
-            ptr::NonNull::new(ptr).unwrap_or_else(|| alloc::handle_alloc_error(layout))
-        };
-        // SAFETY: see [`Box`] Memory layout section and `Box::try_new_uninit_in`
-        Tensor::from(unsafe { Box::from_raw(ptr.as_ptr()) })
+        Tensor::from(tensor::<X, S>::new_boxed_uninit())
     }
 
     /// Creates a new Tensor filled with the values in `iter`.
     /// If the [`Iterator`] it too small, the rest of the elements contain the value `X::default()`.
     #[inline]
-    pub fn from_iter<const LEN: usize>(iter: impl IntoIterator<Item = X>) -> Self
-    where S: Len<LEN> {
+    pub fn from_iter(iter: impl IntoIterator<Item = X>) -> Self {
         let mut t = Self::default();
         t.iter_elem_mut().zip(iter).for_each(|(x, val)| *x = val);
         t
     }
-
-    /// Creates a new Tensor filled with the scalar value.
-    #[inline]
-    pub fn full<const LEN: usize>(val: X) -> Self
-    where S: Len<LEN> {
-        Self::from_1d(Vector::new([val; LEN]))
-    }
-
-    /// Creates a new Tensor filled with the scalar value `0`.
-    #[inline]
-    pub fn zeros<const LEN: usize>() -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        Self::full(X::ZERO)
-    }
-
-    /// Creates a new Tensor filled with the scalar value `1`.
-    #[inline]
-    pub fn ones<const LEN: usize>() -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        Self::full(X::ONE)
-    }
+    */
 
     /// Creates the Tensor from a 1D representation of its elements.
     #[inline]
-    pub fn from_1d<const LEN: usize>(vec: Vector<X, LEN>) -> Self
-    where S: Len<LEN> {
+    pub fn from_1d<const LEN: usize>(vec: Vector<X, LEN>) -> Self {
         let vec = mem::ManuallyDrop::new(vec);
         unsafe { mem::transmute_copy(&vec) }
     }
@@ -104,166 +73,33 @@ impl<X: Element, S: Shape> Tensor<X, S> {
         let t = mem::ManuallyDrop::new(self);
         unsafe { mem::transmute_copy(&t) }
     }
+}
 
-    /// Applies a function to every element of the tensor.
-    // TODO: bench vs tensor::map_clone
-    #[inline]
-    pub fn map_inplace<const LEN: usize>(mut self, mut f: impl FnMut(X) -> X) -> Self
-    where S: Len<LEN> {
-        self.map_mut(|x| *x = f(*x));
-        self
-    }
+impl<X: Element, S: Shape> MultidimensionalOwned<X> for Tensor<X, S> {
+    type Data = tensor<X, S>;
+    type Uninit = Tensor<MaybeUninit<X>, S>;
 
-    /// Adds a scalar to every element of the tensor.
-    #[inline]
-    pub fn scalar_add<const LEN: usize>(mut self, scalar: X) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.scalar_add_mut(scalar);
-        self
-    }
-
-    /// Subtracts a scalar from every element of the tensor.
-    #[inline]
-    pub fn scalar_sub<const LEN: usize>(mut self, scalar: X) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.scalar_sub_mut(scalar);
-        self
-    }
-
-    /// Multiplies the tensor by a scalar value.
-    #[inline]
-    pub fn scalar_mul<const LEN: usize>(mut self, scalar: X) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.scalar_mul_mut(scalar);
-        self
-    }
-
-    /// Divides the tensor by a scalar value.
-    #[inline]
-    pub fn scalar_div<const LEN: usize>(mut self, scalar: X) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.scalar_div_mut(scalar);
-        self
-    }
-
-    /// Adds `other` to `self` elementwise.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// # use const_tensor::{Matrix, Tensor, TensorData};
-    /// let mut mat1 = Matrix::new([[1, 2], [3, 4]]);
-    /// let mat2 = Matrix::new([[4, 3], [2, 1]]);
-    /// let res = mat1.add_elem(&mat2);
-    /// assert_eq!(res._as_inner(), &[[5, 5], [5, 5]]);
-    /// ```
-    #[inline]
-    pub fn add_elem<const LEN: usize>(mut self, other: &Self) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.add_elem_mut(other);
-        self
-    }
-
-    /// Subtracts `other` from `self` elementwise.
-    #[inline]
-    pub fn sub_elem<const LEN: usize>(mut self, other: &Self) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.sub_elem_mut(other);
-        self
-    }
-
-    /// Multiplies `other` to `self` elementwise.
-    #[inline]
-    pub fn mul_elem<const LEN: usize>(mut self, other: &Self) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.mul_elem_mut(other);
-        self
-    }
-
-    /// Divides `other` to `self` elementwise.
-    #[inline]
-    pub fn div_elem<const LEN: usize>(mut self, other: &Self) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.div_elem_mut(other);
-        self
-    }
-
-    /// Squares `self` elementwise.
-    #[inline]
-    pub fn square_elem<const LEN: usize>(mut self) -> Self
-    where
-        S: Len<LEN>,
-        X: Num,
-    {
-        self.square_elem_mut();
-        self
-    }
-
-    /// Calculates the reciprocal of every element in `self`.
-    #[inline]
-    pub fn recip_elem<const LEN: usize>(mut self) -> Self
-    where
-        S: Len<LEN>,
-        X: Float,
-    {
-        self.recip_elem_mut();
-        self
-    }
-
-    /// Calculates the negative of the tensor.
-    #[inline]
-    pub fn neg<const LEN: usize>(mut self) -> Self
-    where
-        S: Len<LEN>,
-        X: Float,
-    {
-        self.neg_mut();
-        self
-    }
-
-    /// `self * t + other * (1 - t)` (same as `t * (self - other) + other`)
-    #[inline]
-    pub fn lerp<const LEN: usize>(mut self, other: &tensor<X, S>, blend: X) -> Self
-    where
-        S: Len<LEN>,
-        X: Float,
-    {
-        self.lerp_mut(other, blend);
-        self
+    fn new_uninit() -> Self::Uninit {
+        Tensor::from(tensor::<X, S>::new_boxed_uninit())
     }
 }
 
-impl<X: Element + fmt::Debug, S: Shape + fmt::Debug> fmt::Debug for Tensor<X, S> {
+impl<X: Element, S: Shape> MultidimensionalOwned<X> for Box<tensor<X, S>> {
+    type Data = tensor<X, S>;
+    type Uninit = Box<tensor<MaybeUninit<X>, S>>;
+
+    fn new_uninit() -> Self::Uninit {
+        tensor::<X, S>::new_boxed_uninit()
+    }
+}
+
+impl<X: Element + fmt::Debug, S: Shape> fmt::Debug for Tensor<X, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("Tensor").field(&self.0).finish()
     }
 }
 
-impl<X: Element, S: Shape> Clone for Tensor<X, S> {
+impl<X: Element + Clone, S: Shape> Clone for Tensor<X, S> {
     fn clone(&self) -> Self {
         self.data.to_owned()
     }
@@ -271,35 +107,35 @@ impl<X: Element, S: Shape> Clone for Tensor<X, S> {
 
 impl<X: Element, S: Shape> Default for Tensor<X, S> {
     fn default() -> Self {
-        Self::new(S::unwrap_data(S::WrappedData::default()))
+        tensor::<X, S>::default().to_owned()
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq<Self> for Tensor<X, S> {
+impl<X: Element, S: Shape> PartialEq<Self> for Tensor<X, S>
+where S::Mapped<X>: PartialEq
+{
     fn eq(&self, other: &Self) -> bool {
-        self.data == other.data
+        self.0 == other.0
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq<&tensor<X, S>> for Tensor<X, S> {
+impl<X: Element, S: Shape> PartialEq<&tensor<X, S>> for Tensor<X, S>
+where S::Mapped<X>: PartialEq
+{
     fn eq(&self, other: &&tensor<X, S>) -> bool {
         self.as_ref() == *other
     }
 }
 
-impl<X: Element + PartialEq, S: Shape> PartialEq<Tensor<X, S>> for &tensor<X, S> {
+impl<X: Element, S: Shape + PartialEq> PartialEq<Tensor<X, S>> for &tensor<X, S>
+where S::Mapped<X>: PartialEq
+{
     fn eq(&self, other: &Tensor<X, S>) -> bool {
-        other.as_ref() == *self
+        *self == other.as_ref()
     }
 }
 
-impl<X: Element + PartialEq, const LEN: usize> PartialEq<&[X; LEN]> for Vector<X, LEN> {
-    fn eq(&self, other: &&[X; LEN]) -> bool {
-        &self.0 == *other
-    }
-}
-
-impl<X: Element + Eq, S: Shape> Eq for Tensor<X, S> {}
+impl<X: Element, S: Shape> Eq for Tensor<X, S> where S::Mapped<X>: Eq {}
 
 impl<X: Element, S: Shape> From<Box<data::tensor<X, S>>> for Tensor<X, S> {
     fn from(data: Box<data::tensor<X, S>>) -> Self {
@@ -352,7 +188,7 @@ impl<X: Element, S: Shape> BorrowMut<data::tensor<X, S>> for Tensor<X, S> {
 }
 
 impl<X: Element + Serialize, S: Shape> Serialize for Tensor<X, S>
-where S::WrappedData<X>: Serialize
+where <S::Mapped<X> as MultidimArr>::Wrapped: Serialize
 {
     fn serialize<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
     where Ser: serde::Serializer {
@@ -361,11 +197,13 @@ where S::WrappedData<X>: Serialize
 }
 
 impl<'de, X: Element + Deserialize<'de>, S: Shape> Deserialize<'de> for Tensor<X, S>
-where S::WrappedData<X>: Deserialize<'de>
+where <S::Mapped<X> as MultidimArr>::Wrapped: Deserialize<'de>
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
-        S::WrappedData::deserialize(deserializer).map(S::unwrap_data).map(Tensor::new)
+        <S::Mapped<X> as MultidimArr>::Wrapped::deserialize(deserializer)
+            .map(S::Mapped::unwrap)
+            .map(Tensor::new)
     }
 }
 

@@ -3,6 +3,7 @@
 #![feature(array_chunks)]
 #![feature(test)]
 
+use const_tensor::Num;
 use mnist_util::{get_mnist, image_to_string, Mnist};
 use rusty_ai::{loss_function::NLLLoss, nn::NNBuilder, optimizer::sgd::SGD, Initializer};
 use std::{ops::Range, time::Instant};

@@ -1,4 +1,4 @@
-use const_tensor::{Element, Float, Len, Num, Shape, Tensor};
+use const_tensor::{Element, Float, Len, MultidimensionalOwned, Num, Shape, Tensor};
 use rand::Rng;
 
 /// see [tensorflow docs](https://www.tensorflow.org/api_docs/python/tf/keras/initializers)
@@ -55,15 +55,7 @@ impl<F: Float, S: Shape> Initializer<F, S>
 where rand_distr::StandardNormal: rand_distr::Distribution<F>
 {
     /// Uses `self` to create a weights [`Matrix`].
-    pub fn init<const LEN: usize>(
-        self,
-        rng: &mut impl Rng,
-        inputs: usize,
-        outputs: usize,
-    ) -> Tensor<F, S>
-    where
-        S: Len<LEN>,
-    {
+    pub fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<F, S> {
         use Initializer as I;
         match self {
             I::Initialized(t) => t,

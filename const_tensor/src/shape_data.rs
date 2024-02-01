@@ -1,7 +1,8 @@
-use crate::{Element, Shape};
-use core::fmt;
+use crate::Element;
+use core::{fmt, slice};
 use std::mem;
 
+/*
 pub trait ShapeData: Sized + Copy + PartialEq + fmt::Debug + Send + Sync + 'static {
     type Element: Element;
     type Shape: Shape<Data<Self::Element> = Self>;
@@ -9,6 +10,8 @@ pub trait ShapeData: Sized + Copy + PartialEq + fmt::Debug + Send + Sync + 'stat
 
     fn as_slice(&self) -> &[Self::Sub];
     fn as_mut_slice(&mut self) -> &mut [Self::Sub];
+
+    fn _as_ptr(&self) -> *const Self::Element;
 
     fn type_hint(self) -> <Self::Shape as Shape>::Data<Self::Element> {
         self
@@ -31,6 +34,11 @@ impl<X: Element> ShapeData for X {
         // SAFETY: T == [T; 1]
         unsafe { mem::transmute::<&mut Self, &mut [X; 1]>(self) }.as_mut_slice()
     }
+
+    #[inline]
+    fn _as_ptr(&self) -> *const Self::Element {
+        self
+    }
 }
 
 impl<X: Element, SUB: ShapeData<Element = X>, const N: usize> ShapeData for [SUB; N] {
@@ -47,7 +55,13 @@ impl<X: Element, SUB: ShapeData<Element = X>, const N: usize> ShapeData for [SUB
     fn as_mut_slice(&mut self) -> &mut [SUB] {
         self.as_mut_slice()
     }
+
+    #[inline]
+    fn _as_ptr(&self) -> *const Self::Element {
+        self.as_ptr() as *const X
+    }
 }
+*/
 
 /*
 pub trait ArrDefault {
@@ -69,6 +83,7 @@ impl<T: Element> ArrDefault for T {
 }
 */
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -81,3 +96,4 @@ mod tests {
         assert!(slice.len() == 1);
     }
 }
+*/

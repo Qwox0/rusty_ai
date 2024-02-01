@@ -1,13 +1,13 @@
 use super::component::NNComponent;
-use crate::{nn::component::NNDisplay, optimizer::Optimizer};
-use const_tensor::{Element, Len, Shape, Tensor, Vector};
+use crate::optimizer::Optimizer;
+use const_tensor::{Element, Len, Multidimensional, MultidimensionalOwned, Shape, Tensor, Vector};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Flatten<S, PREV> {
+pub struct Flatten<S: Shape, PREV> {
     pub(super) prev: PREV,
     #[serde(skip)]
     pub(super) _shape: PhantomData<S>,
@@ -22,12 +22,13 @@ impl<S: Shape, PREV> Flatten<S, PREV> {
 impl<X, S, const LEN: usize, NNIN, PREV> NNComponent<X, NNIN, [(); LEN]> for Flatten<S, PREV>
 where
     X: Element,
-    S: Shape + Len<LEN>,
+    S: Shape + Len<LEN> + PartialEq,
     [(); S::DIM]: Sized,
     NNIN: Shape,
     PREV: NNComponent<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
+    type In = S;
     type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     type StoredData = PREV::StoredData;
 
@@ -54,8 +55,8 @@ where
         &mut self,
         grad: &Self::Grad,
         optimizer: &O,
-        mut opt_state: Self::OptState<O>,
-    ) -> Self::OptState<O> {
+        opt_state: &mut Self::OptState<O>,
+    ) {
         self.prev.optimize(grad, optimizer, opt_state)
     }
 
@@ -75,13 +76,13 @@ where
     }
 }
 
-impl<'a, S: Shape, PREV> fmt::Display for NNDisplay<'a, Flatten<S, PREV>>
+impl<'a, S: Shape, PREV> fmt::Display for Flatten<S, PREV>
 where
     [(); S::DIM]: Sized,
-    NNDisplay<'a, PREV>: fmt::Display,
+    PREV: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", NNDisplay(&self.0.prev))?;
+        writeln!(f, "{}", &self.prev)?;
         writeln!(f, "Flatten: Tensor({:?}) -> Vector({})", S::get_dims_arr(), S::LEN)
     }
 }
@@ -89,13 +90,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::nn::NNHead;
 
     #[test]
     fn simple_flatten() {
         use const_tensor::Tensor4;
         let tensor = Tensor4::new([[[[1, 2], [3, 4]]], [[[5, 6], [7, 8]]]]);
         println!("tensor = {:?}", tensor);
-        let flatten = Flatten::new(());
+        let flatten = Flatten::new(NNHead);
         let vec = flatten.prop(tensor);
         println!("vec = {:?}", vec);
     }

@@ -12,6 +12,7 @@
 #![warn(missing_docs)]
 
 mod aliases;
+mod arr_wrapper;
 mod data;
 mod element;
 mod maybe_uninit;
@@ -23,15 +24,18 @@ mod shape;
 mod shape_data;
 
 pub use aliases::*;
-pub use data::{tensor, TensorData};
+pub use data::tensor;
 pub use element::{Element, Float, MoreNumOps, Num};
+pub use multidim_arr::{Len, MultidimArr};
+pub use multidimensional::{Multidimensional, MultidimensionalOwned};
 pub use owned::Tensor;
-pub use shape::{Len, Shape};
+//pub use shape::{Len, Shape};
 use std::mem;
 
-impl<X: Num, const LEN: usize> vector<X, LEN>
-where [(); LEN]: Len<LEN>
-{
+pub trait Shape: MultidimArr<Element = ()> {}
+impl<S: MultidimArr<Element = ()>> Shape for S {}
+
+impl<X: Num, const LEN: usize> vector<X, LEN> {
     /// Calculates the dot product of the [`vector`]s `self` and `other`.
     /// <https://en.wikipedia.org/wiki/Dot_product>
     pub fn dot_product(&self, other: &Self) -> X {
@@ -43,9 +47,7 @@ where [(); LEN]: Len<LEN>
     }
 }
 
-impl<X: Num, const LEN: usize> Vector<X, LEN>
-where [(); LEN]: Len<LEN>
-{
+impl<X: Num, const LEN: usize> Vector<X, LEN> {
     /// Adds the [`Vector`]s `self` and `rhs`.
     pub fn add_vec(mut self, rhs: &Self) -> Self {
         self.iter_elem_mut().zip(rhs.iter_elem()).for_each(|(l, r)| *l += *r);
@@ -53,29 +55,21 @@ where [(); LEN]: Len<LEN>
     }
 
     /// Calculates `self * other^T`
-    pub fn span_mat<const LEN2: usize>(&self, other: &vector<X, LEN2>) -> Matrix<X, LEN2, LEN>
-    where
-        [[(); LEN2]; LEN]: Len<{ LEN2 * LEN }>,
-        [(); LEN2]: Len<LEN2>,
-    {
-        let mut mat = Matrix::zeros();
+    pub fn span_mat<const LEN2: usize>(&self, other: &vector<X, LEN2>) -> Matrix<X, LEN2, LEN> {
+        let mut mat = Matrix::<X, LEN2, LEN>::new_uninit();
         for (row, &y) in self.iter_elem().enumerate() {
             for (col, &x) in other.iter_elem().enumerate() {
-                mat[row][col].set(x * y)
+                mat[row][col].0.write(x * y);
             }
         }
-        mat
+        unsafe { mem::transmute(mat) }
     }
 }
 
 pub fn span_mat<X: Num, const LEN: usize, const LEN2: usize>(
     s: &vector<X, LEN>,
     other: &vector<X, LEN2>,
-) -> matrix<X, LEN2, LEN>
-where
-    [(); LEN]: Len<LEN>,
-    [(); LEN2]: Len<LEN2>,
-{
+) -> matrix<X, LEN2, LEN> {
     let mut mat = matrix::new([[X::ZERO; LEN2]; LEN]);
     for (row, &y) in s.iter_elem().enumerate() {
         for (col, &x) in other.iter_elem().enumerate() {
@@ -85,9 +79,7 @@ where
     mat
 }
 
-impl<X: Num, const W: usize, const H: usize> matrix<X, W, H>
-where [(); W]: Len<W>
-{
+impl<X: Num, const W: usize, const H: usize> matrix<X, W, H> {
     /// Multiplies the [`matrix`] `self` by the [`vector`] `vec` and returns a newly allocated
     /// [`Vector`] containing the result.
     pub fn mul_vec(&self, vec: &vector<X, W>) -> Vector<X, H> {
@@ -101,8 +93,7 @@ where [(); W]: Len<W>
 
 impl<X: Num, const W: usize, const H: usize> Matrix<X, W, H> {
     /// Transposes the [`Matrix`].
-    pub fn transpose<const LEN: usize>(self) -> Matrix<X, H, W>
-    where [[(); H]; W]: Len<LEN> {
+    pub fn transpose(self) -> Matrix<X, H, W> {
         let mut transposed = Matrix::<X, H, W>::new_uninit(); // bench vs zeros
         for y in 0..H {
             for x in 0..W {
@@ -117,8 +108,8 @@ impl<X: Num, const LEN: usize> vector<X, LEN> {
     /// Transmutes the [`vector`] as a [`matrix`] with height equal to `1`.
     pub fn as_row_mat(&self) -> &matrix<X, LEN, 1>
     where
-        [(); LEN]: Len<LEN>,
-        [[(); LEN]; 1]: Len<LEN>,
+        [(); LEN]: Shape + Len<LEN>,
+        [[(); LEN]; 1]: Shape + Len<LEN>,
     {
         self.transmute_as()
     }
@@ -126,8 +117,8 @@ impl<X: Num, const LEN: usize> vector<X, LEN> {
     /// Transmutes the [`vector`] as a [`matrix`] with width equal to `1`.
     pub fn as_col_mat(&self) -> &matrix<X, 1, LEN>
     where
-        [(); LEN]: Len<LEN>,
-        [[(); 1]; LEN]: Len<LEN>,
+        [(); LEN]: Shape + Len<LEN>,
+        [[(); 1]; LEN]: Shape + Len<LEN>,
     {
         self.transmute_as()
     }

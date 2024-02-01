@@ -1,6 +1,6 @@
-use super::component::{Data, NNComponent, NNDisplay};
+use super::component::{Data, NNComponent};
 use crate::optimizer::Optimizer;
-use const_tensor::{Float, Len, Num, Shape, Tensor, TensorData};
+use const_tensor::{Float, Len, MultidimensionalOwned, Num, Shape, Tensor};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -24,11 +24,12 @@ impl<PREV> Sigmoid<PREV> {
 impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for Sigmoid<PREV>
 where
     X: Float,
-    S: Shape + Len<{ S::LEN }>,
+    S: Shape,
     NNIN: Shape,
     PREV: NNComponent<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
+    type In = S;
     type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     /// The data which is saved during `train_prop` and used in `backprop`.
     ///
@@ -72,8 +73,8 @@ where
         &mut self,
         grad: &Self::Grad,
         optimizer: &O,
-        mut opt_state: Self::OptState<O>,
-    ) -> Self::OptState<O> {
+        opt_state: &mut Self::OptState<O>,
+    ) {
         self.prev.optimize(grad, optimizer, opt_state)
     }
 
@@ -92,11 +93,11 @@ where
     }
 }
 
-impl<'a, PREV> fmt::Display for NNDisplay<'a, Sigmoid<PREV>>
-where NNDisplay<'a, PREV>: fmt::Display
+impl<'a, PREV> fmt::Display for Sigmoid<PREV>
+where PREV: fmt::Display
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", NNDisplay(&self.0.prev))?;
+        writeln!(f, "{}", &self.prev)?;
         write!(f, "Sigmoid")
     }
 }

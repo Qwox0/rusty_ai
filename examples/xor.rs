@@ -1,3 +1,5 @@
+#![allow(incomplete_features)]
+#![feature(generic_const_exprs)]
 #![feature(test)]
 #![feature(iter_array_chunks)]
 
@@ -5,11 +7,11 @@ use const_tensor::{Float, Num};
 use rand::Rng;
 use rand_distr::{Bernoulli, Distribution};
 use rusty_ai::{
-    data::PairList,
     loss_function::{LossFunction, SquaredError},
-    optimizer::{self, sgd::SGD_},
+    nn::NNComponent,
+    optimizer::{self, sgd::SGD},
     trainer::NNTrainer,
-    ActivationFn, BuildLayer, Initializer, NNBuilder, Norm,
+    Initializer, NNBuilder, NN,
 };
 use std::borrow::Borrow;
 
@@ -17,7 +19,7 @@ const LOSS_FUNCTION: SquaredError = SquaredError;
 #[derive(Debug)]
 struct XorLoss;
 
-impl<F: Float> LossFunction<F, 1> for XorLoss {
+impl<F: Float> LossFunction<F, [(); 1]> for XorLoss {
     type ExpectedOutput = bool;
 
     fn propagate(&self, output: &[F; 1], expected_output: impl Borrow<Self::ExpectedOutput>) -> F {
@@ -33,14 +35,17 @@ impl<F: Float> LossFunction<F, 1> for XorLoss {
     }
 }
 
-fn get_nn<F: Float>(hidden_neurons: usize) -> NNTrainer<F, 2, 1, XorLoss, SGD_<F>>
+fn get_nn<F: Float, const NEURONS: usize>()
+-> NNTrainer<F, [(); 2], [(); 1], XorLoss, SGD<F>, impl NNComponent<F, [(); 2], [(); 1]>>
 where rand_distr::StandardNormal: Distribution<F> {
-    NNBuilder::default()
+    NN::builder()
         .element_type::<F>()
-        .layer(hidden_neurons, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::ReLU)
-        .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::Sigmoid)
+        .default_rng()
+        .input_shape::<[(); 2]>()
+        .layer::<NEURONS>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .relu()
+        .layer::<1>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .relu()
         .build::<1>()
         .to_trainer()
         .loss_function(XorLoss)
@@ -65,7 +70,7 @@ fn main() {
     const TRAINING_DATA_COUNT: usize = 1000;
     const EPOCHS: usize = 1000;
 
-    let mut ai = get_nn::<f64>(HIDDEN_NEURONS);
+    let mut ai = get_nn::<f64, HIDDEN_NEURONS>();
 
     let mut rng = rand::thread_rng();
 
@@ -73,7 +78,7 @@ fn main() {
     let test_data = gen_data(&mut rng, 30);
 
     for epoch in 1..=EPOCHS {
-        ai.train(&training_data).execute();
+        ai.train_rayon(&training_data);
         training_data.shuffle_rng(&mut rng);
 
         if epoch % 100 == 0 {

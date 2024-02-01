@@ -1,6 +1,6 @@
-use super::component::{component_new, Data, NNComponent, NNDisplay};
-use crate::optimizer::Optimizer;
-use const_tensor::{Element, Len, Num, Shape, Tensor, TensorData};
+use super::component::{component_new, Data, NNComponent, NoTrainComponent};
+use crate::{derive_nn_component, optimizer::Optimizer};
+use const_tensor::{Element, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -25,11 +25,12 @@ component_new! { ReLU }
 impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for ReLU<PREV>
 where
     X: Num,
-    S: Shape + Len<{ S::LEN }>,
+    S: Shape,
     NNIN: Shape,
     PREV: NNComponent<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
+    type In = S;
     type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     /// The data which is saved during `train_prop` and used in `backprop`.
     ///
@@ -77,8 +78,8 @@ where
         &mut self,
         grad: &Self::Grad,
         optimizer: &O,
-        mut opt_state: Self::OptState<O>,
-    ) -> Self::OptState<O> {
+        opt_state: &mut Self::OptState<O>,
+    ) {
         self.prev.optimize(grad, optimizer, opt_state)
     }
 
@@ -98,11 +99,11 @@ where
     }
 }
 
-impl<'a, PREV> fmt::Display for NNDisplay<'a, ReLU<PREV>>
-where NNDisplay<'a, PREV>: fmt::Display
+impl<PREV> fmt::Display for ReLU<PREV>
+where PREV: fmt::Display
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", NNDisplay(&self.0.prev))?;
+        writeln!(f, "{}", &self.prev)?;
         write!(f, "ReLU")
     }
 }
@@ -118,11 +119,12 @@ component_new! { LeakyReLU<X, PREV> -> leak_rate: X }
 impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for LeakyReLU<X, PREV>
 where
     X: Num,
-    S: Shape + Len<{ S::LEN }>,
+    S: Shape,
     NNIN: Shape,
     PREV: NNComponent<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
+    type In = S;
     type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     /// The data which is saved during `train_prop` and used in `backprop`.
     ///
@@ -158,8 +160,8 @@ where
         &mut self,
         grad: &Self::Grad,
         optimizer: &O,
-        mut opt_state: Self::OptState<O>,
-    ) -> Self::OptState<O> {
+        opt_state: &mut Self::OptState<O>,
+    ) {
         self.prev.optimize(grad, optimizer, opt_state)
     }
 
@@ -179,11 +181,11 @@ where
     }
 }
 
-impl<'a, X: Element, PREV> fmt::Display for NNDisplay<'a, LeakyReLU<X, PREV>>
-where NNDisplay<'a, PREV>: fmt::Display
+impl<X: Element, PREV> fmt::Display for LeakyReLU<X, PREV>
+where PREV: fmt::Display
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", NNDisplay(&self.0.prev))?;
-        write!(f, "LeakyReLU (leak_rate: {:?})", self.0.leak_rate)
+        writeln!(f, "{}", &self.prev)?;
+        write!(f, "LeakyReLU (leak_rate: {:?})", self.leak_rate)
     }
 }

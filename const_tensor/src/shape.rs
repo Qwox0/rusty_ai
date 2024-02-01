@@ -1,31 +1,7 @@
-use crate::{shape_data::ShapeData, Element};
+/*
+use crate::{arr_wrapper::Arr, shape_data::ShapeData, Element};
 use core::fmt;
-use serde::{Deserialize, Serialize};
 use std::mem;
-
-/// This wrapper implements [`Default`], [`Serialize`] and [`Deserialize`] for any length `N`. This
-/// means that implementations for `Arr<T, 0>` might be overly restrictive.
-#[derive(Clone, Copy, Serialize, Deserialize)]
-#[repr(transparent)]
-#[serde(transparent)]
-pub struct Arr<T, const N: usize> {
-    #[serde(with = "serde_arrays")]
-    #[serde(bound(serialize = "T: Serialize"))]
-    #[serde(bound(deserialize = "T: Deserialize<'de>"))]
-    arr: [T; N],
-}
-
-impl<T: fmt::Debug, const N: usize> fmt::Debug for Arr<T, N> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.arr.fmt(f)
-    }
-}
-
-impl<T: Default + Copy, const N: usize> Default for Arr<T, N> {
-    fn default() -> Self {
-        Self { arr: [T::default(); N] }
-    }
-}
 
 /// The shape/dimensions of a tensor.
 pub unsafe trait Shape: Copy + fmt::Debug + Send + Sync + 'static {
@@ -124,3 +100,4 @@ unsafe impl<SUB: Shape, const N: usize> Shape for [SUB; N] {
 pub unsafe trait Len<const LEN: usize> {}
 
 unsafe impl<S: Shape> Len<{ S::LEN }> for S {}
+*/

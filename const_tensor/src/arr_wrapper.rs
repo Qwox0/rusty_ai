@@ -1,4 +1,3 @@
-use crate::{Element, MultidimArr};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use std::mem;
@@ -27,6 +26,7 @@ impl<T: Default + Copy, const N: usize> Default for Arr<T, N> {
     }
 }
 
+/*
 impl<X, SUB, const N: usize> MultidimArr for Arr<SUB, N>
 where
     X: Element,
@@ -105,3 +105,4 @@ impl<X: Element, T: MultidimArr<Element = X> + WrapArr<Element = X>, const N: us
         unsafe { mem::transmute_copy(&data) }
     }
 }
+*/

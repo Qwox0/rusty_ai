@@ -1,6 +1,9 @@
 //! # Loss function module
 
-use const_tensor::{tensor, vector, Element, Float, Len, Num, Shape, Tensor, TensorData, Vector};
+use const_tensor::{
+    tensor, vector, Element, Float, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor,
+    Vector,
+};
 use derive_more::Display;
 
 /// A trait for calculating the loss from an output of the neural network and the expected output.
@@ -12,7 +15,7 @@ pub trait LossFunction<X: Element, S: Shape>: Send + Sync + 'static {
     /// The type of the expected output used by the loss function.
     ///
     /// For a non default example, see [`NLLLoss`].
-    type ExpectedOutput = tensor<X, S>;
+    type ExpectedOutput = Tensor<X, S>;
 
     /// calculates the loss from an output of the neural network and the expected output.
     fn propagate(&self, output: &tensor<X, S>, expected_output: &Self::ExpectedOutput) -> X;
@@ -48,14 +51,12 @@ pub trait LossFunction<X: Element, S: Shape>: Send + Sync + 'static {
 #[derive(Debug, Clone, Copy, Default, Display)]
 pub struct SquaredError;
 
-impl<X: Num, S: Shape> LossFunction<X, S> for SquaredError
-where S: Len<{ S::LEN }>
-{
-    fn propagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> X {
+impl<X: Num, S: Shape> LossFunction<X, S> for SquaredError {
+    fn propagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> X {
         differences(output, expected_output).map(|err| err * err).sum()
     }
 
-    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
+    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> Tensor<X, S> {
         Tensor::from_iter(differences(output, expected_output).map(|x| x * X::lit(2)))
     }
 }
@@ -67,14 +68,12 @@ where S: Len<{ S::LEN }>
 #[derive(Debug, Clone, Copy, Default, Display)]
 pub struct HalfSquaredError;
 
-impl<X: Float, S: Shape> LossFunction<X, S> for HalfSquaredError
-where S: Len<{ S::LEN }>
-{
-    fn propagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> X {
+impl<X: Float, S: Shape> LossFunction<X, S> for HalfSquaredError {
+    fn propagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> X {
         SquaredError.propagate(output, expected_output) * X::f_lit(0.5)
     }
 
-    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
+    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> Tensor<X, S> {
         Tensor::from_iter(differences(output, expected_output))
     }
 }
@@ -86,14 +85,12 @@ where S: Len<{ S::LEN }>
 #[derive(Debug, Clone, Copy, Default, Display)]
 pub struct MeanSquaredError;
 
-impl<X: Num, S: Shape> LossFunction<X, S> for MeanSquaredError
-where S: Len<{ S::LEN }>
-{
-    fn propagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> X {
+impl<X: Num, S: Shape> LossFunction<X, S> for MeanSquaredError {
+    fn propagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> X {
         SquaredError.propagate(output, expected_output) / S::LEN.cast()
     }
 
-    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
+    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> Tensor<X, S> {
         Tensor::from_iter(
             differences(output, expected_output).map(|x| x * X::lit(2) / S::LEN.cast()),
         )
@@ -171,10 +168,7 @@ impl<X: Float, const N: usize> LossFunction<X, [(); N]> for NLLLoss {
 fn differences<'a, X: Num, S: Shape>(
     output: &'a tensor<X, S>,
     expected_output: &'a tensor<X, S>,
-) -> impl Iterator<Item = X> + 'a
-where
-    S: Len<{ S::LEN }>,
-{
+) -> impl Iterator<Item = X> + 'a {
     output
         .iter_elem()
         .zip(expected_output.iter_elem())

@@ -1,7 +1,11 @@
 #![allow(incomplete_features)]
 #![feature(generic_const_exprs)]
 
-use rusty_ai::{loss_function::SquaredError, optimizer::sgd::SGD, Initializer, NN};
+use const_tensor::Tensor;
+use rand_distr::{Distribution, Uniform};
+use rusty_ai::{
+    loss_function::SquaredError, nn::Pair, optimizer::sgd::SGD, Initializer, NNBuilder, Norm, NN
+};
 use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
 
 fn get_out_js_path() -> &'static str {
@@ -24,7 +28,7 @@ pub fn main() {
         .open(out_js_path)
         .expect("could open file");
 
-    let mut ai = NN::builder()
+    let mut ai = NNBuilder::default()
         .double_precision()
         .default_rng()
         .input_shape::<[(); 1]>()
@@ -46,8 +50,12 @@ pub fn main() {
     const EPOCHS: usize = 1000;
     const DATA_RANGE: Range<f64> = -10.0..10.0;
 
-    let training_data =
-        DataBuilder::uniform(DATA_RANGE).build::<1>(1000).gen_pairs(|[x]| [x.sin()]);
+    let training_data = Uniform::from(DATA_RANGE)
+        .sample_iter(rand::thread_rng())
+        .take(1000)
+        //.map(|x| (Tensor::new([x]), Tensor::new([x.sin()])));
+        .map(|x| Pair::new());
+    //DataBuilder::uniform(DATA_RANGE).build::<1>(1000).gen_pairs(|[x]| [x.sin()]);
     let test_data = DataBuilder::uniform(DATA_RANGE).build::<1>(30).gen_pairs(|[x]| [x.sin()]);
     let (x, y): (Vec<_>, Vec<_>) = test_data
         .iter()
