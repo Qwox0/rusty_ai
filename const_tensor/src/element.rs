@@ -10,7 +10,10 @@ use std::{
 };
 
 /// Represents a single value in a multidimensional object. Like a 0D Tensor.
-pub trait Element: Copy + Default + PartialEq + fmt::Debug + Send + Sync + 'static {}
+pub trait Element:
+    Copy + Default + PartialEq + fmt::Debug + Serialize + Send + Sync + 'static
+{
+}
 
 macro_rules! impl_element {
     ($($ty:ty)+) => {
@@ -32,6 +35,7 @@ impl_element! {
 /// An [`Element`] which also implements some numeric operations.
 pub trait Num:
     Element
+    + PartialOrd
     + num::ToPrimitive
     + num::FromPrimitive
     + num::Num

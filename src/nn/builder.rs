@@ -1,10 +1,14 @@
 //! # Neural network builder module
 
 use super::{
-    flatten::Flatten, linear::Linear, relu::ReLU, LeakyReLU, NNComponent, NNHead, Sigmoid, NN,
+    flatten::Flatten,
+    linear::Linear,
+    relu::ReLU,
+    softmax::{LogSoftmax, Softmax},
+    LeakyReLU, NNComponent, NNHead, Sigmoid, NN,
 };
 use crate::Initializer;
-use const_tensor::{matrix, vector, Element, Float, Len, Matrix, Shape, Tensor, Vector};
+use const_tensor::{Element, Float, Matrix, Shape, Vector};
 use half::{bf16, f16};
 use markers::*;
 use rand::{
@@ -138,6 +142,18 @@ where
     pub fn sigmoid(self) -> NNBuilder<X, NNIN, OUT, Sigmoid<PREV>, RNG>
     where Sigmoid<PREV>: NNComponent<X, NNIN, OUT> {
         self.add_component(Sigmoid::new)
+    }
+
+    /// Adds a new [`Softmax`] component to the neural network.
+    pub fn softmax(self) -> NNBuilder<X, NNIN, OUT, Softmax<PREV>, RNG>
+    where Softmax<PREV>: NNComponent<X, NNIN, OUT> {
+        self.add_component(Softmax::new)
+    }
+
+    /// Adds a new [`LogSoftmax`] component to the neural network.
+    pub fn log_softmax(self) -> NNBuilder<X, NNIN, OUT, LogSoftmax<PREV>, RNG>
+    where LogSoftmax<PREV>: NNComponent<X, NNIN, OUT> {
+        self.add_component(LogSoftmax::new)
     }
 
     /// Adds a new [`Flatten`] component to the neural network.

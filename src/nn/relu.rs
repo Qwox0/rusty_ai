@@ -11,7 +11,7 @@ pub fn relu<X: Num>(x: X) -> X {
 
 #[inline]
 pub fn leaky_relu<X: Num>(x: X, leak_rate: X) -> X {
-    if x.is_positive() { x } else { leak_rate }
+    if x.is_positive() { x } else { leak_rate * x }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,7 +47,7 @@ where
     fn train_prop(&self, input: Tensor<X, NNIN>) -> (Tensor<X, S>, Self::StoredData) {
         let (input, prev_data) = self.prev.train_prop(input);
         let out = input.map_inplace(relu);
-        let data = out.map_clone(|x| !x.is_zero());
+        let data = out.map_clone(|x| x > X::ZERO);
         (out, Data { data, prev: prev_data })
     }
 
@@ -141,7 +141,7 @@ where
     fn train_prop(&self, input: Tensor<X, NNIN>) -> (Tensor<X, S>, Self::StoredData) {
         let (input, prev_data) = self.prev.train_prop(input);
         let out = input.map_inplace(|x| leaky_relu(x, self.leak_rate));
-        let data = out.map_clone(|x| !x.is_zero());
+        let data = out.map_clone(|x| x > X::ZERO);
         (out, Data { data, prev: prev_data })
     }
 

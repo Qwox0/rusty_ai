@@ -5,6 +5,7 @@ use const_tensor::{
     Vector,
 };
 use derive_more::Display;
+use std::borrow::Borrow;
 
 /// A trait for calculating the loss from an output of the neural network and the expected output.
 ///
@@ -15,7 +16,7 @@ pub trait LossFunction<X: Element, S: Shape>: Send + Sync + 'static {
     /// The type of the expected output used by the loss function.
     ///
     /// For a non default example, see [`NLLLoss`].
-    type ExpectedOutput = Tensor<X, S>;
+    type ExpectedOutput = tensor<X, S>;
 
     /// calculates the loss from an output of the neural network and the expected output.
     fn propagate(&self, output: &tensor<X, S>, expected_output: &Self::ExpectedOutput) -> X;
@@ -25,7 +26,7 @@ pub trait LossFunction<X: Element, S: Shape>: Send + Sync + 'static {
     fn propagate(
         &self,
         output: &impl PropResultT<N>,
-        expected_output: impl Borrow<Self::ExpectedOutput>,
+        expected_output: Self::ExpectedOutput,
     ) -> X {
         self.propagate_arr(&output.get_nn_output(), expected_output)
     }
@@ -52,12 +53,12 @@ pub trait LossFunction<X: Element, S: Shape>: Send + Sync + 'static {
 pub struct SquaredError;
 
 impl<X: Num, S: Shape> LossFunction<X, S> for SquaredError {
-    fn propagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> X {
-        differences(output, expected_output).map(|err| err * err).sum()
+    fn propagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> X {
+        differences(output, expected_output.borrow()).map(|err| err * err).sum()
     }
 
-    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> Tensor<X, S> {
-        Tensor::from_iter(differences(output, expected_output).map(|x| x * X::lit(2)))
+    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
+        Tensor::from_iter(differences(output, expected_output.borrow()).map(|x| x * X::lit(2)))
     }
 }
 
@@ -69,12 +70,12 @@ impl<X: Num, S: Shape> LossFunction<X, S> for SquaredError {
 pub struct HalfSquaredError;
 
 impl<X: Float, S: Shape> LossFunction<X, S> for HalfSquaredError {
-    fn propagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> X {
+    fn propagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> X {
         SquaredError.propagate(output, expected_output) * X::f_lit(0.5)
     }
 
-    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> Tensor<X, S> {
-        Tensor::from_iter(differences(output, expected_output))
+    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
+        Tensor::from_iter(differences(output, expected_output.borrow()))
     }
 }
 
@@ -86,13 +87,13 @@ impl<X: Float, S: Shape> LossFunction<X, S> for HalfSquaredError {
 pub struct MeanSquaredError;
 
 impl<X: Num, S: Shape> LossFunction<X, S> for MeanSquaredError {
-    fn propagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> X {
+    fn propagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> X {
         SquaredError.propagate(output, expected_output) / S::LEN.cast()
     }
 
-    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &Tensor<X, S>) -> Tensor<X, S> {
+    fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
         Tensor::from_iter(
-            differences(output, expected_output).map(|x| x * X::lit(2) / S::LEN.cast()),
+            differences(output, expected_output.borrow()).map(|x| x * X::lit(2) / S::LEN.cast()),
         )
     }
 }
@@ -129,8 +130,9 @@ impl<X: Float, const N: usize> LossFunction<X, [(); N]> for NLLLoss {
     ///
     /// Panics if `expected_output` is not a valid variant (is not in the range `0..IN`).
     fn propagate(&self, output: &vector<X, N>, expected_output: &Self::ExpectedOutput) -> X {
-        assert!((0..N).contains(expected_output));
-        output[*expected_output].val().neg()
+        let idx = *expected_output.borrow();
+        assert!((0..N).contains(&idx));
+        output[idx].val().neg()
     }
 
     fn backpropagate(
@@ -138,8 +140,9 @@ impl<X: Float, const N: usize> LossFunction<X, [(); N]> for NLLLoss {
         _output: &vector<X, N>,
         expected_output: &Self::ExpectedOutput,
     ) -> Vector<X, N> {
+        let idx = *expected_output.borrow();
         let mut gradient = Vector::new([X::zero(); N]);
-        gradient[*expected_output].set(-X::ONE);
+        gradient[idx].set(-X::ONE);
         gradient
     }
 

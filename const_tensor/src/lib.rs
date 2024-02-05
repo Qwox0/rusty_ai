@@ -104,6 +104,16 @@ impl<X: Num, const W: usize, const H: usize> Matrix<X, W, H> {
     }
 }
 
+impl<X: Num, const N: usize> Matrix<X, N, N> {
+    pub fn identity() -> Matrix<X, N, N> {
+        let mut id = Matrix::<X, N, N>::zeros();
+        for idx in 0..N {
+            id[idx][idx].0 = X::ONE;
+        }
+        unsafe { mem::transmute(id) }
+    }
+}
+
 impl<X: Num, const LEN: usize> vector<X, LEN> {
     /// Transmutes the [`vector`] as a [`matrix`] with height equal to `1`.
     pub fn as_row_mat(&self) -> &matrix<X, LEN, 1>

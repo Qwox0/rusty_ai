@@ -837,6 +837,7 @@ pub trait MultidimensionalOwned<X: Element>: Sized + DerefMut<Target = Self::Dat
         for x in t.iter_elem_mut() {
             x.write(val);
         }
+        let t = mem::ManuallyDrop::new(t);
         unsafe { mem::transmute_copy(&t) }
     }
 

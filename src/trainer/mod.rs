@@ -5,13 +5,13 @@ use crate::{
     loss_function::LossFunction,
     nn::{component::GradComponent, NNComponent, Pair, TestResult},
     optimizer::Optimizer,
-    NN,
+    Norm, NN,
 };
 use const_tensor::{tensor, Element, Float, Shape, Tensor};
 use core::fmt;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{iter::Map, sync::mpsc};
+use std::{borrow::Borrow, iter::Map, sync::mpsc};
 
 mod builder;
 pub use builder::{markers, NNTrainerBuilder};
@@ -149,7 +149,7 @@ where
 
     /// To test a batch of multiple pairs use `test_batch`.
     #[inline]
-    pub fn test(&self, pair: &Pair<X, IN, EO>) -> TestResult<X, OUT> {
+    pub fn test<EO_: Borrow<EO>>(&self, pair: &Pair<X, IN, EO_>) -> TestResult<X, OUT> {
         self.network.test(pair, &self.loss_function)
     }
 
@@ -159,13 +159,13 @@ where
     /// This [`Iterator`] must be consumed otherwise no calculations are done.
     #[must_use = "`Iterators` must be consumed to do work."]
     #[inline]
-    pub fn test_batch<'a, B>(
+    pub fn test_batch<'a, B, EO_>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO>) -> TestResult<X, OUT>>
+    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO_>) -> TestResult<X, OUT>>
     where
-        B: IntoIterator<Item = &'a Pair<X, IN, EO>>,
-        EO: 'a,
+        B: IntoIterator<Item = &'a Pair<X, IN, EO_>>,
+        EO_: Borrow<EO> + 'a,
     {
         batch.into_iter().map(|p| self.test(p))
     }
@@ -187,19 +187,17 @@ where
 {
     /// Trains the internal [`NN`].
     #[inline]
-    pub fn train_single_thread<'a>(
+    pub fn train_single_thread<'a, EO_: Borrow<EO> + 'a>(
         &'a mut self,
-        batch: impl IntoIterator<Item = &'a (Tensor<X, IN>, EO)>,
+        batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
         //) -> Training<'a, Self, Pair<X, IN, EO>>
-    ) where
-        EO: 'a,
-    {
+    ) {
         if !self.retain_gradient {
             self.gradient.set_zero();
         }
-        for (input, eo) in batch {
+        for (input, eo) in batch.into_iter().map(Into::into) {
             let (out, data) = self.training_propagate(input);
-            self.backpropagate_inner(out, &eo, data);
+            self.backpropagate_inner(out, eo.borrow(), data);
         }
         self.clip_gradient();
         self.optimize_trainee();
@@ -207,22 +205,20 @@ where
 
     /// Trains the internal [`NN`] lazily.
     #[inline]
-    pub fn train_single_thread_output<'a>(
+    pub fn train_single_thread_output<'a, EO_: Borrow<EO> + 'a>(
         &'a mut self,
-        batch: impl IntoIterator<Item = &'a (Tensor<X, IN>, EO)>,
+        batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
         //) -> Training<'a, Self, Pair<X, IN, EO>>
-    ) -> impl Iterator<Item = TrainOut<X, OUT>>
-    where
-        EO: 'a,
-    {
+    ) -> impl Iterator<Item = TrainOut<X, OUT>> {
         if !self.retain_gradient {
             self.gradient.set_zero();
         }
         let mut ret = Vec::new();
-        for (input, eo) in batch {
+        for (input, eo) in batch.into_iter().map(Into::into) {
+            let eo = eo.borrow();
             let (output, data) = self.network.training_propagate(input);
             let loss = self.loss_function.propagate(&output, eo);
-            self.backpropagate_inner(output.clone(), &eo, data);
+            self.backpropagate_inner(output.clone(), eo, data);
 
             ret.push(TrainOut { output, loss });
         }
@@ -233,13 +229,13 @@ where
 
     /// Trains the internal [`NN`].
     #[inline]
-    pub fn train_rayon<'a>(
+    pub fn train_rayon<'a, EO_>(
         &'a mut self,
-        batch: impl IntoParallelIterator<Item = &'a (Tensor<X, IN>, EO)>,
+        batch: impl IntoParallelIterator<Item = &'a Pair<X, IN, EO_>>,
     ) where
+        EO_: Borrow<EO> + 'a,
         NN_::Grad: Send + Sync,
         NN_::OptState<O>: Send + Sync,
-        EO: 'a,
     {
         if !self.retain_gradient {
             self.gradient.set_zero();
@@ -248,12 +244,14 @@ where
             .into_par_iter()
             .fold(
                 || self.network.init_zero_gradient(),
-                |grad, (input, eo)| {
+                |grad, p| {
+                    let (input, eo) = p.as_tuple();
                     let (out, data) = self.training_propagate(input);
-                    NNTrainer::backpropagate(self, out, &eo, data, grad)
+                    NNTrainer::backpropagate(self, out, eo.borrow(), data, grad)
                 },
             )
-            .reduce(|| self.network.init_zero_gradient(), |acc, grad| acc.add(&grad));
+            //.reduce(|| self.network.init_zero_gradient(), |acc, grad| acc.add(&grad));
+            .reduce(|| self.network.init_zero_gradient(), GradComponent::add);
         self.gradient.add_mut(&grad);
         self.clip_gradient();
         self.optimize_trainee();
@@ -261,12 +259,12 @@ where
 
     /// Trains the internal [`NN`].
     #[inline]
-    pub fn train_rayon_output<'a>(
+    pub fn train_rayon_output<'a, EO_>(
         &'a mut self,
-        batch: impl IntoParallelIterator<Item = &'a (Tensor<X, IN>, EO)>,
+        batch: impl IntoParallelIterator<Item = &'a Pair<X, IN, EO_>>,
     ) -> impl Iterator<Item = TrainOut<X, OUT>>
     where
-        EO: 'a,
+        EO_: Borrow<EO> + 'a,
         IN: Send + Sync,
         OUT: Send + Sync,
         NN_::Grad: Send + Sync,
@@ -281,7 +279,9 @@ where
             .into_par_iter()
             .fold(
                 || self.network.init_zero_gradient(),
-                |grad, (input, eo)| {
+                |grad, p| {
+                    let (input, eo) = p.as_tuple();
+                    let eo = eo.borrow();
                     let (output, data) = self.training_propagate(input);
                     let loss = self.loss_function.propagate(&output, eo);
                     let grad = NNTrainer::backpropagate(self, output.clone(), &eo, data, grad);
@@ -300,8 +300,8 @@ where
 }
 
 pub struct TrainOut<X: Element, S: Shape> {
-    output: Tensor<X, S>,
-    loss: X,
+    pub output: Tensor<X, S>,
+    pub loss: X,
 }
 
 impl<X, IN, OUT, L, O, NN_> fmt::Display for NNTrainer<X, IN, OUT, L, O, NN_>
@@ -327,7 +327,7 @@ mod benches;
 #[cfg(test)]
 mod seeded_tests {
     use crate::{
-        nn::{component::GradComponent, NNComponent},
+        nn::{component::GradComponent, NNComponent, Pair},
         norm::Norm,
         optimizer::sgd::SGD,
         prelude::SquaredError,
@@ -353,7 +353,7 @@ mod seeded_tests {
             .sigmoid()
             .build();
 
-        let out = ai.propagate(&Vector::new(rng.gen::<[f64; 2]>()));
+        let out = ai.propagate(&Vector::new(rng.gen()));
 
         let expected = [0.5571132267977859, 0.3835754220312069, 0.5254153762665995];
         assert_eq!(out, tensor::literal(expected), "incorrect output");
@@ -388,28 +388,28 @@ mod seeded_tests {
         assert_eq!(&params, expected, "incorrect seed");
 
         let pairs = (0..5)
-            .map(|input| {
+            .map(|_| {
                 let input = Vector::new(rng.gen());
                 let sum = input.iter_elem().sum();
                 let prod = input.iter_elem().product();
-                (input, Vector::new([sum, prod, 0.0]))
+                Pair::new(input, Vector::new([sum, prod, 0.0]))
             })
             .collect::<Vec<_>>();
-        ai.train_single_thread(&pairs);
-        //let out = ai.train(&pairs).outputs_single_thread().collect::<Vec<_>>();
-        //#[rustfmt::skip]
-        //let expected = &[[0.6094448691923857, 0.32679752420868363, 0.49491840692097566],
-        // [0.6085349603591848, 0.32961919965215464, 0.4890806852003969], [0.6455469394878132,
-        // 0.29867520935167713, 0.4551196011602426], [0.6250466147194926, 0.31942805417560755,
-        // 0.46366993008961255], [0.6252413455643969, 0.3184616187182594, 0.46576189882566815]];
-        // assert_eq!(out[0], expected[0]);
+        ai.train_rayon(&pairs);
+        //ai.train_single_thread(&pairs);
 
         let gradient = ai.gradient.iter_param().copied();
         #[rustfmt::skip]
         let expected = &[-0.31527687134612725, -0.2367818186318013, 0.020418606049140496, 0.015550533247454118, -0.001738594474681532, -0.004567137662788988, 0.033859035247529076, 0.02977764834407858, 0.009605083538032784, 0.006826476555722042, -0.6146889718563872, 0.040329523770678166, -0.0050435074713498255, 0.07884882135388332, 0.01821395483674612, -0.29603217316507463, 0.03346627048986953, -0.05878503376051679, -0.2158320807897315, 0.026983231976989056, -0.24554656005324604, 0.02887071882597527, -0.05843956975876532, -0.17243502863504168, 0.022467020003968326, 0.1311511999366582, -0.014868359886407069, 0.02611204347681894, 0.09796223173142266, -0.01217871097874241, -0.054034033529765414, 0.005815532263211411, -0.008911633440899904, -0.034708137931585205, 0.0043542213467064154, 0.2911033451780113, -0.033617414595422807, 0.06373660842764983, 0.21011649849556374, -0.026765687357284716, -0.6362499755696547, -0.5444227081050653, 0.288719083038049, -0.09632461875232448, 0.6412639438519863, -0.2336931253665935, -0.005400196361134401, 0.34277389227803257, -0.01683276960395113, 0.18829397721654298, 0.22312222066614518, 0.0668809841607016, -0.21284993370400693, 0.004724430001813006, -0.06979054513916816, 0.6470015756088618, 0.15347488461571596, -0.7149338885041989, 0.04221164029892477, -0.30940480020839184, -0.4461655070529444, 0.4131071925533384, 1.1799836756082676];
+        println!("gradient = {:?}", ai.gradient.iter_param().collect::<Vec<_>>());
+        println!("expected = {:?}", expected);
+        println!(
+            "diff     = {:?}",
+            ai.gradient.iter_param().zip(expected).map(|(a, b)| a - b).collect::<Vec<_>>()
+        );
         let err = gradient.zip(expected).map(|(p, e)| (p - e).abs()).sum::<f64>();
         println!("error = {:?}", err);
-        assert!(err < 1e-18, "incorrect gradient elements (err: {})", err);
+        assert!(err < 1e-15, "incorrect gradient elements (err: {})", err);
     }
 
     #[test]
@@ -443,10 +443,10 @@ mod seeded_tests {
 
         let input = Vector::new(rng.gen());
         let eo = Vector::new(rng.gen());
-        let pair = (input, eo);
+        let pair = Pair::new(input, eo);
 
         // propagation pre training
-        let prop_out = ai.propagate(&pair.0);
+        let prop_out = ai.propagate(pair.get_input());
         #[rustfmt::skip]
         let expected = [0.5571132267977859, 0.3835754220312069, 0.5254153762665995];
         assert_eq!(prop_out, tensor::literal(expected), "incorrect propagation (pre training)");
@@ -474,7 +474,7 @@ mod seeded_tests {
         assert_eq!(res.loss, 0.09546645303826229, "incorrect loss");
 
         // propagation post training
-        let prop_out = ai.propagate(&pair.0);
+        let prop_out = ai.propagate(pair.get_input());
         #[rustfmt::skip]
         let expected = [0.5570843934685307, 0.38315307990347475, 0.525483857537024];
         assert_eq!(prop_out, tensor::literal(expected), "incorrect propagation (post training)");

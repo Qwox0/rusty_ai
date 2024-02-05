@@ -22,18 +22,18 @@ pub enum Norm {
 
 impl Norm {
     /// Calculates the Norm of type `self` for the `elements`.
-    pub fn calculate<F: Float>(self, elements: impl IntoIterator<Item = F>) -> F {
+    pub fn calculate<X: Float>(self, elements: impl IntoIterator<Item = X>) -> X {
         let elements = elements.into_iter();
         match self {
-            Norm::Infinity => elements.map(F::abs).reduce(F::max).unwrap_or(F::zero()),
-            Norm::One => elements.map(F::abs).sum(),
-            Norm::Two => elements.map(|x| x * x).sum::<F>().sqrt(),
+            Norm::Infinity => elements.map(X::abs).reduce(X::max).unwrap_or(X::zero()),
+            Norm::One => elements.map(X::abs).sum(),
+            Norm::Two => elements.map(|x| x * x).sum::<X>().sqrt(),
             Norm::Integer(i) => {
-                elements.map(F::abs).map(|x| x.powi(i)).sum::<F>().powf(i.cast::<F>().recip())
+                elements.map(X::abs).map(|x| x.powi(i)).sum::<X>().powf(i.cast::<X>().recip())
             },
             Norm::Float(f) => {
                 let f = f.cast();
-                elements.map(F::abs).map(|x| x.powf(f)).sum::<F>().powf(f.recip())
+                elements.map(X::abs).map(|x| x.powf(f)).sum::<X>().powf(f.recip())
             },
         }
     }

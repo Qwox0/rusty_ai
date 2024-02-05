@@ -11,6 +11,7 @@ use const_tensor::{tensor, Element, MultidimArr, Shape, Tensor};
 use core::fmt;
 use serde::Serialize;
 use std::{
+    borrow::Borrow,
     fmt::{Debug, Display},
     iter::Map,
 };
@@ -106,12 +107,12 @@ pub trait NN<X: Element, IN: Shape, OUT: Shape>: NNComponent<X, IN, OUT> + Seria
     /// Tests the neural network.
     fn test<L: LossFunction<X, OUT>>(
         &self,
-        pair: &Pair<X, IN, L::ExpectedOutput>,
+        pair: &Pair<X, IN, impl Borrow<L::ExpectedOutput>>,
         loss_function: &L,
     ) -> TestResult<X, OUT> {
         let (input, expected_output) = pair.as_tuple();
         let out = self.propagate(input);
-        let loss = loss_function.propagate(&out, expected_output);
+        let loss = loss_function.propagate(&out, expected_output.borrow());
         TestResult::new(out, loss)
     }
 
@@ -129,7 +130,8 @@ pub trait NN<X: Element, IN: Shape, OUT: Shape>: NNComponent<X, IN, OUT> + Seria
     ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO>) -> TestResult<X, OUT>>
     where
         B: IntoIterator<Item = &'a Pair<X, IN, EO>>,
-        L: LossFunction<X, OUT, ExpectedOutput = EO>,
+        L: LossFunction<X, OUT>,
+        EO: Borrow<L::ExpectedOutput>,
     {
         batch.into_iter().map(|p| self.test(p, loss_fn))
     }
@@ -149,6 +151,7 @@ impl<X: Element, IN: Shape, OUT: Shape, C: NNComponent<X, IN, OUT> + Serialize> 
 {
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct Pair<X: Element, IN: Shape, EO> {
     input: Tensor<X, IN>,
     expected_output: EO,
@@ -156,7 +159,7 @@ pub struct Pair<X: Element, IN: Shape, EO> {
 
 impl<X: Element, IN: Shape, EO> Pair<X, IN, EO> {
     pub fn new(input: Tensor<X, IN>, expected_output: EO) -> Self {
-        Self { input, expected_output }
+        Self { input: input.into(), expected_output: expected_output.into() }
     }
 
     pub fn get_input(&self) -> &tensor<X, IN> {
@@ -182,6 +185,19 @@ impl<X: Element, IN: Shape, EO> From<(Tensor<X, IN>, EO)> for Pair<X, IN, EO> {
     }
 }
 
+impl<X: Element, IN: Shape, EO> From<Pair<X, IN, EO>> for (Tensor<X, IN>, EO) {
+    fn from(pair: Pair<X, IN, EO>) -> Self {
+        pair.into_tuple()
+    }
+}
+
+impl<'a, X: Element, IN: Shape, EO> From<&'a Pair<X, IN, EO>> for (&'a tensor<X, IN>, &'a EO) {
+    fn from(pair: &'a Pair<X, IN, EO>) -> Self {
+        pair.as_tuple()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct TestResult<X: Element, OUT: Shape> {
     output: Tensor<X, OUT>,
     loss: X,
@@ -198,5 +214,15 @@ impl<X: Element, OUT: Shape> TestResult<X, OUT> {
 
     pub fn get_loss(&self) -> X {
         self.loss
+    }
+
+    pub fn into_tuple(self) -> (Tensor<X, OUT>, X) {
+        (self.output, self.loss)
+    }
+}
+
+impl<X: Element, OUT: Shape> From<TestResult<X, OUT>> for (Tensor<X, OUT>, X) {
+    fn from(res: TestResult<X, OUT>) -> Self {
+        res.into_tuple()
     }
 }

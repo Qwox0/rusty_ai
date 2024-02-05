@@ -4,6 +4,7 @@ use const_tensor::Tensor;
 use const_tensor::{Element, Shape};
 use core::fmt;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 
 /// A trait for the components of a neural network.
 ///
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// `NNIN`: input of the first component. should be a [`Tensor`].
 /// `OUT`: out of this component. should be a [`Tensor`].
 pub trait NNComponent<X: Element, NNIN: Shape, OUT: Shape>:
-    Sized + fmt::Debug + fmt::Display + PartialEq + Send + Sync + 'static
+    Sized + fmt::Debug + fmt::Display + PartialEq + Serialize + Send + Sync + 'static
 {
     /// Gradient component
     type Grad: GradComponent<X>;
@@ -23,7 +24,7 @@ pub trait NNComponent<X: Element, NNIN: Shape, OUT: Shape>:
     type In: Shape;
 
     /// not the best implementation but has to work for now.
-    type OptState<O: Optimizer<X>>;
+    type OptState<O: Optimizer<X>>: Sized + Send + Sync + 'static;
 
     /// The data which is saved during `train_prop` and used in `backprop`.
     type StoredData: TrainData;
@@ -97,27 +98,27 @@ impl fmt::Display for NNHead {
     }
 }
 
-pub trait GradComponent<X: Element>: Sized {
+pub trait GradComponent<X: Element>: Sized + Send + Sync + 'static {
     fn set_zero(&mut self);
-    fn add_mut(&mut self, other: &Self);
+    fn add_mut(&mut self, other: impl Borrow<Self>);
 
     fn iter_param(&self) -> impl Iterator<Item = &X>;
     fn iter_param_mut(&mut self) -> impl Iterator<Item = &mut X>;
 
-    fn add(mut self, other: &Self) -> Self {
+    fn add(mut self, other: impl Borrow<Self>) -> Self {
         self.add_mut(other);
         self
     }
 }
 
-pub trait TrainData {}
+pub trait TrainData: Sized + Send + Sync + 'static {}
 
 pub struct Data<T, PREV: TrainData> {
     pub prev: PREV,
     pub data: T,
 }
 
-impl<T, PREV: TrainData> TrainData for Data<T, PREV> {}
+impl<T: Sized + Send + Sync + 'static, PREV: TrainData> TrainData for Data<T, PREV> {}
 
 /*
 impl<X: Element, NNIN: Shape> NNComponent<X, NNIN, NNIN> for () {
@@ -150,7 +151,7 @@ impl<X: Element> GradComponent<X> for () {
     fn set_zero(&mut self) {}
 
     #[inline]
-    fn add_mut(&mut self, other: &Self) {}
+    fn add_mut(&mut self, other: impl Borrow<Self>) {}
 
     #[inline]
     fn iter_param(&self) -> impl Iterator<Item = &X> {

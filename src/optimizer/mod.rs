@@ -12,7 +12,7 @@ pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 /// This is only used by [`NNTrainer`]. Thus the dimensions of `nn` and `gradient` will always
 /// match.
 pub trait Optimizer<X: Element>: Send + Sync + 'static {
-    type State<S: Shape>;
+    type State<S: Shape>: Sized + Send + Sync + 'static;
 
     fn optimize_tensor<S: Shape>(
         &self,

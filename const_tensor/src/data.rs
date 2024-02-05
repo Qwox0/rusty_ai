@@ -3,14 +3,13 @@ use crate::{
     multidim_arr::{Len, MultidimArr},
     multidimensional::{Multidimensional, MultidimensionalOwned},
     owned::Tensor,
-    scalar, vector, Element, Float, Num, Shape,
+    scalar, vector, Element, Shape,
 };
 use core::mem;
 use serde::Serialize;
 use std::{
     alloc,
     iter::Map,
-    marker::PhantomData,
     ops::{Index, IndexMut},
     ptr, slice,
 };
@@ -90,6 +89,11 @@ impl<X: Element, S: Shape> tensor<X, S> {
     #[inline]
     pub(crate) fn unwrap_box(b: Box<Self>) -> Box<S::Mapped<X>> {
         unsafe { mem::transmute(b) }
+    }
+
+    #[inline]
+    pub fn as_arr(&self) -> &S::Mapped<X> {
+        &self.0
     }
 
     /// Clones `self` into a new [`Box`].

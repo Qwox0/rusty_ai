@@ -6,6 +6,7 @@ use const_tensor::{
 };
 use core::fmt;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 
 /// A fully connected layer. Calculates `y = weights * x + bias`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -143,19 +144,23 @@ impl<X: Num, const IN: usize, const OUT: usize, PREV: GradComponent<X>> GradComp
     fn set_zero(&mut self) {
         self.weights.fill_zero();
         self.bias.fill_zero();
+        self.prev.set_zero();
     }
 
     #[inline]
-    fn add_mut(&mut self, other: &Self) {
+    fn add_mut(&mut self, other: impl Borrow<Self>) {
+        let other = other.borrow();
         self.weights.add_elem_mut(&other.weights);
         self.bias.add_elem_mut(&other.bias);
+        self.prev.add_mut(&other.prev);
     }
 
     #[inline]
     fn iter_param(&self) -> impl Iterator<Item = &X> {
         self.prev
             .iter_param()
-            .chain(self.weights.iter_elem().chain(self.bias.iter_elem()))
+            .chain(self.weights.iter_elem())
+            .chain(self.bias.iter_elem())
     }
 
     #[inline]
