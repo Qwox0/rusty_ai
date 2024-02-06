@@ -24,6 +24,7 @@ mod shape;
 mod shape_data;
 
 pub use aliases::*;
+pub use arr_wrapper::Arr;
 pub use data::tensor;
 pub use element::{Element, Float, MoreNumOps, Num};
 pub use multidim_arr::{Len, MultidimArr};

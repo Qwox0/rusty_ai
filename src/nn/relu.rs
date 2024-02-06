@@ -1,14 +1,16 @@
 use super::component::{component_new, Data, NNComponent, NoTrainComponent};
-use crate::{derive_nn_component, optimizer::Optimizer};
+use crate::optimizer::Optimizer;
 use const_tensor::{Element, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
+/// see [`ReLU`].
 #[inline]
 pub fn relu<X: Num>(x: X) -> X {
     if x.is_positive() { x } else { X::ZERO }
 }
 
+/// see [`LeakyReLU`].
 #[inline]
 pub fn leaky_relu<X: Num>(x: X, leak_rate: X) -> X {
     if x.is_positive() { x } else { leak_rate * x }
@@ -37,6 +39,14 @@ where
     /// Bool Tensor contains whether propagation output elements where unequal to zero or not.
     type StoredData = Data<Tensor<bool, S>, PREV::StoredData>;
 
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use rusty_ai::{const_tensor::Vector, nn::{ReLU, NNHead, NNComponent}};
+    /// let relu = ReLU::new(NNHead);
+    /// let out = relu.prop(Vector::new([-1.0, 0.0, 1.0]));
+    /// assert_eq!(out, Vector::new([0.0, 0.0, 1.0]));
+    /// ```
     #[inline]
     fn prop(&self, input: Tensor<X, NNIN>) -> Tensor<X, S> {
         let input = self.prev.prop(input);
@@ -51,7 +61,7 @@ where
         (out, Data { data, prev: prev_data })
     }
 
-    /// ```
+    /// ```text
     /// o_i = relu(a_i)
     /// do_i/da_i = relu'(a_i)
     /// dL/da_i   = dL/do_i * relu'(a_i)

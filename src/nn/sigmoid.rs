@@ -49,7 +49,7 @@ where
         (out.clone(), Data { data: out, prev: prev_data })
     }
 
-    /// ```
+    /// ```text
     /// o_i = sigmoid(a_i)
     /// do_i/da_i = sigmoid'(a_i) = sigmoid(a_i) * (1 - sigmoid(a_i))
     /// dL/da_i   = dL/do_i * sigmoid(a_i) * (1 - sigmoid(a_i))

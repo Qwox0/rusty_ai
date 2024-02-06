@@ -1,10 +1,10 @@
-use crate::optimizer::Optimizer;
+use crate::{loss_function::LossFunction, optimizer::Optimizer};
 #[allow(unused_imports)]
 use const_tensor::Tensor;
 use const_tensor::{Element, Shape};
 use core::fmt;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
+use std::{borrow::Borrow, iter::Map};
 
 /// A trait for the components of a neural network.
 ///
@@ -53,6 +53,131 @@ pub trait NNComponent<X: Element, NNIN: Shape, OUT: Shape>:
     fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O>;
 
     fn iter_param(&self) -> impl Iterator<Item = &X>;
+
+    /// Iterates over a `batch` of inputs, propagates them and returns an [`Iterator`] over the
+    /// outputs.
+    ///
+    /// This [`Iterator`] must be consumed otherwise no calculations are done.
+    ///
+    /// If you also want to calculate losses use `test` or `prop_with_test`.
+    #[must_use = "`Iterators` must be consumed to do work."]
+    #[inline]
+    fn prop_batch<'a, B, I>(
+        &'a self,
+        batch: B,
+    ) -> std::iter::Map<B::IntoIter, impl FnMut(B::Item) -> Tensor<X, OUT> + 'a>
+    where
+        B: IntoIterator<Item = &'a I>,
+        I: ToOwned<Owned = Tensor<X, NNIN>> + 'a,
+    {
+        batch.into_iter().map(|i: &I| self.prop(i.to_owned()))
+    }
+
+    /// Tests the neural network.
+    fn test<L: LossFunction<X, OUT>>(
+        &self,
+        pair: &Pair<X, NNIN, impl Borrow<L::ExpectedOutput>>,
+        loss_function: &L,
+    ) -> TestResult<X, OUT> {
+        let (input, expected_output) = pair.as_tuple();
+        let out = self.prop(input.to_owned());
+        let loss = loss_function.propagate(&out, expected_output.borrow());
+        TestResult::new(out, loss)
+    }
+
+    /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
+    /// output losses.
+    ///
+    /// This [`Iterator`] must be consumed otherwise no calculations are done.
+    ///
+    /// If you also want to get the outputs use `prop_with_test`.
+    #[must_use = "`Iterators` must be consumed to do work."]
+    fn test_batch<'a, B, L, EO>(
+        &'a self,
+        batch: B,
+        loss_fn: &'a L,
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> TestResult<X, OUT>>
+    where
+        B: IntoIterator<Item = &'a Pair<X, NNIN, EO>>,
+        L: LossFunction<X, OUT>,
+        EO: Borrow<L::ExpectedOutput> + 'a,
+    {
+        batch.into_iter().map(|p| self.test(p, loss_fn))
+    }
+}
+
+mod t {
+    use std::{
+        borrow::{Borrow, Cow},
+        collections::HashMap,
+        ops::Deref,
+    };
+
+    #[derive(Debug, Clone)]
+    struct Outer;
+
+    struct Inner;
+
+    impl Deref for Outer {
+        type Target = Inner;
+
+        fn deref(&self) -> &Self::Target {
+            todo!()
+        }
+    }
+
+    impl Borrow<Inner> for Outer {
+        fn borrow(&self) -> &Inner {
+            todo!()
+        }
+    }
+
+    impl AsRef<Inner> for Outer {
+        fn as_ref(&self) -> &Inner {
+            todo!()
+        }
+    }
+
+    impl ToOwned for Inner {
+        type Owned = Outer;
+
+        fn to_owned(&self) -> Self::Owned {
+            todo!()
+        }
+    }
+
+    fn my_fn_iter<'a, B, I>(_x: B)
+    where
+        B: IntoIterator<Item = &'a I>,
+        I: Borrow<Inner> + 'a,
+    {
+    }
+
+    fn my_fn_iter2<'a, B, I>(b: B)
+    where
+        B: IntoIterator<Item = &'a I>,
+        I: ToOwned<Owned = Outer> + 'a,
+    {
+        let a = b.into_iter().map(|i| i.to_owned());
+    }
+
+    fn test() {
+        my_fn_iter([&Inner]);
+        my_fn_iter([&Outer]);
+        my_fn_iter(&[Inner]);
+        my_fn_iter(&[Outer]);
+
+        my_fn_iter2([&Inner]);
+        my_fn_iter2([&Outer]);
+        my_fn_iter2(&[Inner]);
+        my_fn_iter2(&[Outer]);
+    }
+
+    fn tsdfasdfasfd() {
+        let a = vec![1, 2, 3];
+        let b = vec![1.0, 2.0, 3.0];
+        let zip = a.into_iter().zip(b).collect::<Vec<_>>();
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -255,4 +380,5 @@ macro_rules! derive_nn_component {
         }
     };
 }
+use super::{Pair, TestResult};
 pub use derive_nn_component;

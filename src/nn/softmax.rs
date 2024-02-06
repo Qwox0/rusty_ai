@@ -51,7 +51,7 @@ where
         (out, Data { data, prev: prev_data })
     }
 
-    /// ```
+    /// ```text
     /// y_i = softmax(x_i) = e^x_i/sum(e^x_j)
     /// dy_i/dx_i = relu'(a_i)
     /// dL/dx_i   = dL/dy_i * dy_i/dx_i
@@ -146,7 +146,7 @@ where
         (out.clone(), Data { data: out, prev: prev_data })
     }
 
-    /// ```
+    /// ```text
     /// y_i = ln(softmax(x_i)) = ln(e^x_i/sum(e^x_j)) = x_i - ln(sum(e^x_j))
     /// dy_i/dx_i = 1 - e^x_i/sum(e^x_i) = 1 - softmax(x_i)
     /// dy_i/dx_j =   - e^x_i/sum(e^x_i) =   - softmax(x_i)

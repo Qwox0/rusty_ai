@@ -41,7 +41,7 @@ where
         (out, Data { data: input, prev: prev_data })
     }
 
-    /// ```
+    /// ```text
     /// o_i = sum a_j * w_ij over j + b_i
     /// do_i/db_i  = 1
     /// do_i/da_j  = w_ij

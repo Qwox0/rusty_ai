@@ -104,38 +104,6 @@ pub trait NN<X: Element, IN: Shape, OUT: Shape>: NNComponent<X, IN, OUT> + Seria
         self.backprop(output_gradient, train_data, gradient);
     }
 
-    /// Tests the neural network.
-    fn test<L: LossFunction<X, OUT>>(
-        &self,
-        pair: &Pair<X, IN, impl Borrow<L::ExpectedOutput>>,
-        loss_function: &L,
-    ) -> TestResult<X, OUT> {
-        let (input, expected_output) = pair.as_tuple();
-        let out = self.propagate(input);
-        let loss = loss_function.propagate(&out, expected_output.borrow());
-        TestResult::new(out, loss)
-    }
-
-    /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
-    /// output losses.
-    ///
-    /// This [`Iterator`] must be consumed otherwise no calculations are done.
-    ///
-    /// If you also want to get the outputs use `prop_with_test`.
-    #[must_use = "`Iterators` must be consumed to do work."]
-    fn test_batch<'a, B, L, EO: 'a>(
-        &'a self,
-        batch: B,
-        loss_fn: &'a L,
-    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO>) -> TestResult<X, OUT>>
-    where
-        B: IntoIterator<Item = &'a Pair<X, IN, EO>>,
-        L: LossFunction<X, OUT>,
-        EO: Borrow<L::ExpectedOutput>,
-    {
-        batch.into_iter().map(|p| self.test(p, loss_fn))
-    }
-
     fn init_zero_gradient(&self) -> Self::Grad {
         self.init_zero_grad()
     }

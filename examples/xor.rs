@@ -31,6 +31,7 @@ impl<X: Float> LossFunction<X, [(); 1]> for XorLoss {
         expected_output: &Self::ExpectedOutput,
     ) -> Vector<X, 1> {
         let expected_output = Vector::new([X::from_bool(*expected_output)]);
+
         LOSS_FUNCTION.backpropagate(output, &expected_output)
     }
 }

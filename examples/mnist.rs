@@ -2,8 +2,16 @@
 #![feature(iter_array_chunks)]
 #![feature(test)]
 
+use const_tensor::{Multidimensional, MultidimensionalOwned, Num, Vector};
 use mnist_util::{get_mnist, image_to_string, Mnist};
-use rusty_ai::prelude::*;
+use rand::{seq::SliceRandom, Rng};
+use rusty_ai::{
+    loss_function::SquaredError,
+    nn::Pair,
+    optimizer::sgd::SGD,
+    trainer::{NNTrainer, TrainOut},
+    Initializer, NNBuilder, Norm, NN,
+};
 use std::{ops::Range, time::Instant};
 
 const IMAGE_SIDE: usize = 28;
@@ -12,30 +20,44 @@ const OUTPUTS: usize = 10;
 
 const NORMALIZE_MEAN: f32 = 0.5;
 const NORMALIZE_STD: f32 = 0.5;
-fn transform<X: Num>(img_vec: Vec<u8>, lbl_vec: Vec<u8>) -> PairList<X, IMAGE_SIZE, [X; OUTPUTS]> {
+fn transform<X: Num>(
+    img_vec: Vec<u8>,
+    lbl_vec: Vec<u8>,
+) -> Vec<Pair<X, [(); IMAGE_SIZE], Vector<X, OUTPUTS>>> {
     img_vec
         .into_iter()
         .map(|x| (((x as f32) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD).cast())
         .array_chunks()
-        .zip(lbl_vec.into_iter().map(|x| {
-            let mut out = [X::ZERO; OUTPUTS];
-            out[x as usize] = X::ONE;
-            out
-        }))
+        .zip(lbl_vec)
+        .map(|(input, lbl)| {
+            let mut eo = Vector::zeros();
+            eo[lbl as usize].set(X::ONE);
+            Pair::new(Vector::new(input), eo)
+        })
         .collect()
 }
 
-fn setup_ai() -> NNTrainer<f64, IMAGE_SIZE, OUTPUTS, SquaredError, SGD_<f64>> {
+fn setup_ai(
+    rng: &mut impl Rng,
+) -> NNTrainer<
+    f64,
+    [(); IMAGE_SIZE],
+    [(); OUTPUTS],
+    SquaredError,
+    SGD<f64>,
+    impl NN<f64, [(); IMAGE_SIZE], [(); OUTPUTS]>,
+> {
     NNBuilder::default()
         .double_precision()
-        .input::<IMAGE_SIZE>()
-        .layer(128, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::ReLU)
-        .layer(64, Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .rng(rng)
+        .input_shape::<[(); IMAGE_SIZE]>()
+        .layer::<128>(Initializer::PytorchDefault, Initializer::PytorchDefault)
         .relu()
-        .layer(OUTPUTS, Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<64>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .relu()
+        .layer::<OUTPUTS>(Initializer::PytorchDefault, Initializer::PytorchDefault)
         .sigmoid()
-        .build::<OUTPUTS>()
+        .build()
         .to_trainer()
         .loss_function(SquaredError)
         .optimizer(SGD { learning_rate: 0.003, momentum: 0.9 })
@@ -56,7 +78,9 @@ pub fn main() {
     println!("Example Image:");
     print_image(&training_data[50], -1.0..1.0);
 
-    let mut ai = setup_ai();
+    let mut rng = rand::thread_rng();
+
+    let mut ai = setup_ai(&mut rng);
 
     const EPOCHS: usize = 15;
     const BATCH_SIZE: usize = 64;
@@ -68,11 +92,11 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            let loss = ai.train(batch).mean_loss();
+            let loss = ai.train_rayon_output(batch).map(|out| out.loss).sum::<f64>() / BATCH_SIZE as f64;
             running_loss += loss;
         }
         // shuffle data after one full iteration
-        training_data.shuffle();
+        training_data.shuffle(&mut rng);
 
         let training_loss = running_loss / batch_num as f64;
 
@@ -84,10 +108,10 @@ pub fn main() {
     println!("\nTest:");
     for pair in test_data.iter().take(3) {
         print_image(pair, -1.0..1.0);
-        let (input, expected_output) = pair;
-        let (out, loss) = ai.test(input, expected_output);
+        let (out, loss) = ai.test(pair).into_tuple();
+        let (input, expected_output) = pair.as_tuple();
         println!("output: {:?}", out);
-        let propab = out.iter().copied().map(f64::exp).collect::<Vec<_>>();
+        let propab = out.as_arr().iter().copied().map(f64::exp).collect::<Vec<_>>();
         let guess = propab.iter().enumerate().max_by(|x, y| x.1.total_cmp(y.1)).unwrap().0;
         println!("propab: {:?}; guess: {}", propab, guess);
         println!("error: {}", loss);
@@ -95,114 +119,10 @@ pub fn main() {
     }
 }
 
-pub fn print_image(pair: &Pair<f64, IMAGE_SIZE, [f64; 10]>, val_range: Range<f64>) {
+pub fn print_image(pair: &Pair<f64, [(); IMAGE_SIZE], Vector<f64, 10>>, val_range: Range<f64>) {
     println!(
         "{} label: {:?}",
-        image_to_string::<IMAGE_SIDE, IMAGE_SIZE>(pair.0.as_ref(), val_range),
-        pair.1
+        image_to_string::<IMAGE_SIDE, IMAGE_SIZE>(pair.get_input().as_arr(), val_range),
+        pair.get_expected_output()
     );
-}
-
-#[cfg(test)]
-pub mod tests {
-    extern crate test;
-    use super::*;
-    use test::*;
-
-    fn load_data() -> Pair<IMAGE_SIZE, u8> {
-        (
-            TEST_IMG
-                .iter()
-                .map(|x| ((*x as f64) / 256.0 - NORMALIZE_MEAN) / NORMALIZE_STD)
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-            TEST_LBL,
-        )
-    }
-
-    fn load_data_hack() -> Pair<IMAGE_SIZE, [f64; 10]> {
-        let (input, output) = load_data();
-        let idx = output as usize;
-        let mut output = [0.0; 10];
-        output[idx] = 1.0;
-        (input, output)
-    }
-
-    /// #[bench]
-    pub fn test_propagate(b: &mut Bencher) {
-        let ai = setup_ai();
-        let p = load_data();
-
-        b.iter(|| {
-            black_box(ai.propagate(black_box(&p.0)));
-        })
-    }
-
-    /*
-    /// #[bench]
-    pub fn test_train_hack(b: &mut Bencher) {
-        let mut ai = setup_ai();
-        let p = load_data_hack();
-
-        b.iter(|| {
-            black_box(ai.training_step(black_box(once(&p))));
-        })
-    }
-    */
-
-    /// ...
-    /// ...,   ,    ,    ,  12,  56, 140, 126, 175, 200,  96,   2,    ,    ,    , ...
-    /// ...,   ,  35, 166, 238, 254, 246, 242, 253, 246, 254,  67,    ,    ,    , ...
-    /// ...,   , 184, 182, 146, 127,  70,  30,  45,  36, 215, 175,    ,    ,    , ...
-    /// ...,   ,  30,    ,    ,    ,    ,    ,    ,    , 207, 246,  14,    ,    , ...
-    /// ...,   ,    ,    ,    ,    ,    ,    ,    ,  55, 251, 169,   1,    ,    , ...
-    /// ...,   ,    ,    ,    ,    ,    ,    ,  11, 215, 232,  20,    ,    ,    , ...
-    /// ...,   ,    ,    ,    ,    ,    ,  20, 190, 250,  61,    ,    ,    ,    , ...
-    /// ...,   ,    ,    ,    ,  24, 118, 206, 254, 248, 142, 108,  18,    ,    , ...
-    /// ...,   ,    ,    ,  63, 223, 254, 254, 254, 254, 254, 254, 209,    ,    , ...
-    /// ...,   ,    ,    ,  52, 174, 129,  95,  16,  16,  16, 106, 249, 125,    , ...
-    /// ...,   ,    ,    ,    ,    ,    ,    ,    ,    ,    ,    , 179, 239,    , ...
-    /// ...,   ,    ,    ,    ,    ,    ,    ,    ,    ,    ,    ,  80, 239,    , ...
-    /// ...,   ,    ,    ,    ,    ,    ,    ,    ,    ,    ,    ,  80, 244,  20, ...
-    /// ...,   ,    ,    ,    ,    ,    ,    ,    ,    ,    ,    , 100, 239,    , ...
-    /// ...,   ,    ,    ,    ,    ,    ,    ,    ,    ,    ,    , 234, 239,    , ...
-    /// ...,  4, 140,   5,    ,    ,    ,    ,    ,    ,   3, 150, 254, 129,    , ...
-    /// ..., 64, 254, 181,  38,    ,    ,    ,    ,  34, 188, 254, 209,  20,    , ...
-    /// ..., 12, 226, 255, 223,  88,  68, 128, 157, 242, 254, 207,  23,    ,    , ...
-    /// ...,   ,  45, 210, 254, 254, 254, 254, 255, 254, 187,  49,    ,    ,    , ...
-    /// ...,   ,    ,  41, 129, 239, 229, 179,  91,  16,   3,    ,    ,    ,    , ...
-    /// ...
-    const TEST_IMG: [u8; 784] = [
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 12, 56, 140, 126, 175, 200, 96, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 35, 166, 238, 254, 246, 242, 253, 246, 254, 67, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 184, 182, 146, 127, 70, 30, 45, 36, 215, 175, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 30, 0, 0, 0, 0, 0, 0, 0, 207, 246, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 55, 251, 169, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 215, 232, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 190, 250, 61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 118, 206, 254, 248, 142, 108, 18, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 63, 223, 254, 254, 254, 254, 254, 254, 209, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 52, 174, 129, 95, 16, 16, 16, 106, 249, 125, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 179, 239, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 80, 239, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 80, 244, 20, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 239, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 234, 239, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 140, 5, 0, 0, 0, 0, 0, 0, 3, 150, 254, 129, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 64, 254, 181, 38, 0, 0, 0, 0, 34, 188, 254, 209, 20, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 226, 255, 223, 88, 68, 128, 157, 242, 254, 207, 23, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 45, 210, 254, 254, 254, 254, 255, 254, 187,
-        49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 41, 129, 239, 229, 179, 91,
-        16, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
-    ];
-    const TEST_LBL: u8 = 3;
 }

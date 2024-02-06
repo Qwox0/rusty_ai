@@ -31,7 +31,7 @@ pub trait MultidimArr: Sized + Copy + fmt::Debug + Send + Sync + 'static {
     /// # Example
     ///
     /// ```rust
-    /// # use const_tensor::multidim_arr::*;
+    /// # use const_tensor::*;
     /// let arr = [[1, 2], [3, 4]];
     /// let wrap = Arr { arr: [Arr { arr: [1, 2] }, Arr { arr: [3, 4] }] };
     /// assert_eq!(arr.wrap(), wrap);
@@ -52,7 +52,7 @@ pub trait MultidimArr: Sized + Copy + fmt::Debug + Send + Sync + 'static {
     /// # Example
     ///
     /// ```rust
-    /// # use const_tensor::multidim_arr::*;
+    /// # use const_tensor::*;
     /// let arr = [[1, 2], [3, 4]];
     /// let wrap = Arr { arr: [Arr { arr: [1, 2] }, Arr { arr: [3, 4] }] };
     /// assert_eq!(arr, <[[i32; 2]; 2]>::unwrap(wrap));
@@ -76,7 +76,7 @@ pub trait MultidimArr: Sized + Copy + fmt::Debug + Send + Sync + 'static {
     /// # Example
     ///
     /// ```rust
-    /// # use const_tensor::Shape;
+    /// # use const_tensor::*;
     /// type MyShape = [[[[[(); 2]; 5]; 1]; 3]; 9];
     /// let dims = MyShape::get_dims_arr();
     /// assert_eq!(dims, [2, 5, 1, 3, 9]);
