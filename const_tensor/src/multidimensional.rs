@@ -609,7 +609,10 @@ use std::{
 };
 
 pub trait Multidimensional<X: Element>: Sized {
-    //type Element: Element;
+    type Iter<'a>: Iterator<Item = &'a X>
+    where Self: 'a;
+    type IterMut<'a>: Iterator<Item = &'a mut X> + 'a
+    where Self: 'a;
 
     /// Creates an [`Iterator`] over the references to the elements of `self`.
     ///
@@ -625,10 +628,10 @@ pub trait Multidimensional<X: Element>: Sized {
     /// assert_eq!(iter.next(), Some(&4));
     /// assert_eq!(iter.next(), None);
     /// ```
-    fn iter_elem(&self) -> impl Iterator<Item = &X>;
+    fn iter_elem(&self) -> Self::Iter<'_>;
 
     /// Creates an [`Iterator`] over the mutable references to the elements of `self`.
-    fn iter_elem_mut(&mut self) -> impl Iterator<Item = &mut X>;
+    fn iter_elem_mut(&mut self) -> Self::IterMut<'_>;
 
     /// Sets every element of the tensor to the scalar value `val`.
     #[inline]

@@ -188,6 +188,9 @@ impl<X: Element, S: Shape> tensor<X, S> {
 }
 
 impl<X: Element, S: Shape> Multidimensional<X> for tensor<X, S> {
+    type Iter<'a> = slice::Iter<'a, X>;
+    type IterMut<'a> = slice::IterMut<'a, X>;
+
     #[inline]
     fn iter_elem(&self) -> slice::Iter<'_, X> {
         let ptr = self.0.as_ptr();

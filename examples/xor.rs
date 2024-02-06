@@ -1,5 +1,3 @@
-#![allow(incomplete_features)]
-#![feature(generic_const_exprs)]
 #![feature(test)]
 #![feature(iter_array_chunks)]
 
