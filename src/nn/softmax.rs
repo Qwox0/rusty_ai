@@ -1,4 +1,4 @@
-use super::component::{component_new, Data, NNComponent};
+use super::{component_new, Data, NN};
 use crate::optimizer::Optimizer;
 use const_tensor::{
     Float, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor, Vector,
@@ -15,11 +15,11 @@ pub struct Softmax<PREV> {
 
 component_new! { Softmax }
 
-impl<X, const LEN: usize, NNIN, PREV> NNComponent<X, NNIN, [(); LEN]> for Softmax<PREV>
+impl<X, const LEN: usize, NNIN, PREV> NN<X, NNIN, [(); LEN]> for Softmax<PREV>
 where
     X: Float,
     NNIN: Shape,
-    PREV: NNComponent<X, NNIN, [(); LEN]>,
+    PREV: NN<X, NNIN, [(); LEN]>,
 {
     type Grad = PREV::Grad;
     type In = [(); LEN];
@@ -64,7 +64,7 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop(
+    fn backprop_inplace(
         &self,
         out_grad: Tensor<X, [(); LEN]>,
         data: Self::StoredData,
@@ -75,7 +75,7 @@ where
         for (out, &is_pos) in input_grad.iter_elem_mut().zip(data.iter_elem()) {
             *out *= X::from_bool(is_pos);
         }
-        self.prev.backprop(input_grad, prev_data, grad)
+        self.prev.backprop_inplace(input_grad, prev_data, grad)
     }
 
     #[inline]
@@ -119,11 +119,11 @@ pub struct LogSoftmax<PREV> {
 
 component_new! { LogSoftmax }
 
-impl<X, const LEN: usize, NNIN, PREV> NNComponent<X, NNIN, [(); LEN]> for LogSoftmax<PREV>
+impl<X, const LEN: usize, NNIN, PREV> NN<X, NNIN, [(); LEN]> for LogSoftmax<PREV>
 where
     X: Float,
     NNIN: Shape,
-    PREV: NNComponent<X, NNIN, [(); LEN]>,
+    PREV: NN<X, NNIN, [(); LEN]>,
 {
     type Grad = PREV::Grad;
     type In = [(); LEN];
@@ -160,7 +160,7 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop(
+    fn backprop_inplace(
         &self,
         out_grad: Tensor<X, [(); LEN]>,
         data: Self::StoredData,
@@ -168,7 +168,7 @@ where
     ) {
         let Data { prev: prev_data, data: prop_out } = data;
         let input_grad = prop_out.map_inplace(X::exp).add_elem(&out_grad);
-        self.prev.backprop(input_grad, prev_data, grad)
+        self.prev.backprop_inplace(input_grad, prev_data, grad)
     }
 
     #[inline]

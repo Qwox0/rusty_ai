@@ -1,4 +1,4 @@
-use super::component::{component_new, Data, NNComponent, NoTrainComponent};
+use super::{component_new, Data, NN};
 use crate::optimizer::Optimizer;
 use const_tensor::{Element, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor};
 use core::fmt;
@@ -24,12 +24,12 @@ pub struct ReLU<PREV> {
 
 component_new! { ReLU }
 
-impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for ReLU<PREV>
+impl<X, S, NNIN, PREV> NN<X, NNIN, S> for ReLU<PREV>
 where
     X: Num,
     S: Shape,
     NNIN: Shape,
-    PREV: NNComponent<X, NNIN, S>,
+    PREV: NN<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
     type In = S;
@@ -74,13 +74,13 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {
+    fn backprop_inplace(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {
         let Data { prev: prev_data, data } = data;
         let mut input_grad = out_grad;
         for (out, &is_pos) in input_grad.iter_elem_mut().zip(data.iter_elem()) {
             *out *= X::from_bool(is_pos);
         }
-        self.prev.backprop(input_grad, prev_data, grad)
+        self.prev.backprop_inplace(input_grad, prev_data, grad)
     }
 
     #[inline]
@@ -126,12 +126,12 @@ pub struct LeakyReLU<X, PREV> {
 
 component_new! { LeakyReLU<X, PREV> -> leak_rate: X }
 
-impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for LeakyReLU<X, PREV>
+impl<X, S, NNIN, PREV> NN<X, NNIN, S> for LeakyReLU<X, PREV>
 where
     X: Num,
     S: Shape,
     NNIN: Shape,
-    PREV: NNComponent<X, NNIN, S>,
+    PREV: NN<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
     type In = S;
@@ -156,13 +156,13 @@ where
     }
 
     #[inline]
-    fn backprop(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {
+    fn backprop_inplace(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {
         let Data { prev: prev_data, data } = data;
         let mut input_grad = out_grad;
         for (out, &is_pos) in input_grad.iter_elem_mut().zip(data.iter_elem()) {
             *out *= if is_pos { X::ONE } else { self.leak_rate }
         }
-        self.prev.backprop(input_grad, prev_data, grad)
+        self.prev.backprop_inplace(input_grad, prev_data, grad)
     }
 
     #[inline]

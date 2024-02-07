@@ -5,7 +5,7 @@ use super::{
     linear::Linear,
     relu::ReLU,
     softmax::{LogSoftmax, Softmax},
-    LeakyReLU, NNComponent, NNHead, Sigmoid, NN,
+    LeakyReLU, NNHead, Sigmoid, NN,
 };
 use crate::Initializer;
 use const_tensor::{Element, Float, Matrix, Shape, Vector};
@@ -115,11 +115,11 @@ where
     X: Element,
     NNIN: Shape,
     OUT: Shape,
-    PREV: NNComponent<X, NNIN, OUT>,
+    PREV: NN<X, NNIN, OUT>,
 {
     /// Adds a new [`NNComponent`] to the neural network.
     #[inline]
-    pub fn add_component<C: NNComponent<X, NNIN, OUT2>, OUT2: Shape>(
+    pub fn add_component<C: NN<X, NNIN, OUT2>, OUT2: Shape>(
         self,
         c: impl FnOnce(PREV) -> C,
     ) -> NNBuilder<X, NNIN, OUT2, C, RNG> {
@@ -128,37 +128,37 @@ where
 
     /// Adds a new [`ReLU`] component to the neural network.
     pub fn relu(self) -> NNBuilder<X, NNIN, OUT, ReLU<PREV>, RNG>
-    where ReLU<PREV>: NNComponent<X, NNIN, OUT> {
+    where ReLU<PREV>: NN<X, NNIN, OUT> {
         self.add_component(ReLU::new)
     }
 
     /// Adds a new [`LeakyReLU`] component to the neural network.
     pub fn leaky_relu(self, leak_rate: X) -> NNBuilder<X, NNIN, OUT, LeakyReLU<X, PREV>, RNG>
-    where LeakyReLU<X, PREV>: NNComponent<X, NNIN, OUT> {
+    where LeakyReLU<X, PREV>: NN<X, NNIN, OUT> {
         self.add_component(|prev| LeakyReLU { prev, leak_rate })
     }
 
     /// Adds a new [`Sigmoid`] component to the neural network.
     pub fn sigmoid(self) -> NNBuilder<X, NNIN, OUT, Sigmoid<PREV>, RNG>
-    where Sigmoid<PREV>: NNComponent<X, NNIN, OUT> {
+    where Sigmoid<PREV>: NN<X, NNIN, OUT> {
         self.add_component(Sigmoid::new)
     }
 
     /// Adds a new [`Softmax`] component to the neural network.
     pub fn softmax(self) -> NNBuilder<X, NNIN, OUT, Softmax<PREV>, RNG>
-    where Softmax<PREV>: NNComponent<X, NNIN, OUT> {
+    where Softmax<PREV>: NN<X, NNIN, OUT> {
         self.add_component(Softmax::new)
     }
 
     /// Adds a new [`LogSoftmax`] component to the neural network.
     pub fn log_softmax(self) -> NNBuilder<X, NNIN, OUT, LogSoftmax<PREV>, RNG>
-    where LogSoftmax<PREV>: NNComponent<X, NNIN, OUT> {
+    where LogSoftmax<PREV>: NN<X, NNIN, OUT> {
         self.add_component(LogSoftmax::new)
     }
 
     /// Adds a new [`Flatten`] component to the neural network.
     pub fn flatten(self) -> NNBuilder<X, NNIN, [(); OUT::LEN], Flatten<OUT, PREV>, RNG>
-    where Flatten<OUT, PREV>: NNComponent<X, NNIN, [(); OUT::LEN]> {
+    where Flatten<OUT, PREV>: NN<X, NNIN, [(); OUT::LEN]> {
         self.add_component(Flatten::new)
     }
 }
@@ -167,7 +167,7 @@ impl<X, NNIN, const IN: usize, PREV, RNG> NNBuilder<X, NNIN, [(); IN], PREV, RNG
 where
     X: Element,
     NNIN: Shape,
-    PREV: NNComponent<X, NNIN, [(); IN]>,
+    PREV: NN<X, NNIN, [(); IN]>,
 {
     /// Adds a new [`Linear`] layer to the neural network.
     pub fn layer_from_parts<const N: usize>(
@@ -193,7 +193,7 @@ impl<F, NNIN, const IN: usize, PREV, RNG> NNBuilder<F, NNIN, [(); IN], PREV, RNG
 where
     F: Float,
     NNIN: Shape,
-    PREV: NNComponent<F, NNIN, [(); IN]>,
+    PREV: NN<F, NNIN, [(); IN]>,
     RNG: rand::Rng,
     rand_distr::StandardNormal: rand_distr::Distribution<F>,
 {

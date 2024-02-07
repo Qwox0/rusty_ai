@@ -1,6 +1,6 @@
 //! # Clip gradient norm module
 
-use crate::{nn::component::GradComponent, norm::Norm};
+use crate::{nn::GradComponent, norm::Norm};
 use const_tensor::{Float, Shape, Tensor};
 use serde::{Deserialize, Serialize};
 

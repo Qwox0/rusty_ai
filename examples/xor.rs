@@ -6,7 +6,7 @@ use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use rand_distr::{Bernoulli, Distribution};
 use rusty_ai::{
     loss_function::{LossFunction, SquaredError},
-    nn::{NNComponent, Pair},
+    nn::Pair,
     optimizer::{self, sgd::SGD},
     trainer::NNTrainer,
     Initializer, NNBuilder, Norm, NN,
@@ -37,7 +37,7 @@ impl<X: Float> LossFunction<X, [(); 1]> for XorLoss {
 }
 
 fn get_nn<X: Float, const NEURONS: usize>()
--> NNTrainer<X, [(); 2], [(); 1], XorLoss, SGD<X>, impl NNComponent<X, [(); 2], [(); 1]>>
+-> NNTrainer<X, [(); 2], [(); 1], XorLoss, SGD<X>, impl NN<X, [(); 2], [(); 1]>>
 where rand_distr::StandardNormal: Distribution<X> {
     NNBuilder::default()
         .element_type::<X>()
@@ -57,21 +57,21 @@ where rand_distr::StandardNormal: Distribution<X> {
         .build()
 }
 /*
-    NNBuilder::default()
-        .seeded_rng(3)
-        .input::<2>()
-        .layer(hidden_neurons, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::ReLU)
-        .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::Sigmoid)
-        .build::<1>()
-        .to_trainer()
-        .loss_function(XorLoss)
-        .optimizer(optimizer::sgd::SGD::default())
-        .retain_gradient(true)
-        .new_clip_gradient_norm(5.0, Norm::Two)
-        .build()
- */
+   NNBuilder::default()
+       .seeded_rng(3)
+       .input::<2>()
+       .layer(hidden_neurons, Initializer::PytorchDefault, Initializer::PytorchDefault)
+       .activation_function(ActivationFn::ReLU)
+       .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
+       .activation_function(ActivationFn::Sigmoid)
+       .build::<1>()
+       .to_trainer()
+       .loss_function(XorLoss)
+       .optimizer(optimizer::sgd::SGD::default())
+       .retain_gradient(true)
+       .new_clip_gradient_norm(5.0, Norm::Two)
+       .build()
+*/
 
 fn gen_data<'a, X: Num>(
     rng: &'a mut impl Rng,

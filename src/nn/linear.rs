@@ -1,4 +1,4 @@
-use super::component::{Data, GradComponent, NNComponent};
+use super::{Data, GradComponent, NN};
 use crate::optimizer::Optimizer;
 use const_tensor::{
     Element, Len, Matrix, MatrixShape, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor,
@@ -16,12 +16,12 @@ pub struct Linear<X: Element, const IN: usize, const OUT: usize, PREV> {
     pub(super) bias: Vector<X, OUT>,
 }
 
-impl<X, const IN: usize, const OUT: usize, NNIN, PREV> NNComponent<X, NNIN, [(); OUT]>
+impl<X, const IN: usize, const OUT: usize, NNIN, PREV> NN<X, NNIN, [(); OUT]>
     for Linear<X, IN, OUT, PREV>
 where
     X: Num,
     NNIN: Shape,
-    PREV: NNComponent<X, NNIN, [(); IN]>,
+    PREV: NN<X, NNIN, [(); IN]>,
 {
     type Grad = Linear<X, IN, OUT, PREV::Grad>;
     type In = [(); IN];
@@ -61,7 +61,7 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop(&self, out_grad: Vector<X, OUT>, data: Self::StoredData, grad: &mut Self::Grad) {
+    fn backprop_inplace(&self, out_grad: Vector<X, OUT>, data: Self::StoredData, grad: &mut Self::Grad) {
         let Data { prev: prev_data, data: input } = data;
 
         // TODO: bench
@@ -69,7 +69,7 @@ where
         grad.weights.add_elem_mut(&out_grad.span_mat(&input));
         let input_grad = self.weights.clone().transpose().mul_vec(&out_grad);
 
-        self.prev.backprop(input_grad, prev_data, &mut grad.prev)
+        self.prev.backprop_inplace(input_grad, prev_data, &mut grad.prev)
     }
 
     #[inline]

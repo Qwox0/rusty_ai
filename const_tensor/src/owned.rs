@@ -119,6 +119,8 @@ where S::Mapped<X>: PartialEq
     }
 }
 
+impl<X: Element, S: Shape> Eq for Tensor<X, S> where S::Mapped<X>: Eq {}
+
 impl<X: Element, S: Shape> PartialEq<&tensor<X, S>> for Tensor<X, S>
 where S::Mapped<X>: PartialEq
 {
@@ -135,7 +137,14 @@ where S::Mapped<X>: PartialEq
     }
 }
 
-impl<X: Element, S: Shape> Eq for Tensor<X, S> where S::Mapped<X>: Eq {}
+impl<X: Element, S: Shape, D: MultidimArr<Element = X, Mapped<()> = S>> PartialEq<D>
+    for Tensor<X, S>
+where S::Mapped<X>: PartialEq
+{
+    fn eq(&self, other: &D) -> bool {
+        self.0 == other.type_hint()
+    }
+}
 
 impl<X: Element, S: Shape> From<Box<data::tensor<X, S>>> for Tensor<X, S> {
     fn from(data: Box<data::tensor<X, S>>) -> Self {

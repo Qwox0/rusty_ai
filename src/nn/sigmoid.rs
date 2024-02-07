@@ -1,4 +1,4 @@
-use super::component::{Data, NNComponent};
+use super::{Data, NN};
 use crate::optimizer::Optimizer;
 use const_tensor::{Float, Len, MultidimensionalOwned, Num, Shape, Tensor};
 use core::fmt;
@@ -21,12 +21,12 @@ impl<PREV> Sigmoid<PREV> {
     }
 }
 
-impl<X, S, NNIN, PREV> NNComponent<X, NNIN, S> for Sigmoid<PREV>
+impl<X, S, NNIN, PREV> NN<X, NNIN, S> for Sigmoid<PREV>
 where
     X: Float,
     S: Shape,
     NNIN: Shape,
-    PREV: NNComponent<X, NNIN, S>,
+    PREV: NN<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
     type In = S;
@@ -62,10 +62,10 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {
+    fn backprop_inplace(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {
         let Data { prev: prev_data, data: output } = data;
         let input_grad = out_grad.mul_elem(&output.map_inplace(|x| x * (X::ONE - x)));
-        self.prev.backprop(input_grad, prev_data, grad)
+        self.prev.backprop_inplace(input_grad, prev_data, grad)
     }
 
     #[inline]

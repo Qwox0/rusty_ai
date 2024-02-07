@@ -3,7 +3,7 @@
 use crate::{
     clip_gradient_norm::ClipGradientNorm,
     loss_function::LossFunction,
-    nn::{component::GradComponent, NNComponent, Pair, TestResult},
+    nn::{GradComponent, Pair, TestResult},
     optimizer::Optimizer,
     Norm, NN,
 };
@@ -47,7 +47,7 @@ where
         retain_gradient: bool,
         clip_gradient_norm: Option<ClipGradientNorm<X>>,
     ) -> Self {
-        let gradient = network.init_zero_gradient();
+        let gradient = network.init_zero_grad();
         let opt_state = network.init_opt_state();
         Self {
             network,
@@ -73,7 +73,7 @@ where
     /// Propagates an [`Input`] through the underlying neural network and returns its output.
     #[inline]
     pub fn propagate(&self, input: &tensor<X, IN>) -> Tensor<X, OUT> {
-        self.network.propagate(input)
+        self.network.prop(input.to_owned())
     }
 
     /// Iterates over a `batch` of inputs and returns an [`Iterator`] over the outputs.
@@ -90,15 +90,18 @@ where
     where
         B: IntoIterator<Item = &'a tensor<X, IN>>,
     {
-        self.network.propagate_batch(batch)
+        self.network.prop_batch(batch)
     }
 
     /// Propagates a [`Tensor`] through the underlying neural network and returns the output
     /// [`Tensor`] and additional data which is required for backpropagation.
     ///
     /// If only the output is needed, use the normal `propagate` method instead.
-    pub fn training_propagate(&self, input: &tensor<X, IN>) -> (Tensor<X, OUT>, NN_::StoredData) {
-        self.network.training_propagate(input)
+    pub fn train_prop(
+        &self,
+        input: &impl ToOwned<Owned = Tensor<X, IN>>,
+    ) -> (Tensor<X, OUT>, NN_::StoredData) {
+        self.network.train_prop(input.to_owned())
     }
 
     /// Clips the gradient based on `self.clip_gradient_norm`.
@@ -121,7 +124,7 @@ where
         // gradient of the cost function with respect to the neuron output of the last layer.
         let output_gradient = self.loss_function.backpropagate(&output, expected_output);
         self.network
-            .backpropagate_inplace(output_gradient, train_data, &mut self.gradient);
+            .backprop_inplace(output_gradient, train_data, &mut self.gradient);
     }
 
     pub fn backpropagate_inplace(
@@ -133,7 +136,7 @@ where
     ) {
         // gradient of the cost function with respect to the neuron output of the last layer.
         let output_gradient = self.loss_function.backpropagate(&output, expected_output);
-        self.network.backpropagate_inplace(output_gradient, train_data, gradient);
+        self.network.backprop_inplace(output_gradient, train_data, gradient);
     }
 
     pub fn backpropagate(
@@ -196,7 +199,7 @@ where
             self.gradient.set_zero();
         }
         for (input, eo) in batch.into_iter().map(Into::into) {
-            let (out, data) = self.training_propagate(input);
+            let (out, data) = self.train_prop(input);
             self.backpropagate_inner(out, eo.borrow(), data);
         }
         self.clip_gradient();
@@ -216,7 +219,7 @@ where
         let mut ret = Vec::new();
         for (input, eo) in batch.into_iter().map(Into::into) {
             let eo = eo.borrow();
-            let (output, data) = self.network.training_propagate(input);
+            let (output, data) = self.network.train_prop(input.to_owned());
             let loss = self.loss_function.propagate(&output, eo);
             self.backpropagate_inner(output.clone(), eo, data);
 
@@ -243,15 +246,15 @@ where
         let grad = batch
             .into_par_iter()
             .fold(
-                || self.network.init_zero_gradient(),
+                || self.network.init_zero_grad(),
                 |grad, p| {
                     let (input, eo) = p.as_tuple();
-                    let (out, data) = self.training_propagate(input);
+                    let (out, data) = self.train_prop(input);
                     NNTrainer::backpropagate(self, out, eo.borrow(), data, grad)
                 },
             )
-            //.reduce(|| self.network.init_zero_gradient(), |acc, grad| acc.add(&grad));
-            .reduce(|| self.network.init_zero_gradient(), GradComponent::add);
+            //.reduce(|| self.network.init_zero_grad(), |acc, grad| acc.add(&grad));
+            .reduce(|| self.network.init_zero_grad(), GradComponent::add);
         self.gradient.add_mut(&grad);
         self.clip_gradient();
         self.optimize_trainee();
@@ -278,11 +281,11 @@ where
         let grad = batch
             .into_par_iter()
             .fold(
-                || self.network.init_zero_gradient(),
+                || self.network.init_zero_grad(),
                 |grad, p| {
                     let (input, eo) = p.as_tuple();
                     let eo = eo.borrow();
-                    let (output, data) = self.training_propagate(input);
+                    let (output, data) = self.train_prop(input);
                     let loss = self.loss_function.propagate(&output, eo);
                     let grad = NNTrainer::backpropagate(self, output.clone(), &eo, data, grad);
 
@@ -290,7 +293,7 @@ where
                     grad
                 },
             )
-            .reduce(|| self.network.init_zero_gradient(), |acc, grad| acc.add(&grad));
+            .reduce(|| self.network.init_zero_grad(), |acc, grad| acc.add(&grad));
         self.gradient.add_mut(&grad);
         self.clip_gradient();
         self.optimize_trainee();
@@ -327,7 +330,7 @@ mod benches;
 #[cfg(test)]
 mod seeded_tests {
     use crate::{
-        nn::{component::GradComponent, NNComponent, Pair},
+        nn::{GradComponent, Pair},
         norm::Norm,
         optimizer::sgd::SGD,
         prelude::SquaredError,
@@ -353,7 +356,7 @@ mod seeded_tests {
             .sigmoid()
             .build();
 
-        let out = ai.propagate(&Vector::new(rng.gen()));
+        let out = ai.prop(Vector::new(rng.gen()));
 
         let expected = [0.5571132267977859, 0.3835754220312069, 0.5254153762665995];
         assert_eq!(out, tensor::literal(expected), "incorrect output");

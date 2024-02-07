@@ -1,7 +1,7 @@
-use crate::{Element, Float, Len, Num, Tensor};
+use crate::{tensor, Element, Float, Len, Num, Shape, Tensor};
 use std::{
     io::Write,
-    mem,
+    mem::{self, MaybeUninit},
     ops::{Deref, DerefMut, Neg},
 };
 
@@ -367,5 +367,29 @@ pub trait MultidimensionalOwned<X: Element>: Sized + DerefMut<Target = Self::Dat
     where X: Float {
         self.lerp_mut(other, blend);
         self
+    }
+}
+
+pub trait MultidimensionalOwned2<X: Element>: Multidimensional<X> {
+    fn add_elem2(mut self: Box<Self>, other: &Self) -> Box<Self>
+    where X: Num {
+        self.add_elem_mut(other);
+        self
+    }
+}
+
+impl<X: Element, S: Shape> MultidimensionalOwned2<X> for tensor<X, S> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let t = crate::vector::new_boxed([1, 2, 3, 4]);
+
+        let t = Tensor::from(t.add_elem2(crate::vector::literal([4, 3, 2, 1])));
+
+        assert_eq!(t, [5, 5, 5, 6]);
     }
 }

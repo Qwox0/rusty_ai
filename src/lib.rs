@@ -29,13 +29,10 @@ mod util;
 
 pub use const_tensor::{self, Element, Float, Num};
 pub use initializer::Initializer;
-//pub use input::Input;
-pub use nn::{NNBuilder, NN};
+pub use nn::{NNBuilder, Pair, NN};
 pub use norm::Norm;
 pub use optimizer::Optimizer;
-//pub use propagation::VerbosePropagation;
 pub use reexport::half::{bf16, f16};
-//pub use traits::ParamsIter;
 
 /// # `rusty_ai` prelude
 ///

@@ -1,4 +1,4 @@
-use super::component::NNComponent;
+use super::NN;
 use crate::optimizer::Optimizer;
 use const_tensor::{Element, Len, Multidimensional, MultidimensionalOwned, Shape, Tensor, Vector};
 use core::fmt;
@@ -19,13 +19,13 @@ impl<S: Shape, PREV> Flatten<S, PREV> {
     }
 }
 
-impl<X, S, const LEN: usize, NNIN, PREV> NNComponent<X, NNIN, [(); LEN]> for Flatten<S, PREV>
+impl<X, S, const LEN: usize, NNIN, PREV> NN<X, NNIN, [(); LEN]> for Flatten<S, PREV>
 where
     X: Element,
     S: Shape + Len<LEN> + PartialEq,
     [(); S::DIM]: Sized,
     NNIN: Shape,
-    PREV: NNComponent<X, NNIN, S>,
+    PREV: NN<X, NNIN, S>,
 {
     type Grad = PREV::Grad;
     type In = S;
@@ -45,9 +45,9 @@ where
     }
 
     #[inline]
-    fn backprop(&self, out_grad: Vector<X, LEN>, data: PREV::StoredData, grad: &mut PREV::Grad) {
+    fn backprop_inplace(&self, out_grad: Vector<X, LEN>, data: PREV::StoredData, grad: &mut PREV::Grad) {
         let input_grad = Tensor::from_1d(out_grad);
-        self.prev.backprop(input_grad, data, grad)
+        self.prev.backprop_inplace(input_grad, data, grad)
     }
 
     #[inline]
