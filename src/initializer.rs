@@ -1,122 +1,118 @@
-use const_tensor::{Element, Float, Len, MultidimensionalOwned, Num, Shape, Tensor};
+use const_tensor::{Element, Float, MultidimensionalOwned, Num, Shape, Tensor};
 use rand::Rng;
+use rand_distr::uniform::SampleUniform;
+use std::ops::Range;
 
-/// see [tensorflow docs](https://www.tensorflow.org/api_docs/python/tf/keras/initializers)
-/// or [pytorch docs](https://pytorch.org/docs/stable/nn.init.html)
-#[derive(Debug, Clone)]
-pub enum Initializer<X: Element, S: Shape> {
-    /// Fixed value
-    Initialized(Tensor<X, S>),
-
-    /// Initializes all values with the fixed value `self.0`
-    Constant(X),
-
-    /// Uniform from start (`self.0`; inclusive) to end (`self.1`; exclusive)
-    Uniform(X, X),
-
-    /// `𝓝 (self.mean, self.std_dev^2)`
-    Normal {
-        /// mean of the normal distribution
-        mean: X,
-        /// standard deviation of the normal distribution
-        std_dev: X,
-    },
-
-    /// `𝓝 (0, 1)`
-    ///
-    /// Same as `Self::Normal { mean: 0.0, std_dev: 1.0 }` but faster.
-    StandardNormal,
-
-    /// also known as `Xavier Normal`.
-    GlorotNormal,
-
-    /// also known as `Xavier Uniform`.
-    GlorotUniform,
-
-    /// [TensorFlow Dense Layer docs](https://www.tensorflow.org/api_docs/python/tf/keras/layers/Dense)
-    //TensorFlowDefault,
-
-    /// [Pytorch Linear Layer docs](https://pytorch.org/docs/stable/generated/torch.nn.Linear.html)
-    PytorchDefault,
+pub trait Initializer<X: Element, S: Shape> {
+    fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S>;
 }
 
-// pub type DataInitializer<const DIM: usize> = Initializer<[f64; DIM]>;
-
-impl<X: Num, S: Shape> Initializer<X, S> {
-    /// Initializes all values with the fixed value `1`.
-    #[allow(non_upper_case_globals)]
-    pub const Ones: Self = Initializer::Constant(X::ONE);
-    /// Initializes all values with the fixed value `0`.
-    #[allow(non_upper_case_globals)]
-    pub const Zeros: Self = Initializer::Constant(X::ZERO);
-}
-
-impl<F: Float, S: Shape> Initializer<F, S>
-where rand_distr::StandardNormal: rand_distr::Distribution<F>
-{
-    /// Uses `self` to create a weights [`Matrix`].
-    pub fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<F, S> {
-        use Initializer as I;
-        match self {
-            I::Initialized(t) => t,
-            I::Constant(x) => Tensor::full(x),
-            I::Uniform(low, high) => Tensor::from_iter(uniform(rng, low, high)),
-            I::Normal { mean, std_dev } => Tensor::from_iter(normal(rng, mean, std_dev)),
-            I::StandardNormal => Tensor::from_iter(std_normal(rng)),
-            I::GlorotNormal => Tensor::from_iter(glorot_normal(rng, inputs, outputs)),
-            I::GlorotUniform => Tensor::from_iter(glorot_uniform(rng, inputs, outputs)),
-            I::PytorchDefault => Tensor::from_iter(pytorch_default(rng, inputs)),
-        }
+// for already initialized tensors
+impl<X: Element, S: Shape> Initializer<X, S> for Tensor<X, S> {
+    fn init(self, _rng: &mut impl Rng, _inputs: usize, _outputs: usize) -> Tensor<X, S> {
+        self
     }
 }
 
-fn uniform<'a, X: Float>(rng: &'a mut impl Rng, low: X, high: X) -> impl Iterator<Item = X> + 'a {
-    rng.sample_iter(rand_distr::Uniform::new(low, high))
+/// Initializes all values with the fixed value `self.0`
+pub struct Constant<X>(pub X);
+
+impl<X: Element, S: Shape> Initializer<X, S> for Constant<X> {
+    fn init(self, _rng: &mut impl Rng, _inputs: usize, _outputs: usize) -> Tensor<X, S> {
+        Tensor::full(self.0)
+    }
 }
 
-/// # Panics
-/// Panics if `std_dev` is not finite.
-fn normal<'a, X: Float>(
-    rng: &'a mut impl Rng,
-    mean: X,
-    std_dev: X,
-) -> impl Iterator<Item = X> + 'a
-where
-    rand_distr::StandardNormal: rand_distr::Distribution<X>,
+#[allow(non_snake_case)]
+pub fn Zeros<X: Num>() -> Constant<X> {
+    Constant(X::ZERO)
+}
+
+#[allow(non_snake_case)]
+pub fn Ones<X: Num>() -> Constant<X> {
+    Constant(X::ONE)
+}
+
+/// Uniform
+pub struct Uniform<X>(pub Range<X>);
+
+impl<X: Element, S: Shape> Initializer<X, S> for Uniform<X>
+where X: SampleUniform
 {
-    rng.sample_iter(rand_distr::Normal::new(mean, std_dev).expect("standard deviation is finite"))
+    fn init(self, rng: &mut impl Rng, _inputs: usize, _outputs: usize) -> Tensor<X, S> {
+        Tensor::from_iter(rng.sample_iter(rand_distr::Uniform::from(self.0)))
+    }
 }
 
-fn std_normal<'a, X: 'a>(rng: &'a mut impl Rng) -> impl Iterator<Item = X> + 'a
-where rand_distr::StandardNormal: rand_distr::Distribution<X> {
-    rng.sample_iter(rand_distr::StandardNormal)
+/// `𝓝 (self.mean, self.std_dev^2)`
+pub struct Normal<X> {
+    /// mean of the normal distribution
+    pub mean: X,
+    /// standard deviation of the normal distribution
+    pub std_dev: X,
 }
 
-fn glorot_uniform<'a, X: Float>(
-    rng: &'a mut impl Rng,
-    inputs: usize,
-    outputs: usize,
-) -> impl Iterator<Item = X> + 'a {
-    let x = (6.0.cast::<X>() / (inputs + outputs).cast()).sqrt(); // TODO: gain
-    uniform(rng, -x, x)
-}
-
-fn glorot_normal<'a, X: Float>(
-    rng: &'a mut impl Rng,
-    inputs: usize,
-    outputs: usize,
-) -> impl Iterator<Item = X> + 'a
-where
-    rand_distr::StandardNormal: rand_distr::Distribution<X>,
+impl<X: Float, S: Shape> Initializer<X, S> for Normal<X>
+where rand_distr::StandardNormal: rand_distr::Distribution<X>
 {
-    let std_dev = (2.0.cast::<X>() / (inputs + outputs).cast()).sqrt(); // TODO: gain
-    normal(rng, X::zero(), std_dev)
+    /// # Panics
+    /// Panics if `std_dev` is not finite.
+    fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S> {
+        Tensor::from_iter(rng.sample_iter(
+            rand_distr::Normal::new(self.mean, self.std_dev).expect("standard deviation is finite"),
+        ))
+    }
 }
 
-fn pytorch_default<'a, X: Float>(
-    rng: &'a mut impl Rng,
-    inputs: usize,
-) -> impl Iterator<Item = X> + 'a {
-    let x = inputs.cast::<X>().recip().sqrt();
-    uniform(rng, -x, x)
+/// `𝓝 (0, 1)`
+///
+/// Same as `Self::Normal { mean: 0.0, std_dev: 1.0 }` but faster.
+pub struct StandardNormal;
+
+impl<X: Element, S: Shape> Initializer<X, S> for StandardNormal
+where rand_distr::StandardNormal: rand_distr::Distribution<X>
+{
+    fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S> {
+        Tensor::from_iter(rng.sample_iter(rand_distr::StandardNormal))
+    }
+}
+
+/// also known as `Xavier Normal`.
+pub struct GlorotNormal;
+
+impl<X: Float, S: Shape> Initializer<X, S> for GlorotNormal
+where rand_distr::StandardNormal: rand_distr::Distribution<X>
+{
+    fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S> {
+        let std_dev = (X::lit(2) / (inputs + outputs).cast()).sqrt(); // TODO: gain
+        Normal { mean: X::ZERO, std_dev }.init(rng, inputs, outputs)
+    }
+}
+
+/// also known as `Xavier Uniform`.
+pub struct GlorotUniform;
+
+impl<X: Float, S: Shape> Initializer<X, S> for GlorotUniform
+where X: SampleUniform
+{
+    fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S> {
+        let x = (X::lit(6) / (inputs + outputs).cast()).sqrt(); // TODO: gain
+        Uniform(-x..x).init(rng, inputs, outputs)
+    }
+}
+
+/// [TensorFlow Dense Layer docs](https://www.tensorflow.org/api_docs/python/tf/keras/layers/Dense)
+//pub struct TensorFlowDefault;
+//impl<X: Element, S: Shape> Initializer<X, S> for TensorFlowDefault {}
+
+/// [Pytorch Linear Layer docs](https://pytorch.org/docs/stable/generated/torch.nn.Linear.html)
+pub struct PytorchDefault;
+
+impl<X: Float, S: Shape> Initializer<X, S> for PytorchDefault
+where X: SampleUniform
+{
+    fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S> {
+        let x = inputs.cast::<X>().recip().sqrt();
+        Uniform(-x..x).init(rng, inputs, outputs)
+    }
 }

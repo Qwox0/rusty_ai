@@ -3,9 +3,7 @@
 
 use const_tensor::{Tensor, Vector};
 use rand_distr::{Distribution, Uniform};
-use rusty_ai::{
-    loss_function::SquaredError, nn::Pair, optimizer::sgd::SGD, Initializer, NNBuilder, Norm, NN,
-};
+use rusty_ai::{initializer::PytorchDefault, loss_function::SquaredError, nn::Pair, optimizer::sgd::SGD, NNBuilder, Norm, NN};
 use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
 
 fn get_out_js_path() -> &'static str {
@@ -32,13 +30,13 @@ pub fn main() {
         .double_precision()
         .default_rng()
         .input_shape::<[(); 1]>()
-        .layer::<20>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<20>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<20>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<20>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<20>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<20>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<1>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<1>(PytorchDefault, PytorchDefault)
         .build()
         .to_trainer()
         .loss_function(SquaredError)

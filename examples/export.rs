@@ -1,4 +1,4 @@
-use rusty_ai::{Initializer, NNBuilder, NN};
+use rusty_ai::{initializer::PytorchDefault, NNBuilder, NN};
 use serde::de::DeserializeOwned;
 
 const IN: usize = 2;
@@ -8,11 +8,11 @@ fn get_nn() -> impl NN<f32, [(); IN], [(); OUT]> + DeserializeOwned {
     NNBuilder::default()
         .default_rng()
         .input_shape::<[(); IN]>()
-        .layer::<6>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<6>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<6>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<6>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<OUT>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<OUT>(PytorchDefault, PytorchDefault)
         .sigmoid()
         .build()
 }

@@ -2,15 +2,11 @@
 #![feature(iter_array_chunks)]
 #![feature(test)]
 
-use const_tensor::{Multidimensional, MultidimensionalOwned, Num, Vector};
+use const_tensor::{MultidimensionalOwned, Num, Vector};
 use mnist_util::{get_mnist, image_to_string, Mnist};
 use rand::{seq::SliceRandom, Rng};
 use rusty_ai::{
-    loss_function::SquaredError,
-    nn::Pair,
-    optimizer::sgd::SGD,
-    trainer::{NNTrainer, TrainOut},
-    Initializer, NNBuilder, Norm, NN,
+    initializer::PytorchDefault, loss_function::SquaredError, nn::Pair, optimizer::sgd::SGD, trainer::NNTrainer, NNBuilder, Norm, NN
 };
 use std::{ops::Range, time::Instant};
 
@@ -51,11 +47,11 @@ fn setup_ai(
         .double_precision()
         .rng(rng)
         .input_shape::<[(); IMAGE_SIZE]>()
-        .layer::<128>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<128>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<64>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<64>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<OUTPUTS>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<OUTPUTS>(PytorchDefault, PytorchDefault)
         .sigmoid()
         .build()
         .to_trainer()
@@ -92,7 +88,8 @@ pub fn main() {
     for e in 0..EPOCHS {
         let mut running_loss = 0.0;
         for batch in training_data.chunks(BATCH_SIZE) {
-            let loss = ai.train_rayon_output(batch).map(|out| out.loss).sum::<f64>() / BATCH_SIZE as f64;
+            let loss =
+                ai.train_rayon_output(batch).map(|out| out.loss).sum::<f64>() / BATCH_SIZE as f64;
             running_loss += loss;
         }
         // shuffle data after one full iteration

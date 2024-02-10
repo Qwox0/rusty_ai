@@ -1,17 +1,17 @@
 #![feature(test)]
 #![feature(iter_array_chunks)]
 
-use const_tensor::{vector, Float, MultidimensionalOwned, Num, Tensor, Vector};
+use const_tensor::{vector, Float, Num, Tensor, Vector};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use rand_distr::{Bernoulli, Distribution};
 use rusty_ai::{
+    initializer::PytorchDefault,
     loss_function::{LossFunction, SquaredError},
     nn::Pair,
     optimizer::{self, sgd::SGD},
     trainer::NNTrainer,
-    Initializer, NNBuilder, Norm, NN,
+    NNBuilder, Norm, NN,
 };
-use std::borrow::Borrow;
 
 const LOSS_FUNCTION: SquaredError = SquaredError;
 #[derive(Debug)]
@@ -44,9 +44,9 @@ where rand_distr::StandardNormal: Distribution<X> {
         //.default_rng()
         .seeded_rng(3)
         .input_shape::<[(); 2]>()
-        .layer::<NEURONS>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<NEURONS>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<1>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<1>(PytorchDefault, PytorchDefault)
         .relu()
         .build()
         .to_trainer()
@@ -60,9 +60,9 @@ where rand_distr::StandardNormal: Distribution<X> {
    NNBuilder::default()
        .seeded_rng(3)
        .input::<2>()
-       .layer(hidden_neurons, Initializer::PytorchDefault, Initializer::PytorchDefault)
+       .layer(hidden_neurons, PytorchDefault, PytorchDefault)
        .activation_function(ActivationFn::ReLU)
-       .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
+       .layer(1, PytorchDefault, PytorchDefault)
        .activation_function(ActivationFn::Sigmoid)
        .build::<1>()
        .to_trainer()

@@ -123,8 +123,7 @@ where
     ) {
         // gradient of the cost function with respect to the neuron output of the last layer.
         let output_gradient = self.loss_function.backpropagate(&output, expected_output);
-        self.network
-            .backprop_inplace(output_gradient, train_data, &mut self.gradient);
+        self.network.backprop_inplace(output_gradient, train_data, &mut self.gradient);
     }
 
     pub fn backpropagate_inplace(
@@ -193,7 +192,6 @@ where
     pub fn train_single_thread<'a, EO_: Borrow<EO> + 'a>(
         &'a mut self,
         batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
-        //) -> Training<'a, Self, Pair<X, IN, EO>>
     ) {
         if !self.retain_gradient {
             self.gradient.set_zero();
@@ -211,7 +209,6 @@ where
     pub fn train_single_thread_output<'a, EO_: Borrow<EO> + 'a>(
         &'a mut self,
         batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
-        //) -> Training<'a, Self, Pair<X, IN, EO>>
     ) -> impl Iterator<Item = TrainOut<X, OUT>> {
         if !self.retain_gradient {
             self.gradient.set_zero();
@@ -330,11 +327,12 @@ mod benches;
 #[cfg(test)]
 mod seeded_tests {
     use crate::{
+        initializer::PytorchDefault,
+        loss_function::SquaredError,
         nn::{GradComponent, Pair},
         norm::Norm,
         optimizer::sgd::SGD,
-        prelude::SquaredError,
-        Initializer, NNBuilder, NN,
+        NNBuilder, NN,
     };
     use const_tensor::{tensor, Multidimensional, Vector, VectorShape};
     use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -348,11 +346,11 @@ mod seeded_tests {
             .double_precision()
             .rng(&mut rng)
             .input_shape::<VectorShape<2>>()
-            .layer::<5>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .layer::<5>(PytorchDefault, PytorchDefault)
             .relu()
-            .layer::<5>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .layer::<5>(PytorchDefault, PytorchDefault)
             .relu()
-            .layer::<3>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .layer::<3>(PytorchDefault, PytorchDefault)
             .sigmoid()
             .build();
 
@@ -371,10 +369,10 @@ mod seeded_tests {
             .double_precision()
             .rng(&mut rng)
             .input_shape::<VectorShape<2>>()
-            .layer::<5>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .layer::<5>(PytorchDefault, PytorchDefault)
             .leaky_relu(0.1)
-            .layer::<5>(Initializer::PytorchDefault, Initializer::PytorchDefault)
-            .layer::<3>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .layer::<5>(PytorchDefault, PytorchDefault)
+            .layer::<3>(PytorchDefault, PytorchDefault)
             .sigmoid()
             .build()
             .to_trainer()
@@ -424,11 +422,11 @@ mod seeded_tests {
             .double_precision()
             .rng(&mut rng)
             .input_shape::<VectorShape<2>>()
-            .layer::<5>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .layer::<5>(PytorchDefault, PytorchDefault)
             .relu()
-            .layer::<5>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .layer::<5>(PytorchDefault, PytorchDefault)
             .relu()
-            .layer::<3>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+            .layer::<3>(PytorchDefault, PytorchDefault)
             .sigmoid()
             .build()
             .to_trainer()

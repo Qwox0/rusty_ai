@@ -15,7 +15,7 @@
 pub mod bias;
 pub mod clip_gradient_norm;
 pub mod data;
-mod initializer;
+pub mod initializer;
 pub mod loss_function;
 pub mod nn;
 mod norm;
@@ -28,7 +28,6 @@ mod traits;
 mod util;
 
 pub use const_tensor::{self, Element, Float, Num};
-pub use initializer::Initializer;
 pub use nn::{NNBuilder, Pair, NN};
 pub use norm::Norm;
 pub use optimizer::Optimizer;
@@ -39,17 +38,8 @@ pub use reexport::half::{bf16, f16};
 /// includes everything
 pub mod prelude {
     pub use crate::{
-        bias::*,
-        clip_gradient_norm::*,
-        const_tensor::*,
-        data::*,
-        //gradient::aliases::*,
-        loss_function::*,
-        nn::builder::markers::*,
-        optimizer::*,
-        //trainer::{markers::*, *},
-        training::*,
-        *,
+        clip_gradient_norm::*, const_tensor::*, initializer::*, loss_function::*,
+        nn::builder::markers::*, optimizer::*, *,
     };
 }
 

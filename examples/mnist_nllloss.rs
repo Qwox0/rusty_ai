@@ -9,10 +9,7 @@ use const_tensor::{Multidimensional, Num, Vector};
 use mnist_util::{get_mnist, image_to_string, Mnist};
 use rand::seq::SliceRandom;
 use rusty_ai::{
-    loss_function::NLLLoss,
-    nn::{NNBuilder, Pair},
-    optimizer::sgd::SGD,
-    Initializer, Norm, NN,
+    initializer::PytorchDefault, loss_function::NLLLoss, nn::{NNBuilder, Pair}, optimizer::sgd::SGD, Norm, NN
 };
 use std::{ops::Range, time::Instant};
 
@@ -50,11 +47,11 @@ pub fn main() {
         .double_precision()
         .rng(&mut rng)
         .input_shape::<[(); IMAGE_SIZE]>()
-        .layer::<128>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<128>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<64>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<64>(PytorchDefault, PytorchDefault)
         .relu()
-        .layer::<OUTPUTS>(Initializer::PytorchDefault, Initializer::PytorchDefault)
+        .layer::<OUTPUTS>(PytorchDefault, PytorchDefault)
         .log_softmax()
         .build()
         .to_trainer()

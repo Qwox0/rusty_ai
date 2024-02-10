@@ -7,7 +7,7 @@ use super::{
     softmax::{LogSoftmax, Softmax},
     LeakyReLU, NNHead, Sigmoid, NN,
 };
-use crate::Initializer;
+use crate::initializer::Initializer;
 use const_tensor::{Element, Float, Matrix, Shape, Vector};
 use half::{bf16, f16};
 use markers::*;
@@ -200,8 +200,8 @@ where
     /// Uses [`Initializer`] to add a new [`Linear`] layer to the neural network.
     pub fn layer<const N: usize>(
         mut self,
-        weights_init: Initializer<F, [[(); IN]; N]>,
-        bias_init: Initializer<F, [(); N]>,
+        weights_init: impl Initializer<F, [[(); IN]; N]>,
+        bias_init: impl Initializer<F, [(); N]>,
     ) -> NNBuilder<F, NNIN, [(); N], Linear<F, IN, N, PREV>, RNG> {
         let weights = weights_init.init(&mut self.rng, IN, N); // TODO: lazy
         let bias = bias_init.init(&mut self.rng, IN, N);
