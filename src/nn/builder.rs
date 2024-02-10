@@ -189,20 +189,19 @@ where
     }
 }
 
-impl<F, NNIN, const IN: usize, PREV, RNG> NNBuilder<F, NNIN, [(); IN], PREV, RNG>
+impl<X, NNIN, const IN: usize, PREV, RNG> NNBuilder<X, NNIN, [(); IN], PREV, RNG>
 where
-    F: Float,
+    X: Element,
     NNIN: Shape,
-    PREV: NN<F, NNIN, [(); IN]>,
+    PREV: NN<X, NNIN, [(); IN]>,
     RNG: rand::Rng,
-    rand_distr::StandardNormal: rand_distr::Distribution<F>,
 {
     /// Uses [`Initializer`] to add a new [`Linear`] layer to the neural network.
     pub fn layer<const N: usize>(
         mut self,
-        weights_init: impl Initializer<F, [[(); IN]; N]>,
-        bias_init: impl Initializer<F, [(); N]>,
-    ) -> NNBuilder<F, NNIN, [(); N], Linear<F, IN, N, PREV>, RNG> {
+        weights_init: impl Initializer<X, [[(); IN]; N]>,
+        bias_init: impl Initializer<X, [(); N]>,
+    ) -> NNBuilder<X, NNIN, [(); N], Linear<X, IN, N, PREV>, RNG> {
         let weights = weights_init.init(&mut self.rng, IN, N); // TODO: lazy
         let bias = bias_init.init(&mut self.rng, IN, N);
         self.layer_from_parts(weights, bias)
