@@ -16,6 +16,99 @@ use std::{borrow::Borrow, iter::Map, sync::mpsc};
 mod builder;
 pub use builder::{markers, NNTrainerBuilder};
 
+pub trait Trainable<X: Element, IN: Shape, OUT: Shape> {
+    type Network: NN<X, IN, OUT>;
+    type LossFunction: LossFunction<X, OUT, ExpectedOutput = Self::EO>;
+    type EO;
+    type Optimizer: Optimizer<X>;
+
+    fn get_network(&self) -> &Self::Network;
+
+    /// Trains the internal [`NN`] lazily.
+    fn train_single_thread<'a, EO_: Borrow<Self::EO> + 'a>(
+        &'a mut self,
+        batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
+    );
+
+    /// Trains the internal [`NN`] lazily.
+    fn train_single_thread_output<'a, EO_: Borrow<Self::EO> + 'a>(
+        &'a mut self,
+        batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
+    ) -> impl Iterator<Item = TrainOut<X, OUT>>;
+
+    /// Trains the internal [`NN`].
+    fn train_rayon<'a, EO_>(
+        &'a mut self,
+        batch: impl IntoParallelIterator<Item = &'a Pair<X, IN, EO_>>,
+    ) where
+        EO_: Borrow<Self::EO> + 'a;
+
+    /// Trains the internal [`NN`].
+    fn train_rayon_output<'a, EO_>(
+        &'a mut self,
+        batch: impl IntoParallelIterator<Item = &'a Pair<X, IN, EO_>>,
+    ) -> impl Iterator<Item = TrainOut<X, OUT>>
+    where
+        EO_: Borrow<Self::EO> + 'a,
+        IN: Send + Sync,
+        OUT: Send + Sync,
+        TrainOut<X, OUT>: Send;
+
+    /// Propagates an [`Input`] through the underlying neural network and returns its output.
+    #[inline]
+    fn propagate(&self, input: &tensor<X, IN>) -> Tensor<X, OUT> {
+        self.get_network().prop(input.to_owned())
+    }
+
+    /// Iterates over a `batch` of inputs and returns an [`Iterator`] over the outputs.
+    ///
+    /// This [`Iterator`] must be consumed otherwise no calculations are done.
+    ///
+    /// If you also want to calculate losses use `test` or `prop_with_test`.
+    #[must_use = "`Iterators` must be consumed to do work."]
+    #[inline]
+    fn propagate_batch<'a, B>(
+        &'a self,
+        batch: B,
+    ) -> Map<B::IntoIter, impl FnMut(&'a tensor<X, IN>) -> Tensor<X, OUT>>
+    where
+        B: IntoIterator<Item = &'a tensor<X, IN>>,
+    {
+        self.get_network().prop_batch(batch)
+    }
+
+    /// Propagates a [`Tensor`] through the underlying neural network and returns the output
+    /// [`Tensor`] and additional data which is required for backpropagation.
+    ///
+    /// If only the output is needed, use the normal `propagate` method instead.
+    fn train_prop(
+        &self,
+        input: &impl ToOwned<Owned = Tensor<X, IN>>,
+    ) -> (Tensor<X, OUT>, <Self::Network as NN<X, IN, OUT>>::StoredData) {
+        self.get_network().train_prop(input.to_owned())
+    }
+
+    /// To test a batch of multiple pairs use `test_batch`.
+    fn test<EO: Borrow<Self::EO>>(&self, pair: &Pair<X, IN, EO>) -> TestResult<X, OUT>;
+
+    /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
+    /// outputs and the losses.
+    ///
+    /// This [`Iterator`] must be consumed otherwise no calculations are done.
+    #[must_use = "`Iterators` must be consumed to do work."]
+    #[inline]
+    fn test_batch<'a, B, EO>(
+        &'a self,
+        batch: B,
+    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO>) -> TestResult<X, OUT>>
+    where
+        B: IntoIterator<Item = &'a Pair<X, IN, EO>>,
+        EO: Borrow<Self::EO> + 'a,
+    {
+        batch.into_iter().map(|p| self.test(p))
+    }
+}
+
 /// Trainer for a [`NeuralNetwork`].
 ///
 /// Can be constructed using a [`NNTrainerBuilder`].
@@ -66,44 +159,6 @@ where
         self.network
     }
 
-    pub fn get_network(&self) -> &NN_ {
-        &self.network
-    }
-
-    /// Propagates an [`Input`] through the underlying neural network and returns its output.
-    #[inline]
-    pub fn propagate(&self, input: &tensor<X, IN>) -> Tensor<X, OUT> {
-        self.network.prop(input.to_owned())
-    }
-
-    /// Iterates over a `batch` of inputs and returns an [`Iterator`] over the outputs.
-    ///
-    /// This [`Iterator`] must be consumed otherwise no calculations are done.
-    ///
-    /// If you also want to calculate losses use `test` or `prop_with_test`.
-    #[must_use = "`Iterators` must be consumed to do work."]
-    #[inline]
-    pub fn propagate_batch<'a, B>(
-        &'a self,
-        batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a tensor<X, IN>) -> Tensor<X, OUT>>
-    where
-        B: IntoIterator<Item = &'a tensor<X, IN>>,
-    {
-        self.network.prop_batch(batch)
-    }
-
-    /// Propagates a [`Tensor`] through the underlying neural network and returns the output
-    /// [`Tensor`] and additional data which is required for backpropagation.
-    ///
-    /// If only the output is needed, use the normal `propagate` method instead.
-    pub fn train_prop(
-        &self,
-        input: &impl ToOwned<Owned = Tensor<X, IN>>,
-    ) -> (Tensor<X, OUT>, NN_::StoredData) {
-        self.network.train_prop(input.to_owned())
-    }
-
     /// Clips the gradient based on `self.clip_gradient_norm`.
     ///
     /// If `self.clip_gradient_norm` is [`None`], this does nothing.
@@ -149,36 +204,13 @@ where
         gradient
     }
 
-    /// To test a batch of multiple pairs use `test_batch`.
-    #[inline]
-    pub fn test<EO_: Borrow<EO>>(&self, pair: &Pair<X, IN, EO_>) -> TestResult<X, OUT> {
-        self.network.test(pair, &self.loss_function)
-    }
-
-    /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
-    /// outputs and the losses.
-    ///
-    /// This [`Iterator`] must be consumed otherwise no calculations are done.
-    #[must_use = "`Iterators` must be consumed to do work."]
-    #[inline]
-    pub fn test_batch<'a, B, EO_>(
-        &'a self,
-        batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(&'a Pair<X, IN, EO_>) -> TestResult<X, OUT>>
-    where
-        B: IntoIterator<Item = &'a Pair<X, IN, EO_>>,
-        EO_: Borrow<EO> + 'a,
-    {
-        batch.into_iter().map(|p| self.test(p))
-    }
-
     #[inline]
     pub fn optimize_trainee(&mut self) {
         self.network.optimize(&self.gradient, &self.optimizer, &mut self.opt_state);
     }
 }
 
-impl<X, IN, OUT, L, EO, O, NN_> NNTrainer<X, IN, OUT, L, O, NN_>
+impl<X, IN, OUT, L, EO, O, NN_> Trainable<X, IN, OUT> for NNTrainer<X, IN, OUT, L, O, NN_>
 where
     X: Float,
     IN: Shape,
@@ -187,9 +219,16 @@ where
     L: LossFunction<X, OUT, ExpectedOutput = EO>,
     O: Optimizer<X>,
 {
-    /// Trains the internal [`NN`].
-    #[inline]
-    pub fn train_single_thread<'a, EO_: Borrow<EO> + 'a>(
+    type EO = L::ExpectedOutput;
+    type LossFunction = L;
+    type Network = NN_;
+    type Optimizer = O;
+
+    fn get_network(&self) -> &Self::Network {
+        &self.network
+    }
+
+    fn train_single_thread<'a, EO_: Borrow<Self::EO> + 'a>(
         &'a mut self,
         batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
     ) {
@@ -204,9 +243,7 @@ where
         self.optimize_trainee();
     }
 
-    /// Trains the internal [`NN`] lazily.
-    #[inline]
-    pub fn train_single_thread_output<'a, EO_: Borrow<EO> + 'a>(
+    fn train_single_thread_output<'a, EO_: Borrow<Self::EO> + 'a>(
         &'a mut self,
         batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
     ) -> impl Iterator<Item = TrainOut<X, OUT>> {
@@ -227,15 +264,11 @@ where
         ret.into_iter()
     }
 
-    /// Trains the internal [`NN`].
-    #[inline]
-    pub fn train_rayon<'a, EO_>(
+    fn train_rayon<'a, EO_>(
         &'a mut self,
         batch: impl IntoParallelIterator<Item = &'a Pair<X, IN, EO_>>,
     ) where
-        EO_: Borrow<EO> + 'a,
-        NN_::Grad: Send + Sync,
-        NN_::OptState<O>: Send + Sync,
+        EO_: Borrow<Self::EO> + 'a,
     {
         if !self.retain_gradient {
             self.gradient.set_zero();
@@ -257,18 +290,14 @@ where
         self.optimize_trainee();
     }
 
-    /// Trains the internal [`NN`].
-    #[inline]
-    pub fn train_rayon_output<'a, EO_>(
+    fn train_rayon_output<'a, EO_>(
         &'a mut self,
         batch: impl IntoParallelIterator<Item = &'a Pair<X, IN, EO_>>,
     ) -> impl Iterator<Item = TrainOut<X, OUT>>
     where
-        EO_: Borrow<EO> + 'a,
+        EO_: Borrow<Self::EO> + 'a,
         IN: Send + Sync,
         OUT: Send + Sync,
-        NN_::Grad: Send + Sync,
-        NN_::OptState<O>: Send + Sync,
         TrainOut<X, OUT>: Send,
     {
         if !self.retain_gradient {
@@ -297,6 +326,10 @@ where
 
         recv.into_iter()
     }
+
+    fn test<EO_: Borrow<Self::EO>>(&self, pair: &Pair<X, IN, EO_>) -> TestResult<X, OUT> {
+        self.network.test(pair, &self.loss_function)
+    }
 }
 
 pub struct TrainOut<X: Element, S: Shape> {
@@ -309,15 +342,13 @@ where
     X: Element,
     IN: Shape,
     OUT: Shape,
-    L: fmt::Display,
+    L: fmt::Debug,
     O: Optimizer<X> + fmt::Debug,
     NN_: NN<X, IN, OUT>,
-    [(); IN::DIM]: Sized,
-    [(); OUT::DIM]: Sized,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.network)?;
-        write!(f, "Loss Function: {}, Optimizer: {:?}", self.loss_function, self.optimizer)
+        write!(f, "Loss Function: {:?}, Optimizer: {:?}", self.loss_function, self.optimizer)
     }
 }
 
@@ -332,6 +363,7 @@ mod seeded_tests {
         nn::{GradComponent, Pair},
         norm::Norm,
         optimizer::sgd::SGD,
+        trainer::Trainable,
         NNBuilder, NN,
     };
     use const_tensor::{tensor, Multidimensional, Vector, VectorShape};

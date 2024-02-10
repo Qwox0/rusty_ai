@@ -9,7 +9,7 @@ use rusty_ai::{
     loss_function::{LossFunction, SquaredError},
     nn::Pair,
     optimizer::{self, sgd::SGD},
-    trainer::NNTrainer,
+    trainer::{NNTrainer, Trainable},
     NNBuilder, Norm, NN,
 };
 
@@ -36,9 +36,7 @@ impl<X: Float> LossFunction<X, [(); 1]> for XorLoss {
     }
 }
 
-fn get_nn<X: Float, const NEURONS: usize>()
--> NNTrainer<X, [(); 2], [(); 1], XorLoss, SGD<X>, impl NN<X, [(); 2], [(); 1]>>
-where rand_distr::StandardNormal: Distribution<X> {
+fn get_nn<X: Float, const NEURONS: usize>() -> impl Trainable<X, [(); 2], [(); 1]> {
     NNBuilder::default()
         .element_type::<X>()
         //.default_rng()
@@ -56,22 +54,6 @@ where rand_distr::StandardNormal: Distribution<X> {
         .new_clip_gradient_norm(X::lit(5), Norm::Two)
         .build()
 }
-/*
-   NNBuilder::default()
-       .seeded_rng(3)
-       .input::<2>()
-       .layer(hidden_neurons, PytorchDefault, PytorchDefault)
-       .activation_function(ActivationFn::ReLU)
-       .layer(1, PytorchDefault, PytorchDefault)
-       .activation_function(ActivationFn::Sigmoid)
-       .build::<1>()
-       .to_trainer()
-       .loss_function(XorLoss)
-       .optimizer(optimizer::sgd::SGD::default())
-       .retain_gradient(true)
-       .new_clip_gradient_norm(5.0, Norm::Two)
-       .build()
-*/
 
 fn gen_data<'a, X: Num>(
     rng: &'a mut impl Rng,

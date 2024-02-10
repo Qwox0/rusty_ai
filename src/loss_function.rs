@@ -5,6 +5,7 @@ use const_tensor::{
     Vector,
 };
 use derive_more::Display;
+use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
 /// A trait for calculating the loss from an output of the neural network and the expected output.
@@ -49,7 +50,7 @@ pub trait LossFunction<X: Element, S: Shape>: Send + Sync + 'static {
 
 /// squared error loss function.
 /// implements [`LossFunction`].
-#[derive(Debug, Clone, Copy, Default, Display)]
+#[derive(Debug, Clone, Copy, Default, Display, Serialize, Deserialize)]
 pub struct SquaredError;
 
 impl<X: Num, S: Shape> LossFunction<X, S> for SquaredError {
@@ -120,7 +121,7 @@ impl<X: Num, S: Shape> LossFunction<X, S> for MeanSquaredError {
 /// `N`: number of network outputs
 /// `e`: expected variant/class (unsigned integer in range `0..N`)
 /// `L`: Loss
-#[derive(Debug, Clone, Copy, Default, Display)]
+#[derive(Debug, Clone, Copy, Default, Display, Serialize, Deserialize)]
 pub struct NLLLoss;
 
 impl<X: Float, const N: usize> LossFunction<X, [(); N]> for NLLLoss {

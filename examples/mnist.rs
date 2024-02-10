@@ -6,7 +6,12 @@ use const_tensor::{MultidimensionalOwned, Num, Vector};
 use mnist_util::{get_mnist, image_to_string, Mnist};
 use rand::{seq::SliceRandom, Rng};
 use rusty_ai::{
-    initializer::PytorchDefault, loss_function::SquaredError, nn::Pair, optimizer::sgd::SGD, trainer::NNTrainer, NNBuilder, Norm, NN
+    initializer::PytorchDefault,
+    loss_function::SquaredError,
+    nn::Pair,
+    optimizer::sgd::SGD,
+    trainer::{NNTrainer, Trainable},
+    NNBuilder, Norm, NN,
 };
 use std::{ops::Range, time::Instant};
 
@@ -33,16 +38,7 @@ fn transform<X: Num>(
         .collect()
 }
 
-fn setup_ai(
-    rng: &mut impl Rng,
-) -> NNTrainer<
-    f64,
-    [(); IMAGE_SIZE],
-    [(); OUTPUTS],
-    SquaredError,
-    SGD<f64>,
-    impl NN<f64, [(); IMAGE_SIZE], [(); OUTPUTS]>,
-> {
+fn setup_ai(rng: &mut impl Rng) -> impl Trainable<f64, [(); IMAGE_SIZE], [(); OUTPUTS]> {
     NNBuilder::default()
         .double_precision()
         .rng(rng)
@@ -106,7 +102,6 @@ pub fn main() {
     for pair in test_data.iter().take(3) {
         print_image(pair, -1.0..1.0);
         let (out, loss) = ai.test(pair).into_tuple();
-        let (input, expected_output) = pair.as_tuple();
         println!("output: {:?}", out);
         let propab = out.as_arr().iter().copied().map(f64::exp).collect::<Vec<_>>();
         let guess = propab.iter().enumerate().max_by(|x, y| x.1.total_cmp(y.1)).unwrap().0;

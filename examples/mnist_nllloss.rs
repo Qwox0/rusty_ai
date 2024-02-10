@@ -9,7 +9,12 @@ use const_tensor::{Multidimensional, Num, Vector};
 use mnist_util::{get_mnist, image_to_string, Mnist};
 use rand::seq::SliceRandom;
 use rusty_ai::{
-    initializer::PytorchDefault, loss_function::NLLLoss, nn::{NNBuilder, Pair}, optimizer::sgd::SGD, Norm, NN
+    initializer::PytorchDefault,
+    loss_function::NLLLoss,
+    nn::{NNBuilder, Pair},
+    optimizer::sgd::SGD,
+    trainer::Trainable,
+    Norm, NN,
 };
 use std::{ops::Range, time::Instant};
 

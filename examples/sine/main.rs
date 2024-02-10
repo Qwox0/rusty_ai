@@ -3,7 +3,10 @@
 
 use const_tensor::{Tensor, Vector};
 use rand_distr::{Distribution, Uniform};
-use rusty_ai::{initializer::PytorchDefault, loss_function::SquaredError, nn::Pair, optimizer::sgd::SGD, NNBuilder, Norm, NN};
+use rusty_ai::{
+    initializer::PytorchDefault, loss_function::SquaredError, nn::Pair, optimizer::sgd::SGD,
+    trainer::Trainable, NNBuilder, Norm, NN,
+};
 use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
 
 fn get_out_js_path() -> &'static str {
