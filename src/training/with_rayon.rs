@@ -92,15 +92,12 @@ where
 
     /// Executes the [`Training`] and returns the mean of the losses calculated during training.
     pub fn mean_loss(self) -> X {
-        todo!("mean_loss")
-        /*
         let mut count = 0;
-        let sum = self.losses().fold(0.0, |acc, (_, loss)| {
+        let sum = self.losses().fold(X::ZERO, |acc, (_, loss)| {
             count += 1;
             acc + loss
         });
-        sum / count as X
-        */
+        sum / X::lit(count)
     }
 }
 
