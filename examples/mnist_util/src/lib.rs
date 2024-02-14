@@ -1,6 +1,8 @@
 #![feature(iter_array_chunks)]
 
-use std::ops::Range;
+use core::fmt;
+use rusty_ai::Num;
+use std::ops::{Range, Sub};
 
 #[cfg(not(target_os = "windows"))]
 const NL: &'static str = "\n";
@@ -10,14 +12,18 @@ const NL: &'static str = "\r\n";
 pub use load_mnist::Mnist;
 
 pub fn get_mnist() -> load_mnist::Mnist {
+    get_mnist_with_len(60_000, 10_000)
+}
+
+pub fn get_mnist_with_len(train_len: u32, test_len: u32) -> load_mnist::Mnist {
     let data_path = concat!(env!("CARGO_MANIFEST_DIR"), "/mnist-raw");
 
     load_mnist::MnistBuilder::new()
         .base_path(data_path)
         .label_format_digit()
-        .training_set_length(60_000)
+        .training_set_length(train_len)
         .validation_set_length(0)
-        .test_set_length(10_000)
+        .test_set_length(test_len)
         .finalize()
 }
 
@@ -26,9 +32,9 @@ pub fn get_mnist() -> load_mnist::Mnist {
 /// # Panics
 ///
 /// Panics if `IMAGE_SIZE != IMAGE_SIDE ^ 2`
-pub fn image_to_string<const IMAGE_SIDE: usize, const IMAGE_SIZE: usize>(
-    image: &[f64; IMAGE_SIZE],
-    val_range: Range<f64>,
+pub fn image_to_string<X: Num, const IMAGE_SIDE: usize, const IMAGE_SIZE: usize>(
+    image: &[X; IMAGE_SIZE],
+    val_range: Range<X>,
 ) -> String {
     assert_eq!(IMAGE_SIZE, IMAGE_SIDE * IMAGE_SIDE);
 
@@ -44,11 +50,10 @@ pub fn image_to_string<const IMAGE_SIDE: usize, const IMAGE_SIZE: usize>(
     buf.push_str(v_border);
     buf.push('┐');
     buf.push_str(NL);
-    #[allow(illegal_floating_point_literal_pattern)]
     image
         .iter()
-        .map(|x| (x - val_range.start) / range_width)
-        .map(|x| match x {
+        .map(|x| (*x - val_range.start) / range_width)
+        .map(|x| match x.cast::<f32>() {
             ..=0.0751 => ' ',
             ..=0.0829 => '`',
             ..=0.0848 => '.',

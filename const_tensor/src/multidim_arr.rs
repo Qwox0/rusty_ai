@@ -1,4 +1,4 @@
-use crate::{arr_wrapper::Arr, Element, Shape};
+use crate::{Element, Shape};
 use core::fmt;
 use std::mem;
 
@@ -16,9 +16,6 @@ pub trait MultidimArr: Sized + Copy + fmt::Debug + Send + Sync + 'static {
     /// Next smaller shape
     type Sub: MultidimArr<Element = Self::Element>;
 
-    /// Same shape as Self but using the [`Arr`] wrapper.
-    type Wrapped: Default + Copy;
-
     const DIM: usize;
     const LEN: usize;
 
@@ -28,41 +25,8 @@ pub trait MultidimArr: Sized + Copy + fmt::Debug + Send + Sync + 'static {
     fn as_ptr(&self) -> *const Self::Element;
     fn as_mut_ptr(&mut self) -> *mut Self::Element;
 
-    /// # Example
-    ///
-    /// ```rust
-    /// # use const_tensor::*;
-    /// let arr = [[1, 2], [3, 4]];
-    /// let wrap = Arr { arr: [Arr { arr: [1, 2] }, Arr { arr: [3, 4] }] };
-    /// assert_eq!(arr.wrap(), wrap);
-    /// ```
     #[inline]
-    fn wrap(self) -> Self::Wrapped {
-        let arr = mem::ManuallyDrop::new(self);
-        // SAFETY: `Arr<T, N> == [T; N]`
-        unsafe { mem::transmute_copy(&arr) }
-    }
-
-    #[inline]
-    fn wrap_ref(&self) -> &Self::Wrapped {
-        // SAFETY: `Arr<T, N> == [T; N]`
-        unsafe { mem::transmute(self) }
-    }
-
-    /// # Example
-    ///
-    /// ```rust
-    /// # use const_tensor::*;
-    /// let arr = [[1, 2], [3, 4]];
-    /// let wrap = Arr { arr: [Arr { arr: [1, 2] }, Arr { arr: [3, 4] }] };
-    /// assert_eq!(arr, <[[i32; 2]; 2]>::unwrap(wrap));
-    /// ```
-    #[inline]
-    fn unwrap(data: Self::Wrapped) -> Self {
-        let data = mem::ManuallyDrop::new(data);
-        // SAFETY: `Arr<T, N> == [T; N]`
-        unsafe { mem::transmute_copy(&data) }
-    }
+    fn default() -> Self;
 
     /// hint that `impl MultidimArr<Element=Element = X, Mapped<()> = S>` is the same type as
     /// `S::Mapped<X>`.
@@ -91,7 +55,6 @@ impl<X: Element> MultidimArr for X {
     type Element = X;
     type Mapped<Y: Element> = Y;
     type Sub = X;
-    type Wrapped = X;
 
     const DIM: usize = 0;
     const LEN: usize = 1;
@@ -118,6 +81,10 @@ impl<X: Element> MultidimArr for X {
         self
     }
 
+    fn default() -> Self {
+        Default::default()
+    }
+
     #[inline]
     fn get_dims_arr() -> [usize; 0] {
         []
@@ -135,7 +102,6 @@ where
     type Element = SUB::Element;
     type Mapped<Y: Element> = [SUB::Mapped<Y>; N];
     type Sub = SUB;
-    type Wrapped = Arr<SUB::Wrapped, N>;
 
     const DIM: usize = SUB::DIM + 1;
     const LEN: usize = SUB::LEN * N;
@@ -158,6 +124,10 @@ where
     #[inline]
     fn as_mut_ptr(&mut self) -> *mut X {
         self.as_mut_slice().as_mut_ptr() as *mut X
+    }
+
+    fn default() -> Self {
+        [SUB::default(); N]
     }
 
     #[inline]

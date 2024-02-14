@@ -30,7 +30,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "const_tensor"
 version = "0.1.0"
 dependencies = [
- "half",
+ "half 2.3.1",
  "inline_closure",
  "num",
  "rand",
@@ -116,6 +116,12 @@ dependencies = [
 
 [[package]]
 name = "half"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
+
+[[package]]
+name = "half"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc52e53916c08643f1b56ec082790d1e86a32e58dc5268f897f313fbae7b4872"
@@ -177,6 +183,7 @@ name = "mnist_util"
 version = "0.1.0"
 dependencies = [
  "mnist",
+ "rusty_ai",
 ]
 
 [[package]]
@@ -356,13 +363,14 @@ dependencies = [
  "anyhow",
  "const_tensor",
  "derive_more",
- "half",
+ "half 2.3.1",
  "inline_closure",
  "mnist_util",
  "rand",
  "rand_distr",
  "rayon",
  "serde",
+ "serde_cbor",
  "serde_json",
  "spmc",
 ]
@@ -394,6 +402,16 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38636132857f68ec3d5f3eb121166d2af33cb55174c4d5ff645db6165cbef0fd"
 dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde_cbor"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
+dependencies = [
+ "half 1.8.2",
  "serde",
 ]
 

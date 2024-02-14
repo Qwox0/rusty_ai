@@ -2,10 +2,15 @@
 #![feature(generic_const_exprs)]
 
 use const_tensor::{Tensor, Vector};
+use rand::{rngs::StdRng, SeedableRng};
 use rand_distr::{Distribution, Uniform};
 use rusty_ai::{
-    initializer::PytorchDefault, loss_function::SquaredError, nn::Pair, optimizer::sgd::SGD,
-    trainer::Trainable, NNBuilder, Norm, NN,
+    initializer::PytorchDefault,
+    loss_function::SquaredError,
+    nn::{Pair, TestResult},
+    optimizer::sgd::SGD,
+    trainer::Trainable,
+    NNBuilder, Norm, NN,
 };
 use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
 
@@ -19,6 +24,8 @@ fn get_out_js_path() -> &'static str {
     }
 }
 
+type X = f32;
+
 pub fn main() {
     let out_js_path = get_out_js_path();
     println!("Generation output file: {}", out_js_path);
@@ -29,9 +36,10 @@ pub fn main() {
         .open(out_js_path)
         .expect("could open file");
 
+    let mut rng = StdRng::seed_from_u64(69420);
     let mut ai = NNBuilder::default()
-        .double_precision()
-        .default_rng()
+        .normal_precision()
+        .rng(rng)
         .input_shape::<[(); 1]>()
         .layer::<20>(PytorchDefault, PytorchDefault)
         .relu()
@@ -49,7 +57,7 @@ pub fn main() {
         .build();
 
     const EPOCHS: usize = 1000;
-    const DATA_RANGE: Range<f64> = -10.0..10.0;
+    const DATA_RANGE: Range<X> = -10.0..10.0;
 
     let training_data = Uniform::from(DATA_RANGE)
         .sample_iter(rand::thread_rng())
@@ -73,7 +81,7 @@ pub fn main() {
     let mut js_res_vars = vec![];
 
     let (outputs, losses): (Vec<_>, Vec<_>) = ai.test_batch(&test_data).map(Into::into).unzip();
-    let error = losses.into_iter().sum::<f64>();
+    let error = losses.into_iter().sum::<X>();
     println!("epoch: {:>4}, loss: {:<20}", 0, error);
     export_res(&mut js_file, &mut js_res_vars, 0, outputs, error);
 
@@ -83,7 +91,7 @@ pub fn main() {
         if epoch % 100 == 0 {
             let (outputs, losses): (Vec<_>, Vec<_>) =
                 ai.test_batch(&test_data).map(Into::into).unzip();
-            let error = losses.into_iter().sum::<f64>();
+            let error = losses.into_iter().sum::<X>();
             println!("epoch: {:>4}, loss: {:<20}", epoch, error);
             export_res(&mut js_file, &mut js_res_vars, epoch, outputs, error);
         }
@@ -96,8 +104,8 @@ fn export_res(
     js_file: &mut File,
     js_res_vars: &mut Vec<String>,
     epoch: usize,
-    outputs: Vec<Vector<f64, 1>>,
-    error_sum: f64,
+    outputs: Vec<Vector<X, 1>>,
+    error_sum: X,
 ) {
     let js_var_name = format!("gen{epoch}_result");
     writeln!(
@@ -112,4 +120,58 @@ fn export_res(
 
 fn stringify_arr(iter: impl Iterator<Item = impl Display>) -> String {
     format!("[{}]", iter.map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn seeded_test() {
+        let mut rng = StdRng::seed_from_u64(69420);
+        let mut ai = NNBuilder::default()
+        .element_type::<X>()
+        .rng(&mut rng)
+        .input_shape::<[();1]>()
+        .layer::<20>( PytorchDefault, PytorchDefault)
+        .relu()
+        .layer::<20>( PytorchDefault, PytorchDefault)
+        .relu()
+        .layer::<20>( PytorchDefault, PytorchDefault)
+        .relu()
+        .layer::<1>( PytorchDefault, PytorchDefault)
+        .build()
+        .to_trainer()
+        .loss_function(SquaredError)
+        .optimizer(SGD { learning_rate: 0.01, ..SGD::default() })
+        //.optimizer(SGD::default())
+        .retain_gradient(true)
+        .new_clip_gradient_norm(5.0, Norm::Two)
+        .build();
+
+        const EPOCHS: usize = 1000;
+        const DATA_RANGE: Range<X> = -10.0..10.0;
+
+        let training_data: Vec<_> = Uniform::from(DATA_RANGE)
+            .sample_iter(&mut rng)
+            .take(1000)
+            .map(|input| Pair::new(Vector::new([input]), Vector::new([input.sin()])))
+            .collect();
+        let test_data: Vec<_> = Uniform::from(DATA_RANGE)
+            .sample_iter(&mut rng)
+            .take(30)
+            .map(|input| Pair::new(Vector::new([input]), Vector::new([input.sin()])))
+            .collect();
+
+        let loss: X = ai.test_batch(test_data.iter()).map(|r| r.get_loss()).sum();
+        println!("epoch: {:>4}, loss: {:<20}", 0, loss);
+
+        for epoch in 1..=EPOCHS {
+            ai.train_single_thread(&training_data);
+
+            if epoch % 100 == 0 {
+                let loss: X = ai.test_batch(test_data.iter()).map(|r| r.get_loss()).sum();
+                println!("epoch: {:>4}, loss: {:<20}", epoch, loss);
+            }
+        }
+    }
 }

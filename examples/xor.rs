@@ -8,8 +8,8 @@ use rusty_ai::{
     initializer::PytorchDefault,
     loss_function::{LossFunction, SquaredError},
     nn::Pair,
-    optimizer::{self, sgd::SGD},
-    trainer::{NNTrainer, Trainable},
+    optimizer,
+    trainer::Trainable,
     NNBuilder, Norm, NN,
 };
 
@@ -36,16 +36,17 @@ impl<X: Float> LossFunction<X, [(); 1]> for XorLoss {
     }
 }
 
-fn get_nn<X: Float, const NEURONS: usize>() -> impl Trainable<X, [(); 2], [(); 1]> {
+fn get_nn<X: Float, const NEURONS: usize>(
+    rng: &mut impl Rng,
+) -> impl Trainable<X, [(); 2], [(); 1], EO = bool> {
     NNBuilder::default()
         .element_type::<X>()
-        //.default_rng()
-        .seeded_rng(3)
+        .rng(rng)
         .input_shape::<[(); 2]>()
         .layer::<NEURONS>(PytorchDefault, PytorchDefault)
         .relu()
         .layer::<1>(PytorchDefault, PytorchDefault)
-        .relu()
+        .sigmoid()
         .build()
         .to_trainer()
         .loss_function(XorLoss)
@@ -72,15 +73,13 @@ fn main() {
     const TRAINING_DATA_COUNT: usize = 1000;
     const EPOCHS: usize = 1000;
 
-    let mut ai = get_nn::<f64, HIDDEN_NEURONS>();
-
-    //let mut rng = rand::thread_rng();
     let mut rng = StdRng::seed_from_u64(69420);
+    let mut ai = get_nn::<f64, HIDDEN_NEURONS>(&mut rng);
 
     let mut training_data = gen_data(&mut rng, TRAINING_DATA_COUNT).collect::<Vec<_>>();
     let test_data = gen_data(&mut rng, 30).collect::<Vec<_>>();
 
-    let loss_sum: f64 = ai.test_batch(test_data.iter()).map(|r| r.get_loss()).sum();
+    let loss_sum: f64 = ai.test_batch(&test_data).map(|r| r.get_loss()).sum();
     println!("epoch: {:>4}, loss: {:<20}", 0, loss_sum);
 
     for epoch in 1..=EPOCHS {
@@ -98,6 +97,41 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusty_ai::nn::TestResult;
+
+    #[test]
+    fn seeded_test() {
+        let mut rng = StdRng::seed_from_u64(3);
+        let mut ai = get_nn::<f32, 5>(&mut rng);
+
+        let nn_params = ai.get_network().iter_param().copied().collect::<Vec<_>>();
+        #[rustfmt::skip]
+        let expected = [0.20864576, -0.5724608, 0.67966837, -0.20861408, -0.50551707, -0.44711044, 0.28708225, -0.10395467, 0.14460564, -0.36693484, -0.49184257, -0.13523221, -0.1413005, -0.20470047, 0.70528835, 0.12746763, -0.42766398, -0.017448157, -0.16920936, 0.4134671, 0.027382761];
+        assert_eq!(nn_params, expected);
+
+        let mut training_data = gen_data(&mut rng, 10).collect::<Vec<_>>();
+
+        for e in 1..=1000 {
+            ai.train_single_thread(&training_data);
+            training_data.shuffle(&mut rng);
+
+            if e % 100 == 0 {
+                let test_data = gen_data(&mut rng, 10).collect::<Vec<_>>();
+                let loss: f32 = ai.test_batch(&test_data).map(|r| r.get_loss()).sum();
+                println!("epoch: {:>4}, loss: {}", e, loss);
+            }
+        }
+
+        for p in gen_data(&mut rng, 30) {
+            let (_, loss) = ai.test(&p).into_tuple();
+            assert!(
+                loss < 1e-5,
+                "assertion failed: loss < 1e-8 (loss: {}). This test contains rng. Please repeat \
+                 the test to ensure that it has failed.",
+                loss
+            )
+        }
+    }
 
     #[test]
     fn test() {
@@ -105,9 +139,9 @@ mod tests {
         const TRAINING_DATA_COUNT: usize = 500;
         const EPOCHS: usize = 500;
 
-        let mut ai = get_nn::<f32, HIDDEN_NEURONS>();
-
         let mut rng = rand::thread_rng();
+        let mut ai = get_nn::<f32, HIDDEN_NEURONS>(&mut rng);
+
         let mut training_data = gen_data(&mut rng, TRAINING_DATA_COUNT).collect::<Vec<_>>();
 
         for _ in 1..=EPOCHS {
@@ -132,11 +166,11 @@ macro_rules! _bench_example_epoch {
     ( $( $bench_name:ident : $neurons:expr, $data_count:expr );* $(;)? ) => { $(
         #[bench]
         fn $bench_name(b: &mut Bencher) {
-            let mut ai = get_nn::<f32, $neurons>();
             let mut rng = rand::thread_rng();
+            let mut ai = get_nn::<f32, $neurons>(&mut rng);
             let mut training_data = gen_data(&mut rng, $data_count).collect::<Vec<_>>();
             b.iter(|| {
-                black_box(NNTrainer::train_rayon(
+                black_box(Trainable::train_rayon(
                     black_box(&mut ai),
                     black_box(&training_data),
                 ));

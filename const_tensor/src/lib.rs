@@ -12,7 +12,6 @@
 #![warn(missing_docs)]
 
 mod aliases;
-mod arr_wrapper;
 mod data;
 mod element;
 mod maybe_uninit;
@@ -24,7 +23,6 @@ mod shape;
 mod shape_data;
 
 pub use aliases::*;
-pub use arr_wrapper::Arr;
 pub use data::tensor;
 pub use element::{Element, Float, MoreNumOps, Num};
 pub use multidim_arr::{Len, MultidimArr};

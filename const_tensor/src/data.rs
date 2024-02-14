@@ -6,7 +6,7 @@ use crate::{
     scalar, vector, Element, Shape,
 };
 use core::mem;
-use serde::Serialize;
+use serde::{ser::SerializeSeq, Serialize};
 use std::{
     alloc,
     iter::Map,
@@ -14,6 +14,28 @@ use std::{
     ptr, slice,
 };
 
+/// Data of a [`Tensor`].
+///
+/// Like unsized type, this type should never be owned directly. Thus this type is similar to `str`
+/// and slice.
+///
+/// # `serde` Note
+///
+/// Tensors are serialized in their 1D representation. This means, that serialization followed by
+/// deserialization is equivalent to [`tensor::transmute_clone`]:
+///
+/// ```rust
+/// # use const_tensor::*;
+/// # fn main() -> Result<(), serde_json::Error> {
+/// let tensor = matrix::literal([[1, 2, 3, 4], [5, 6, 7, 8]]); // 2D
+/// let json = serde_json::to_string(tensor)?;
+/// assert_eq!(json, "[1,2,3,4,5,6,7,8]"); // 1D
+/// let deserialized: Tensor3<i32, 2, 2, 2> = serde_json::from_str(&json)?;
+/// assert_eq!(deserialized, [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]); // 3D
+///
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 #[repr(transparent)]
@@ -29,10 +51,10 @@ impl<X: Element, S: Shape> tensor<X, S> {
         Self(data)
     }
 
-    #[inline]
-    pub(crate) fn new_uninit() -> tensor<MaybeUninit<X>, S> {
-        // SAFETY: tensor contains MaybeUninit which doesn't need initialization
-        unsafe { MaybeUninit::uninit().assume_init() }
+    /// similar to [`slice::from_raw_parts`].
+    pub unsafe fn from_raw_ptr<'a>(ptr: *const X) -> &'a Self {
+        let ref_ = unsafe { ptr.as_ref().unwrap_unchecked() };
+        Self::wrap_ref(unsafe { mem::transmute(ref_) })
     }
 
     /// Allocates a new tensor on the heap.
@@ -57,12 +79,6 @@ impl<X: Element, S: Shape> tensor<X, S> {
         unsafe { Box::from_raw(ptr.as_ptr()) }
     }
 
-    /*
-    pub fn new_boxed(data: impl ShapeData<Element = X, Shape = S>) -> Box<Self> {
-        Box::new(Self::new(data.type_hint()))
-    }
-    */
-
     /// similar to `&str` and `&[]` literals.
     #[inline]
     pub fn literal<'a>(data: S::Mapped<X>) -> &'a Self {
@@ -81,11 +97,13 @@ impl<X: Element, S: Shape> tensor<X, S> {
         unsafe { mem::transmute(data) }
     }
 
+    #[allow(unused)]
     #[inline]
     pub(crate) fn wrap_box(b: Box<S::Mapped<X>>) -> Box<Self> {
         unsafe { mem::transmute(b) }
     }
 
+    #[allow(unused)]
     #[inline]
     pub(crate) fn unwrap_box(b: Box<Self>) -> Box<S::Mapped<X>> {
         unsafe { mem::transmute(b) }
@@ -125,6 +143,16 @@ impl<X: Element, S: Shape> tensor<X, S> {
         S2: Shape + Len<LEN>,
     {
         unsafe { mem::transmute(self) }
+    }
+
+    /// Changes the Shape of the Tensor.
+    #[inline]
+    pub fn transmute_clone<S2, const LEN: usize>(&self) -> Tensor<X, S2>
+    where
+        S: Len<LEN>,
+        S2: Shape + Len<LEN>,
+    {
+        self.to_owned().transmute_into()
     }
 
     /// Returns the length of the tensor in its 1D representation.
@@ -206,7 +234,7 @@ impl<X: Element, S: Shape> Multidimensional<X> for tensor<X, S> {
 
 impl<X: Element, S: Shape> Default for tensor<X, S> {
     fn default() -> Self {
-        Self::new(S::Mapped::<X>::unwrap(<S::Mapped<X> as MultidimArr>::Wrapped::default()))
+        Self::new(S::Mapped::default())
     }
 }
 
@@ -252,12 +280,14 @@ impl<X: Element, S: Shape> IndexMut<usize> for tensor<X, S> {
     }
 }
 
-impl<X: Element + Serialize, S: Shape> Serialize for tensor<X, S>
-where <S::Mapped<X> as MultidimArr>::Wrapped: Serialize
-{
+impl<X: Element + Serialize, S: Shape> Serialize for tensor<X, S> {
     fn serialize<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
     where Ser: serde::Serializer {
-        S::Mapped::wrap_ref(&self.0).serialize(serializer)
+        let mut seq = serializer.serialize_seq(Some(self.len()))?;
+        for element in self.iter_elem() {
+            seq.serialize_element(element)?;
+        }
+        seq.end()
     }
 }
 
@@ -267,87 +297,4 @@ impl<X: Element> scalar<X> {
     pub fn val(&self) -> X {
         self.0
     }
-}
-
-// ===================== old =========================
-
-/*
-   pub unsafe trait AsArr<Elem>: Sized {
-   type Arr: AsRef<[Elem]> + AsMut<[Elem]> + IndexMut<usize>;
-
-   fn as_arr(&self) -> &Self::Arr {
-   unsafe { mem::transmute(self) }
-   }
-
-   fn as_arr_mut(&mut self) -> &mut Self::Arr {
-   unsafe { mem::transmute(self) }
-   }
-   }
-
-   unsafe impl<T: Element> AsArr<T> for T {
-   type Arr = [T; 1];
-   }
-
-   unsafe impl<T, const N: usize> AsArr<T> for [T; N] {
-   type Arr = [T; N];
-   }
-
-/// Length of a tensor ([`TensorData`]).
-///
-/// # SAFETY
-///
-/// Some provided methods on [`TensorData`] requires the correct implementation of this trait.
-/// Otherwise undefined behavior might occur.
-pub unsafe trait Len<const LEN: usize> {}
-
-pub(crate) fn new_boxed_tensor_data<X: Element, T: TensorData<X>>(data: T::Shape) -> Box<T> {
-let data = ManuallyDrop::new(data);
-// SAFETY: see TensorData
-Box::new(unsafe { mem::transmute_copy::<T::Shape, T>(&data) })
-}
-
-/// Trait for Tensor data. Types implementing this trait are similar to [`str`] and `slice` and
-/// should only be accessed behind a reference.
-///
-/// # SAFETY
-///
-/// * The data structure must be equivalent to [`Box<Self::Data>`] as [`mem::transmute`] and
-/// [`mem::transmute_copy`] are used to convert between [`Tensor`] types.
-/// * The `LEN` constant has to equal the length of the tensor in its 1D representation.
-pub unsafe trait TensorData<X: Element>: Sized + IndexMut<usize> {
-/// [`Tensor`] type owning `Self`.
-type Owned: Tensor<X, Data = Self>;
-/// Internal Shape of the tensor data. Usually an array `[[[[X; A]; B]; ...]; Z]` with the same
-/// dimensions as the tensor.
-type Shape: Copy + AsArr<<Self::SubData as TensorData<X>>::Shape>;
-/// The [`TensorData`] one dimension lower.
-type SubData: TensorData<X>;
-
-/// `Self` but with another [`Element`] type.
-type Mapped<E: Element>: TensorData<E, Owned = <Self::Owned as Tensor<X>>::Mapped<E>>;
-
-/// The dimension of the tensor.
-const DIM: usize;
-/// The length of the tensor in its 1D representation.
-const LEN: usize;
-}
-*/
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::Matrix;
-
-    /*
-    #[test]
-    fn serde_test() {
-        let a: &matrix<i32, 2, 2> = tensor::literal([[1, 2], [3, 4]]);
-        println!("{:?}", a);
-        let json = serde_json::to_string(a).unwrap();
-        println!("{:?}", json);
-        let a: Matrix<i32, 2, 2> = serde_json::from_str(&json).unwrap();
-        println!("{:?}", a);
-        panic!()
-    }
-    */
 }

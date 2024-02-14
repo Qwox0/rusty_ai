@@ -36,16 +36,16 @@ where
     type OptState<O: Optimizer<X>> = PREV::OptState<O>;
     /// The data which is saved during `train_prop` and used in `backprop`.
     ///
-    /// Bool Tensor contains whether propagation output elements where unequal to zero or not.
+    /// Bool Tensor contains whether propagation output elements are positive.
     type StoredData = Data<Tensor<bool, S>, PREV::StoredData>;
 
     /// # Examples
     ///
     /// ```rust
-    /// # use rusty_ai::{const_tensor::Vector, nn::{ReLU, NNHead, NNComponent}};
+    /// # use rusty_ai::{*, nn::*, const_tensor::*};
     /// let relu = ReLU::new(NNHead);
     /// let out = relu.prop(Vector::new([-1.0, 0.0, 1.0]));
-    /// assert_eq!(out, Vector::new([0.0, 0.0, 1.0]));
+    /// assert_eq!(out, [0.0, 0.0, 1.0]);
     /// ```
     #[inline]
     fn prop(&self, input: Tensor<X, NNIN>) -> Tensor<X, S> {
@@ -53,6 +53,15 @@ where
         input.map_inplace(relu)
     }
 
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use rusty_ai::{*, nn::*, const_tensor::*};
+    /// let relu = ReLU::new(NNHead);
+    /// let (out, data) = relu.train_prop(Vector::new([-1.0, 0.0, 1.0]));
+    /// assert_eq!(out, [0.0, 0.0, 1.0]);
+    /// assert_eq!(data.data, [false, false, true]);
+    /// ```
     #[inline]
     fn train_prop(&self, input: Tensor<X, NNIN>) -> (Tensor<X, S>, Self::StoredData) {
         let (input, prev_data) = self.prev.train_prop(input);
@@ -72,6 +81,17 @@ where
     /// a_i: input component i
     ///
     /// L: total loss
+    /// ```
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use rusty_ai::{*, nn::*, const_tensor::*};
+    /// let relu = ReLU::new(NNHead);
+    /// let (_, data) = relu.train_prop(Vector::new([-1.0, 0.0, 1.0]));
+    /// let out_grad = Tensor::new([1.0, 1.0, 1.0]);
+    /// let in_grad = relu.backprop(out_grad, data, ());
+    /// panic!("{:?}", in_grad);
     /// ```
     #[inline]
     fn backprop_inplace(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {

@@ -1,22 +1,20 @@
 use crate::{
-    data,
-    maybe_uninit::MaybeUninit,
-    multidim_arr::MultidimArr,
-    multidimensional::{Multidimensional, MultidimensionalOwned},
-    tensor, Element, Float, Len, Num, Shape, Vector,
+    data, maybe_uninit::MaybeUninit, multidim_arr::MultidimArr,
+    multidimensional::MultidimensionalOwned, tensor, Element, Len, Shape, Vector,
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    alloc,
     borrow::{Borrow, BorrowMut},
-    fmt,
-    marker::PhantomData,
-    mem,
+    fmt, mem,
     ops::{Deref, DerefMut},
-    ptr,
 };
 
 /// An owned tensor.
+///
+/// # `serde` Note
+///
+/// Tensors are serialized in their 1D representation. This means, that serialization followed by
+/// deserialization is equivalent to [`tensor::transmute_clone`].
 #[repr(transparent)]
 pub struct Tensor<X: Element, S: Shape> {
     /// [`Box`] pointer to the tensor data.
@@ -30,22 +28,11 @@ impl<X: Element, S: Shape> Tensor<X, S> {
         Self::from(data::tensor::new_boxed(data))
     }
 
-    /*
-    /// Allocates a new uninitialized [`Tensor`].
-    #[inline]
-    pub fn new_uninit() -> Tensor<MaybeUninit<X>, S> {
-        Tensor::from(tensor::<X, S>::new_boxed_uninit())
+    /// similar to [`Vec::from_raw_parts`].
+    pub unsafe fn from_raw_ptr(ptr: *mut X) -> Self {
+        let ptr = ptr as *mut tensor<X, S>;
+        unsafe { Box::from_raw(ptr) }.into()
     }
-
-    /// Creates a new Tensor filled with the values in `iter`.
-    /// If the [`Iterator`] it too small, the rest of the elements contain the value `X::default()`.
-    #[inline]
-    pub fn from_iter(iter: impl IntoIterator<Item = X>) -> Self {
-        let mut t = Self::default();
-        t.iter_elem_mut().zip(iter).for_each(|(x, val)| *x = val);
-        t
-    }
-    */
 
     /// Creates the Tensor from a 1D representation of its elements.
     #[inline]
@@ -158,6 +145,23 @@ impl<X: Element, S: Shape> From<Tensor<X, S>> for Box<data::tensor<X, S>> {
     }
 }
 
+pub struct InvalidLenError {
+    expected: usize,
+    got: usize,
+}
+
+impl<X: Element, S: Shape> TryFrom<Box<[X]>> for Tensor<X, S> {
+    type Error = InvalidLenError;
+
+    fn try_from(data: Box<[X]>) -> Result<Self, Self::Error> {
+        if data.len() != S::LEN {
+            return Err(InvalidLenError { expected: S::LEN, got: data.len() });
+        }
+        let ptr = Box::into_raw(data) as *mut X;
+        Ok(unsafe { Self::from_raw_ptr(ptr) })
+    }
+}
+
 impl<X: Element, S: Shape> Deref for Tensor<X, S> {
     type Target = data::tensor<X, S>;
 
@@ -196,30 +200,36 @@ impl<X: Element, S: Shape> BorrowMut<data::tensor<X, S>> for Tensor<X, S> {
     }
 }
 
-impl<X: Element + Serialize, S: Shape> Serialize for Tensor<X, S>
-where <S::Mapped<X> as MultidimArr>::Wrapped: Serialize
-{
+impl<X: Element + Serialize, S: Shape> Serialize for Tensor<X, S> {
     fn serialize<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
     where Ser: serde::Serializer {
         tensor::<X, S>::serialize(&self, serializer)
     }
 }
 
-impl<'de, X: Element + Deserialize<'de>, S: Shape> Deserialize<'de> for Tensor<X, S>
-where <S::Mapped<X> as MultidimArr>::Wrapped: Deserialize<'de>
-{
+impl<'de, X: Element + Deserialize<'de>, S: Shape> Deserialize<'de> for Tensor<X, S> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
-        <S::Mapped<X> as MultidimArr>::Wrapped::deserialize(deserializer)
+        /*
+        <<S::Mapped<X> as MultidimArr>::Wrapped>::deserialize(deserializer)
             .map(S::Mapped::unwrap)
             .map(Tensor::new)
+        */
+        //let b = Box::<[<S::Mapped<X> as MultidimArr>::Sub]>::deserialize(deserializer);
+        let b = Box::<[X]>::deserialize(deserializer)?;
+
+        //panic!("2 {}", b?.len());
+        b.try_into().map_err(|InvalidLenError { expected, got }| {
+            serde::de::Error::custom(format_args!("invalid length: {}, expected {}", got, expected))
+        })
+        //b.map(S::Mapped::unwrap_box).map(tensor::wrap_box).map(Tensor::from)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Matrix;
+    use crate::{Matrix, Multidimensional};
 
     #[test]
     fn safety_new_uninit() {
