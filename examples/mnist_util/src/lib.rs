@@ -1,8 +1,7 @@
 #![feature(iter_array_chunks)]
 
-use core::fmt;
 use rusty_ai::Num;
-use std::ops::{Range, Sub};
+use std::ops::Range;
 
 #[cfg(not(target_os = "windows"))]
 const NL: &'static str = "\n";

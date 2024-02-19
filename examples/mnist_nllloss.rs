@@ -5,16 +5,12 @@
 #![feature(array_chunks)]
 #![feature(test)]
 
-use const_tensor::{Element, Multidimensional, Num, Vector};
-use mnist_util::{get_mnist, get_mnist_with_len, image_to_string, Mnist};
-use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+use const_tensor::{Multidimensional, Num, Vector};
+use mnist_util::{get_mnist, image_to_string, Mnist};
+use rand::seq::SliceRandom;
 use rusty_ai::{
-    initializer::PytorchDefault,
-    loss_function::NLLLoss,
-    nn::{NNBuilder, Pair},
-    optimizer::sgd::SGD,
-    trainer::Trainable,
-    Norm, NN,
+    initializer::PytorchDefault, loss_function::NLLLoss, nn::NNBuilder, optimizer::sgd::SGD,
+    trainer::Trainable, Norm, Pair, NN,
 };
 use std::{ops::Range, time::Instant};
 
@@ -46,13 +42,6 @@ pub fn main() {
     println!("Example Image:");
     print_image(&training_data[50], -1.0..1.0);
 
-    /*
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(4)
-        .build()
-        .unwrap()
-        .install(|| {
-            */
     let mut rng = rand::thread_rng();
 
     let mut ai = NNBuilder::default()
@@ -118,78 +107,83 @@ pub fn print_image<X: Num>(pair: &Pair<X, [(); IMAGE_SIZE], usize>, val_range: R
     );
 }
 
-fn seeded_test() {
-    type X = f32;
-
-    let Mnist { trn_img, trn_lbl, tst_img, tst_lbl, .. } = get_mnist_with_len(500, 10);
-
-    let mut training_data = transform::<X>(trn_img, trn_lbl);
-    let test_data = transform::<X>(tst_img, tst_lbl);
-
-    println!("Example Image:");
-    print_image(&training_data[50], -1.0..1.0);
-
-    let mut rng = StdRng::seed_from_u64(69420);
-
-    let mut ai = NNBuilder::default()
-        .element_type::<X>()
-        .rng(&mut rng)
-        .input_shape::<[(); IMAGE_SIZE]>()
-        .layer::<128>(PytorchDefault, PytorchDefault)
-        .relu()
-        .layer::<64>(PytorchDefault, PytorchDefault)
-        .relu()
-        .layer::<OUTPUTS>(PytorchDefault, PytorchDefault)
-        .log_softmax()
-        .build()
-        .to_trainer()
-        .loss_function(NLLLoss)
-        .optimizer(SGD { learning_rate: 0.003, momentum: 0.9 })
-        .retain_gradient(false)
-        .new_clip_gradient_norm(5.0, Norm::Two)
-        .build();
-
-    const EPOCHS: usize = 30;
-    const BATCH_SIZE: usize = 64;
-    let batch_num = training_data.len().div_ceil(BATCH_SIZE);
-
-    println!("\nTraining:");
-    let start = Instant::now();
-
-    for e in 0..EPOCHS {
-        let mut running_loss = 0.0;
-        for batch in training_data.chunks(BATCH_SIZE) {
-            let loss = ai.train_rayon_output(batch).map(|out| out.loss).sum::<X>()
-                / BATCH_SIZE as X;
-            running_loss += loss;
-        }
-        // shuffle data after one full iteration
-        training_data.shuffle(&mut rng);
-
-        let training_loss = running_loss / batch_num as X;
-
-        println!("Epoch {:>2} - Training loss: {}", e, training_loss);
-        let secs = start.elapsed().as_secs();
-        //println!("Training Time: {} min {} s", secs / 60, secs % 60);
-    }
-
-    println!("\nTest:");
-    for pair in test_data.iter().take(3) {
-        print_image(pair, -1.0..1.0);
-        let (out, loss) = ai.test(pair).into_tuple();
-        println!("output: {:?}", out);
-        let propab = out.iter_elem().copied().map(X::exp).collect::<Vec<_>>();
-        let guess = propab.iter().enumerate().max_by(|x, y| x.1.total_cmp(y.1)).unwrap().0;
-        println!("propab: {:?}; guess: {}", propab, guess);
-        println!("error: {}", loss);
-        //assert!(loss < 0.2);
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use mnist_util::{get_mnist_with_len, Mnist};
+    use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+
     #[test]
     fn seeded_test() {
-        super::seeded_test();
+        type X = f32;
+
+        let Mnist { trn_img, trn_lbl, tst_img, tst_lbl, .. } = get_mnist_with_len(500, 10);
+
+        let mut training_data = transform::<X>(trn_img, trn_lbl);
+        let test_data = transform::<X>(tst_img, tst_lbl);
+
+        println!("Example Image:");
+        print_image(&training_data[50], -1.0..1.0);
+
+        let mut rng = StdRng::seed_from_u64(69420);
+
+        let mut ai = NNBuilder::default()
+            .element_type::<X>()
+            .rng(&mut rng)
+            .input_shape::<[(); IMAGE_SIZE]>()
+            .layer::<128>(PytorchDefault, PytorchDefault)
+            .relu()
+            .layer::<64>(PytorchDefault, PytorchDefault)
+            .relu()
+            .layer::<OUTPUTS>(PytorchDefault, PytorchDefault)
+            .log_softmax()
+            .build()
+            .to_trainer()
+            .loss_function(NLLLoss)
+            .optimizer(SGD { learning_rate: 0.003, momentum: 0.9 })
+            .retain_gradient(false)
+            .new_clip_gradient_norm(5.0, Norm::Two)
+            .build();
+
+        const EPOCHS: usize = 30;
+        const BATCH_SIZE: usize = 64;
+        let batch_num = training_data.len().div_ceil(BATCH_SIZE);
+
+        println!("\nTraining:");
+        let start = Instant::now();
+
+        for e in 0..EPOCHS {
+            let mut running_loss = 0.0;
+            for batch in training_data.chunks(BATCH_SIZE) {
+                let loss =
+                    ai.train_rayon_output(batch).map(|out| out.loss).sum::<X>() / BATCH_SIZE as X;
+                running_loss += loss;
+            }
+            // shuffle data after one full iteration
+            training_data.shuffle(&mut rng);
+
+            let training_loss = running_loss / batch_num as X;
+
+            let secs = start.elapsed().as_secs();
+            println!(
+                "Epoch {:>2} - Training loss: {:<15} | Training Time: {} min {} s",
+                e,
+                training_loss,
+                secs / 60,
+                secs % 60,
+            );
+        }
+
+        println!("\nTest:");
+        for pair in test_data.iter().take(3) {
+            print_image(pair, -1.0..1.0);
+            let (out, loss) = ai.test(pair).into_tuple();
+            println!("output: {:?}", out);
+            let propab = out.iter_elem().copied().map(X::exp).collect::<Vec<_>>();
+            let guess = propab.iter().enumerate().max_by(|x, y| x.1.total_cmp(y.1)).unwrap().0;
+            println!("propab: {:?}; guess: {}", propab, guess);
+            println!("error: {}", loss);
+            //assert!(loss < 0.2);
+        }
     }
 }

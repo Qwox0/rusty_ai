@@ -1,6 +1,6 @@
 //! # Optimizer module
 
-use const_tensor::{Element, Len, Shape, Tensor};
+use const_tensor::{Element, Shape, Tensor};
 pub mod adam;
 pub mod sgd;
 
@@ -12,8 +12,10 @@ pub const DEFAULT_LEARNING_RATE: f64 = 0.01;
 /// This is only used by [`NNTrainer`]. Thus the dimensions of `nn` and `gradient` will always
 /// match.
 pub trait Optimizer<X: Element>: Send + Sync + 'static {
+    /// State required for optimizing a [`Tensor`] with [`Shape`] `S`.
     type State<S: Shape>: Sized + Send + Sync + 'static;
 
+    /// optimizes a [`Tensor`].
     fn optimize_tensor<S: Shape>(
         &self,
         tensor: &mut Tensor<X, S>,
@@ -21,19 +23,6 @@ pub trait Optimizer<X: Element>: Send + Sync + 'static {
         state: &mut Self::State<S>,
     );
 
+    /// Creates a new optimizer state from a tensor.
     fn new_state<S: Shape>(tensor: Tensor<X, S>) -> Self::State<S>;
 }
-
-/*
-/// Represents the constants/configuration of an [`Optimizer`].
-///
-/// Used by [`NNTrainerBuilder`] to create an [`Optimizer`] of type `Self::Optimizer`.
-pub trait OptimizerValues<X> {
-    /// Target [`Optimizer`] type
-    type Optimizer: Optimizer<X>;
-
-    /// Creates an [`Optimizer`] based on the configuration in `self` and the [`NeuralNetwork`]
-    /// [`Layer`]s in `layers`.
-    fn init_with_layers(self, layers: &[Layer<X>]) -> Self::Optimizer;
-}
-*/

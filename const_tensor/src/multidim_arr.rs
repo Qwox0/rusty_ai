@@ -2,6 +2,14 @@ use crate::{Element, Shape};
 use core::fmt;
 use std::mem;
 
+/// Trait for multidimensional arrays: `[[[[X; A]; B]; ...]; Z]`.
+///
+/// element `X` implementing [`Element`].
+/// constant dimensions `A`, `B`, ..., `Z`
+///
+/// # 0D Note
+///
+/// The zero dimensional object implementing this trait is `X`, not `[X; 1]`.
 pub trait MultidimArr: Sized + Copy + fmt::Debug + Send + Sync + 'static {
     /// Element of the multidimensional array.
     type Element: Element;
@@ -16,16 +24,26 @@ pub trait MultidimArr: Sized + Copy + fmt::Debug + Send + Sync + 'static {
     /// Next smaller shape
     type Sub: MultidimArr<Element = Self::Element>;
 
+    /// dimension of the multidimensional array.
     const DIM: usize;
+
+    /// total number of elements in the multidimensional array.
     const LEN: usize;
 
+    /// converts the array into a slice over the sub arrays.
     fn as_sub_slice(&self) -> &[Self::Sub];
+
+    /// converts the array into a mutable slice over the sub arrays.
     fn as_mut_sub_slice(&mut self) -> &mut [Self::Sub];
 
+    /// Returns a pointer to the first element of the array.
     fn as_ptr(&self) -> *const Self::Element;
+
+    /// Returns a mutable pointer to the first element of the array.
     fn as_mut_ptr(&mut self) -> *mut Self::Element;
 
-    #[inline]
+    /// Creates a new zeroed array. This is needed as arrays don't implement [`Default`] for any
+    /// length.
     fn default() -> Self;
 
     /// hint that `impl MultidimArr<Element=Element = X, Mapped<()> = S>` is the same type as

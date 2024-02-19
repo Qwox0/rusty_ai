@@ -19,16 +19,14 @@ fn get_nn() -> impl NN<f32, [(); IN], [(); OUT]> + DeserializeOwned {
 
 fn main() -> Result<(), serde_json::Error> {
     let nn = get_nn();
-    println!("{}\n", nn);
 
     let json = serde_json::to_string(&nn)?;
-    println!("\nJSON: {}", json);
+    println!("JSON: {}", json);
 
     let new_nn = nn.deserialize_hint(serde_json::from_str(&json)?);
 
-    println!("{:?}", new_nn);
     assert_eq!(nn, new_nn);
-    println!("\nAI and NEW_AI are equal!");
+    println!("\nNN and NEW_NN are equal!");
 
     Ok(())
 }

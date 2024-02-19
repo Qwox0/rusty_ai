@@ -8,7 +8,7 @@ use super::{
     LeakyReLU, NNHead, Sigmoid, NN,
 };
 use crate::initializer::Initializer;
-use const_tensor::{Element, Float, Matrix, Shape, Vector};
+use const_tensor::{Element, Matrix, Shape, Vector};
 use half::{bf16, f16};
 use markers::*;
 use rand::{
@@ -215,6 +215,7 @@ where
     OUT: Shape,
     NN_: NN<X, NNIN, OUT>,
 {
+    /// Builds the neural network.
     pub fn build(self) -> NN_ {
         self.components
     }

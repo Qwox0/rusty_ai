@@ -1,14 +1,16 @@
 use super::{Data, NN};
 use crate::optimizer::Optimizer;
-use const_tensor::{Float, Len, MultidimensionalOwned, Num, Shape, Tensor};
+use const_tensor::{Float, MultidimensionalOwned, Shape, Tensor};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
+/// Calculates the sigmoid function for a single number .
 #[inline]
 pub fn sigmoid<X: Float>(x: X) -> X {
     x.neg().exp().add(X::ONE).recip()
 }
 
+/// The sigmoid activation function.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Sigmoid<PREV> {
@@ -16,6 +18,7 @@ pub struct Sigmoid<PREV> {
 }
 
 impl<PREV> Sigmoid<PREV> {
+    /// Creates a new [`Sigmoid`] activation function.
     pub fn new(prev: PREV) -> Sigmoid<PREV> {
         Sigmoid { prev }
     }
@@ -39,13 +42,13 @@ where
     #[inline]
     fn prop(&self, input: Tensor<X, NNIN>) -> Tensor<X, S> {
         let input = self.prev.prop(input);
-        input.map_inplace(sigmoid)
+        input.map(sigmoid)
     }
 
     #[inline]
     fn train_prop(&self, input: Tensor<X, NNIN>) -> (Tensor<X, S>, Self::StoredData) {
         let (input, prev_data) = self.prev.train_prop(input);
-        let out = input.map_inplace(sigmoid);
+        let out = input.map(sigmoid);
         (out.clone(), Data { data: out, prev: prev_data })
     }
 
@@ -62,9 +65,14 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop_inplace(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {
+    fn backprop_inplace(
+        &self,
+        out_grad: Tensor<X, S>,
+        data: Self::StoredData,
+        grad: &mut PREV::Grad,
+    ) {
         let Data { prev: prev_data, data: output } = data;
-        let input_grad = out_grad.mul_elem(&output.map_inplace(|x| x * (X::ONE - x)));
+        let input_grad = out_grad.mul_elem(&output.map(|x| x * (X::ONE - x)));
         self.prev.backprop_inplace(input_grad, prev_data, grad)
     }
 

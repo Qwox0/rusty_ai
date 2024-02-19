@@ -20,7 +20,7 @@ inline_closure = { git = "https://github.com/Qwox0/inline_closure" }
 num = "0.4"
 rand = { version = "0.8.5", features = ["min_const_gen"] }
 rand_distr = "0.4.3"
-rayon = "1.8.0"
+rayon = "1.8.1"
 serde = { version = "1.0", features = ["derive"] }
 #thiserror = "1.0.44"
 

@@ -1,10 +1,11 @@
 use super::NN;
 use crate::optimizer::Optimizer;
-use const_tensor::{Element, Len, Multidimensional, MultidimensionalOwned, Shape, Tensor, Vector};
+use const_tensor::{Element, Len, Shape, Tensor, Vector};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
+/// Flattens any [`Tensor`] into a [`Vector`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Flatten<S: Shape, PREV> {
@@ -14,6 +15,7 @@ pub struct Flatten<S: Shape, PREV> {
 }
 
 impl<S: Shape, PREV> Flatten<S, PREV> {
+    /// Creates a new Flatten component.
     pub fn new(prev: PREV) -> Flatten<S, PREV> {
         Flatten { prev, _shape: PhantomData }
     }
@@ -45,7 +47,12 @@ where
     }
 
     #[inline]
-    fn backprop_inplace(&self, out_grad: Vector<X, LEN>, data: PREV::StoredData, grad: &mut PREV::Grad) {
+    fn backprop_inplace(
+        &self,
+        out_grad: Vector<X, LEN>,
+        data: PREV::StoredData,
+        grad: &mut PREV::Grad,
+    ) {
         let input_grad = Tensor::from_1d(out_grad);
         self.prev.backprop_inplace(input_grad, data, grad)
     }

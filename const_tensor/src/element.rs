@@ -3,7 +3,7 @@ use half::{bf16, f16};
 use inline_closure::inline_closure;
 use num::Zero;
 use rand_distr::uniform::SampleUniform;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use std::{
     iter::{Product, Sum},
     ops::{AddAssign, DivAssign, MulAssign, RemAssign, SubAssign},

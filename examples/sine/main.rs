@@ -5,12 +5,8 @@ use const_tensor::{Tensor, Vector};
 use rand::{rngs::StdRng, SeedableRng};
 use rand_distr::{Distribution, Uniform};
 use rusty_ai::{
-    initializer::PytorchDefault,
-    loss_function::SquaredError,
-    nn::{Pair, TestResult},
-    optimizer::sgd::SGD,
-    trainer::Trainable,
-    NNBuilder, Norm, NN,
+    initializer::PytorchDefault, loss_function::SquaredError, optimizer::sgd::SGD,
+    trainer::Trainable, NNBuilder, Norm, Pair, NN,
 };
 use std::{fmt::Display, fs::File, io::Write, ops::Range, path::Path};
 
@@ -39,7 +35,7 @@ pub fn main() {
     let mut rng = StdRng::seed_from_u64(69420);
     let mut ai = NNBuilder::default()
         .normal_precision()
-        .rng(rng)
+        .rng(&mut rng)
         .input_shape::<[(); 1]>()
         .layer::<20>(PytorchDefault, PytorchDefault)
         .relu()
@@ -124,6 +120,7 @@ fn stringify_arr(iter: impl Iterator<Item = impl Display>) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn seeded_test() {

@@ -1,13 +1,11 @@
 //! Module containing the [`SGD_`] [`Optimizer`].
 
 use super::{Optimizer, DEFAULT_LEARNING_RATE};
-use const_tensor::{
-    Element, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor, VectorShape,
-};
+use const_tensor::{Element, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
-/// Stochastic gradient descent optimizer
+/// Stochastic gradient descent [`Optimizer`]
 ///
 /// this type implements [`Optimizer`]
 ///
@@ -27,6 +25,7 @@ impl<X: Num> Default for SGD<X> {
     }
 }
 
+/// State of the Stochastic gradient descent [`Optimizer`].
 pub struct SGDState<X: Element, S: Shape> {
     prev_grad: Tensor<X, S>,
 }

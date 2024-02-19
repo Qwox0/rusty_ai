@@ -1,9 +1,13 @@
+//! # Initializer module
+
 use const_tensor::{Element, Float, MultidimensionalOwned, Num, Shape, Tensor};
 use rand::Rng;
 use rand_distr::uniform::SampleUniform;
 use std::ops::Range;
 
+/// trait for initializing tensors.
 pub trait Initializer<X: Element, S: Shape> {
+    /// initialize a tensor from the inputs and outputs of a nn layer.
     fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S>;
 }
 
@@ -23,11 +27,13 @@ impl<X: Element, S: Shape> Initializer<X, S> for Constant<X> {
     }
 }
 
+/// Initializes all values with the value zero.
 #[allow(non_snake_case)]
 pub fn Zeros<X: Num>() -> Constant<X> {
     Constant(X::ZERO)
 }
 
+/// Initializes all values with the value one.
 #[allow(non_snake_case)]
 pub fn Ones<X: Num>() -> Constant<X> {
     Constant(X::ONE)
@@ -57,7 +63,7 @@ where rand_distr::StandardNormal: rand_distr::Distribution<X>
 {
     /// # Panics
     /// Panics if `std_dev` is not finite.
-    fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S> {
+    fn init(self, rng: &mut impl Rng, _inputs: usize, _outputs: usize) -> Tensor<X, S> {
         Tensor::from_iter(rng.sample_iter(
             rand_distr::Normal::new(self.mean, self.std_dev).expect("standard deviation is finite"),
         ))
@@ -72,7 +78,7 @@ pub struct StandardNormal;
 impl<X: Element, S: Shape> Initializer<X, S> for StandardNormal
 where rand_distr::StandardNormal: rand_distr::Distribution<X>
 {
-    fn init(self, rng: &mut impl Rng, inputs: usize, outputs: usize) -> Tensor<X, S> {
+    fn init(self, rng: &mut impl Rng, _inputs: usize, _outputs: usize) -> Tensor<X, S> {
         Tensor::from_iter(rng.sample_iter(rand_distr::StandardNormal))
     }
 }

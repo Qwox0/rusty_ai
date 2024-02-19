@@ -7,10 +7,9 @@ use rand_distr::{Bernoulli, Distribution};
 use rusty_ai::{
     initializer::PytorchDefault,
     loss_function::{LossFunction, SquaredError},
-    nn::Pair,
     optimizer,
     trainer::Trainable,
-    NNBuilder, Norm, NN,
+    NNBuilder, Norm, Pair, NN,
 };
 
 const LOSS_FUNCTION: SquaredError = SquaredError;
@@ -97,7 +96,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusty_ai::nn::TestResult;
+    use rusty_ai::test_result::TestResult;
 
     #[test]
     fn seeded_test() {

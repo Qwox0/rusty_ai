@@ -1,11 +1,8 @@
 //! Trainer module.
 
 use crate::{
-    clip_gradient_norm::ClipGradientNorm,
-    loss_function::LossFunction,
-    nn::{GradComponent, Pair, TestResult},
-    optimizer::Optimizer,
-    Norm, NN,
+    clip_gradient_norm::ClipGradientNorm, loss_function::LossFunction, nn::GradComponent,
+    optimizer::Optimizer, test_result::TestResult, Pair, NN,
 };
 use const_tensor::{tensor, Element, Float, Shape, Tensor};
 use core::fmt;
@@ -16,12 +13,18 @@ use std::{borrow::Borrow, iter::Map, sync::mpsc};
 mod builder;
 pub use builder::{markers, NNTrainerBuilder};
 
+/// represents a trainable NN. see [`NNTrainer`].
 pub trait Trainable<X: Element, IN: Shape, OUT: Shape> {
+    /// trainee
     type Network: NN<X, IN, OUT>;
+    /// [`LossFunction`]
     type LossFunction: LossFunction<X, OUT, ExpectedOutput = Self::EO>;
+    /// expected output of the loss function
     type EO;
+    /// [`Optimizer`]
     type Optimizer: Optimizer<X>;
 
+    /// Returns a reference to the internal [`NN`].
     fn get_network(&self) -> &Self::Network;
 
     /// Trains the internal [`NN`] lazily.
@@ -170,6 +173,9 @@ where
         }
     }
 
+    /// Propagates the output gradient backwards through the neural network.
+    ///
+    /// This mutates the internal gradient.
     pub fn backpropagate_inner(
         &mut self,
         output: Tensor<X, OUT>,
@@ -181,6 +187,7 @@ where
         self.network.backprop_inplace(output_gradient, train_data, &mut self.gradient);
     }
 
+    /// Propagates the output gradient backwards through the neural network.
     pub fn backpropagate_inplace(
         &self,
         output: Tensor<X, OUT>,
@@ -193,6 +200,7 @@ where
         self.network.backprop_inplace(output_gradient, train_data, gradient);
     }
 
+    /// Propagates the output gradient backwards through the neural network.
     pub fn backpropagate(
         &self,
         output: Tensor<X, OUT>,
@@ -204,6 +212,7 @@ where
         gradient
     }
 
+    /// Optimize the internal neural network.
     #[inline]
     pub fn optimize_trainee(&mut self) {
         self.network.optimize(&self.gradient, &self.optimizer, &mut self.opt_state);
@@ -233,7 +242,7 @@ where
         batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
     ) {
         if !self.retain_gradient {
-            self.gradient.set_zero();
+            self.gradient.fill_zero();
         }
         for (input, eo) in batch.into_iter().map(Into::into) {
             let (out, data) = self.train_prop(input);
@@ -248,7 +257,7 @@ where
         batch: impl IntoIterator<Item = &'a Pair<X, IN, EO_>>,
     ) -> impl Iterator<Item = TrainOut<X, OUT>> {
         if !self.retain_gradient {
-            self.gradient.set_zero();
+            self.gradient.fill_zero();
         }
         let mut ret = Vec::new();
         for (input, eo) in batch.into_iter().map(Into::into) {
@@ -271,7 +280,7 @@ where
         EO_: Borrow<Self::EO> + 'a,
     {
         if !self.retain_gradient {
-            self.gradient.set_zero();
+            self.gradient.fill_zero();
         }
         let grad = batch
             .into_par_iter()
@@ -283,9 +292,8 @@ where
                     NNTrainer::backpropagate(self, out, eo.borrow(), data, grad)
                 },
             )
-            //.reduce(|| self.network.init_zero_grad(), |acc, grad| acc.add(&grad));
-            .reduce(|| self.network.init_zero_grad(), GradComponent::add);
-        self.gradient.add_mut(&grad);
+            .reduce(|| self.network.init_zero_grad(), |acc, grad| acc.add_elem(&grad));
+        self.gradient.add_elem_mut(&grad);
         self.clip_gradient();
         self.optimize_trainee();
     }
@@ -301,7 +309,7 @@ where
         TrainOut<X, OUT>: Send,
     {
         if !self.retain_gradient {
-            self.gradient.set_zero();
+            self.gradient.fill_zero();
         }
         let (send, recv) = mpsc::channel();
         let grad = batch
@@ -319,8 +327,8 @@ where
                     grad
                 },
             )
-            .reduce(|| self.network.init_zero_grad(), |acc, grad| acc.add(&grad));
-        self.gradient.add_mut(&grad);
+            .reduce(|| self.network.init_zero_grad(), |acc, grad| acc.add_elem(&grad));
+        self.gradient.add_elem_mut(&grad);
         self.clip_gradient();
         self.optimize_trainee();
 
@@ -332,8 +340,11 @@ where
     }
 }
 
+/// see `train_..._output` methods on [`Trainable`].
 pub struct TrainOut<X: Element, S: Shape> {
+    /// the output calculate during the training step
     pub output: Tensor<X, S>,
+    /// the loss calculate during the training step
     pub loss: X,
 }
 
@@ -353,18 +364,10 @@ where
 }
 
 #[cfg(test)]
-mod benches;
-
-#[cfg(test)]
 mod seeded_tests {
     use crate::{
-        initializer::PytorchDefault,
-        loss_function::SquaredError,
-        nn::{GradComponent, Pair},
-        norm::Norm,
-        optimizer::sgd::SGD,
-        trainer::Trainable,
-        NNBuilder, NN,
+        initializer::PytorchDefault, loss_function::SquaredError, nn::GradComponent, norm::Norm,
+        optimizer::sgd::SGD, trainer::Trainable, NNBuilder, Pair, NN,
     };
     use const_tensor::{tensor, Multidimensional, Vector, VectorShape};
     use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -431,14 +434,14 @@ mod seeded_tests {
         ai.train_rayon(&pairs);
         //ai.train_single_thread(&pairs);
 
-        let gradient = ai.gradient.iter_param().copied();
+        let gradient = ai.gradient.iter_elem().copied();
         #[rustfmt::skip]
         let expected = &[-0.31527687134612725, -0.2367818186318013, 0.020418606049140496, 0.015550533247454118, -0.001738594474681532, -0.004567137662788988, 0.033859035247529076, 0.02977764834407858, 0.009605083538032784, 0.006826476555722042, -0.6146889718563872, 0.040329523770678166, -0.0050435074713498255, 0.07884882135388332, 0.01821395483674612, -0.29603217316507463, 0.03346627048986953, -0.05878503376051679, -0.2158320807897315, 0.026983231976989056, -0.24554656005324604, 0.02887071882597527, -0.05843956975876532, -0.17243502863504168, 0.022467020003968326, 0.1311511999366582, -0.014868359886407069, 0.02611204347681894, 0.09796223173142266, -0.01217871097874241, -0.054034033529765414, 0.005815532263211411, -0.008911633440899904, -0.034708137931585205, 0.0043542213467064154, 0.2911033451780113, -0.033617414595422807, 0.06373660842764983, 0.21011649849556374, -0.026765687357284716, -0.6362499755696547, -0.5444227081050653, 0.288719083038049, -0.09632461875232448, 0.6412639438519863, -0.2336931253665935, -0.005400196361134401, 0.34277389227803257, -0.01683276960395113, 0.18829397721654298, 0.22312222066614518, 0.0668809841607016, -0.21284993370400693, 0.004724430001813006, -0.06979054513916816, 0.6470015756088618, 0.15347488461571596, -0.7149338885041989, 0.04221164029892477, -0.30940480020839184, -0.4461655070529444, 0.4131071925533384, 1.1799836756082676];
-        println!("gradient = {:?}", ai.gradient.iter_param().collect::<Vec<_>>());
+        println!("gradient = {:?}", ai.gradient.iter_elem().collect::<Vec<_>>());
         println!("expected = {:?}", expected);
         println!(
             "diff     = {:?}",
-            ai.gradient.iter_param().zip(expected).map(|(a, b)| a - b).collect::<Vec<_>>()
+            ai.gradient.iter_elem().zip(expected).map(|(a, b)| a - b).collect::<Vec<_>>()
         );
         let err = gradient.zip(expected).map(|(p, e)| (p - e).abs()).sum::<f64>();
         println!("error = {:?}", err);
@@ -492,7 +495,7 @@ mod seeded_tests {
         assert!(res_iter.count() == 0);
 
         // gradient
-        let gradient = ai.gradient.iter_param().copied();
+        let gradient = ai.gradient.iter_elem().copied();
         #[rustfmt::skip]
         let expected = [-0.003572457096879446, -0.0002794669624026194, 0.0, 0.0, 0.0, 0.0, 0.0004427478746224825, 3.463537847355607e-5, 0.0, 0.0, -0.0038284717751311454, 0.0, 0.0, 0.0004744767244292752, 0.0, -0.00580726500680219, 0.0, 0.0, -0.009380821731006066, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.022005357571517076, 0.0, 0.0, 0.0, 0.0, 0.008226304898399563, 0.0, 0.0, 0.0, 0.0, 0.06395275520239677, 0.0, 0.0, 0.0, 0.0, -0.013618442087793855, 0.0, 0.0, 0.0, 0.0, 0.018289699457633535, 0.1421873716797208, -0.030278140178756956];
 

@@ -1,12 +1,10 @@
 //! Module containing the [`Adam_`] [`Optimizer`].
 
 use super::{Optimizer, DEFAULT_LEARNING_RATE};
-use const_tensor::{
-    Element, Float, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor,
-};
+use const_tensor::{Element, Float, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor};
 use serde::{Deserialize, Serialize};
 
-/// Adam Optimizer
+/// Adam [`Optimizer`]
 ///
 /// This type implements [`Optimizer`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -32,6 +30,7 @@ impl<X: Float> Default for Adam<X> {
     }
 }
 
+/// State of the Adam [`Optimizer`].
 pub struct AdamState<X: Element, S: Shape> {
     m: Tensor<X, S>,
     v: Tensor<X, S>,

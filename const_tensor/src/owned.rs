@@ -210,19 +210,14 @@ impl<X: Element + Serialize, S: Shape> Serialize for Tensor<X, S> {
 impl<'de, X: Element + Deserialize<'de>, S: Shape> Deserialize<'de> for Tensor<X, S> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
-        /*
-        <<S::Mapped<X> as MultidimArr>::Wrapped>::deserialize(deserializer)
-            .map(S::Mapped::unwrap)
-            .map(Tensor::new)
-        */
-        //let b = Box::<[<S::Mapped<X> as MultidimArr>::Sub]>::deserialize(deserializer);
-        let b = Box::<[X]>::deserialize(deserializer)?;
-
-        //panic!("2 {}", b?.len());
-        b.try_into().map_err(|InvalidLenError { expected, got }| {
-            serde::de::Error::custom(format_args!("invalid length: {}, expected {}", got, expected))
-        })
-        //b.map(S::Mapped::unwrap_box).map(tensor::wrap_box).map(Tensor::from)
+        Box::<[X]>::deserialize(deserializer)?.try_into().map_err(
+            |InvalidLenError { expected, got }| {
+                serde::de::Error::custom(format_args!(
+                    "invalid length: {}, expected {}",
+                    got, expected
+                ))
+            },
+        )
     }
 }
 

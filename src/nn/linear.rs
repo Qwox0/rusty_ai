@@ -1,12 +1,11 @@
 use super::{Data, GradComponent, NN};
 use crate::optimizer::Optimizer;
 use const_tensor::{
-    Element, Len, Matrix, MatrixShape, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor,
+    Element, Matrix, MatrixShape, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor,
     Vector, VectorShape,
 };
 use core::fmt;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
 
 /// A fully connected layer. Calculates `y = weights * x + bias`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,7 +60,12 @@ where
     /// L: total loss
     /// ```
     #[inline]
-    fn backprop_inplace(&self, out_grad: Vector<X, OUT>, data: Self::StoredData, grad: &mut Self::Grad) {
+    fn backprop_inplace(
+        &self,
+        out_grad: Vector<X, OUT>,
+        data: Self::StoredData,
+        grad: &mut Self::Grad,
+    ) {
         let Data { prev: prev_data, data: input } = data;
 
         // TODO: bench
@@ -141,32 +145,19 @@ where
 impl<X: Num, const IN: usize, const OUT: usize, PREV: GradComponent<X>> GradComponent<X>
     for Linear<X, IN, OUT, PREV>
 {
-    fn set_zero(&mut self) {
-        self.weights.fill_zero();
-        self.bias.fill_zero();
-        self.prev.set_zero();
-    }
-
     #[inline]
-    fn add_mut(&mut self, other: impl Borrow<Self>) {
-        let other = other.borrow();
-        self.weights.add_elem_mut(&other.weights);
-        self.bias.add_elem_mut(&other.bias);
-        self.prev.add_mut(&other.prev);
-    }
-
-    #[inline]
-    fn iter_param(&self) -> impl Iterator<Item = &X> {
+    fn iter_elem(&self) -> impl Iterator<Item = &X> {
         self.prev
-            .iter_param()
+            .iter_elem()
             .chain(self.weights.iter_elem())
             .chain(self.bias.iter_elem())
     }
 
     #[inline]
-    fn iter_param_mut(&mut self) -> impl Iterator<Item = &mut X> {
+    fn iter_elem_mut(&mut self) -> impl Iterator<Item = &mut X> {
         self.prev
-            .iter_param_mut()
-            .chain(self.weights.iter_elem_mut().chain(self.bias.iter_elem_mut()))
+            .iter_elem_mut()
+            .chain(self.weights.iter_elem_mut())
+            .chain(self.bias.iter_elem_mut())
     }
 }

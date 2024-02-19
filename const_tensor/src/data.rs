@@ -109,15 +109,29 @@ impl<X: Element, S: Shape> tensor<X, S> {
         unsafe { mem::transmute(b) }
     }
 
+    /// Returns a reference to the internal array.
     #[inline]
     pub fn as_arr(&self) -> &S::Mapped<X> {
         &self.0
     }
 
     /// Clones `self` into a new [`Box`].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use const_tensor::*;
+    /// let t = vector::literal([1, 2, 3]);
+    /// let out = t.to_box();
+    /// assert_eq!(out, tensor::new_boxed([1, 2, 3]));
+    /// ```
     #[inline]
     pub fn to_box(&self) -> Box<Self> {
-        Self::new_boxed(self.0.clone())
+        let mut boxed = Self::new_boxed_uninit();
+        for (y, &x) in boxed.iter_elem_mut().zip(self.iter_elem()) {
+            y.write(x);
+        }
+        unsafe { mem::transmute(boxed) }
     }
 
     /// Creates a reference to the elements of the tensor in its 1D representation.
@@ -161,11 +175,13 @@ impl<X: Element, S: Shape> tensor<X, S> {
         S::LEN
     }
 
+    /// Returns a reference to the sub tensor at the given index.
     #[inline]
     pub fn get_sub_tensor(&self, idx: usize) -> Option<&tensor<X, S::Sub>> {
         self.0.as_sub_slice().get(idx).map(tensor::wrap_ref)
     }
 
+    /// Returns a mut reference to the sub tensor at the given index.
     #[inline]
     pub fn get_sub_tensor_mut(&mut self, idx: usize) -> Option<&mut tensor<X, S::Sub>> {
         self.0.as_mut_sub_slice().get_mut(idx).map(tensor::wrap_mut)
@@ -205,6 +221,15 @@ impl<X: Element, S: Shape> tensor<X, S> {
     }
 
     /// Applies a function to every element of the tensor.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use const_tensor::*;
+    /// let t = vector::literal([1, 2, 3]);
+    /// let out = t.map_clone(|x| x as f32 * 0.5);
+    /// assert_eq!(out, Tensor::new([0.5, 1.0, 1.5]));
+    /// ```
     #[inline]
     pub fn map_clone<Y: Element>(&self, mut f: impl FnMut(X) -> Y) -> Tensor<Y, S> {
         let mut out = Tensor::<Y, S>::new_uninit();

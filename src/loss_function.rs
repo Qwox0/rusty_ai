@@ -6,7 +6,6 @@ use const_tensor::{
 };
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use std::borrow::Borrow;
 
 /// A trait for calculating the loss from an output of the neural network and the expected output.
 ///
@@ -22,30 +21,12 @@ pub trait LossFunction<X: Element, S: Shape>: Send + Sync + 'static {
     /// calculates the loss from an output of the neural network and the expected output.
     fn propagate(&self, output: &tensor<X, S>, expected_output: &Self::ExpectedOutput) -> X;
 
-    /*
-    #[inline]
-    fn propagate(
-        &self,
-        output: &impl PropResultT<N>,
-        expected_output: Self::ExpectedOutput,
-    ) -> X {
-        self.propagate_arr(&output.get_nn_output(), expected_output)
-    }
-    */
-
     /// calculates the gradient of the loss with respect to the output of the neural network.
     fn backpropagate(
         &self,
         output: &tensor<X, S>,
         expected_output: &Self::ExpectedOutput,
     ) -> Tensor<X, S>;
-
-    /*
-    /// validates that the neural network and `Self` are compatible.
-    fn check_layers(_layer: &[Layer<X>]) -> anyhow::Result<()> {
-        anyhow::Ok(())
-    }
-    */
 }
 
 /// squared error loss function.
@@ -55,11 +36,11 @@ pub struct SquaredError;
 
 impl<X: Num, S: Shape> LossFunction<X, S> for SquaredError {
     fn propagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> X {
-        differences(output, expected_output.borrow()).map(|err| err * err).sum()
+        differences(output, expected_output).map(|err| err * err).sum()
     }
 
     fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
-        Tensor::from_iter(differences(output, expected_output.borrow()).map(|x| x * X::lit(2)))
+        Tensor::from_iter(differences(output, expected_output).map(|x| x * X::lit(2)))
     }
 }
 
@@ -76,7 +57,7 @@ impl<X: Float, S: Shape> LossFunction<X, S> for HalfSquaredError {
     }
 
     fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
-        Tensor::from_iter(differences(output, expected_output.borrow()))
+        Tensor::from_iter(differences(output, expected_output))
     }
 }
 
@@ -94,7 +75,7 @@ impl<X: Num, S: Shape> LossFunction<X, S> for MeanSquaredError {
 
     fn backpropagate(&self, output: &tensor<X, S>, expected_output: &tensor<X, S>) -> Tensor<X, S> {
         Tensor::from_iter(
-            differences(output, expected_output.borrow()).map(|x| x * X::lit(2) / S::LEN.cast()),
+            differences(output, expected_output).map(|x| x * X::lit(2) / S::LEN.cast()),
         )
     }
 }
@@ -131,7 +112,7 @@ impl<X: Float, const N: usize> LossFunction<X, [(); N]> for NLLLoss {
     ///
     /// Panics if `expected_output` is not a valid variant (is not in the range `0..IN`).
     fn propagate(&self, output: &vector<X, N>, expected_output: &Self::ExpectedOutput) -> X {
-        let idx = *expected_output.borrow();
+        let idx = *expected_output;
         assert!((0..N).contains(&idx));
         output[idx].val().neg()
     }
@@ -141,7 +122,7 @@ impl<X: Float, const N: usize> LossFunction<X, [(); N]> for NLLLoss {
         _output: &vector<X, N>,
         expected_output: &Self::ExpectedOutput,
     ) -> Vector<X, N> {
-        let idx = *expected_output.borrow();
+        let idx = *expected_output;
         let mut gradient = Vector::new([X::zero(); N]);
         gradient[idx].set(-X::ONE);
         gradient

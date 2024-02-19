@@ -1,6 +1,6 @@
 use super::{component_new, Data, NN};
 use crate::optimizer::Optimizer;
-use const_tensor::{Element, Len, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor};
+use const_tensor::{Element, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor};
 use core::fmt;
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +16,7 @@ pub fn leaky_relu<X: Num>(x: X, leak_rate: X) -> X {
     if x.is_positive() { x } else { leak_rate * x }
 }
 
+/// The ReLU activation function.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ReLU<PREV> {
@@ -50,7 +51,7 @@ where
     #[inline]
     fn prop(&self, input: Tensor<X, NNIN>) -> Tensor<X, S> {
         let input = self.prev.prop(input);
-        input.map_inplace(relu)
+        input.map(relu)
     }
 
     /// # Examples
@@ -65,7 +66,7 @@ where
     #[inline]
     fn train_prop(&self, input: Tensor<X, NNIN>) -> (Tensor<X, S>, Self::StoredData) {
         let (input, prev_data) = self.prev.train_prop(input);
-        let out = input.map_inplace(relu);
+        let out = input.map(relu);
         let data = out.map_clone(|x| x > X::ZERO);
         (out, Data { data, prev: prev_data })
     }
@@ -86,12 +87,12 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// # use rusty_ai::{*, nn::*, const_tensor::*};
-    /// let relu = ReLU::new(NNHead);
+    /// # use rusty_ai::{*, nn::*, const_tensor::*, test_util::{InspectGrad, TensorInspection}};
+    /// let relu = ReLU::new(InspectGrad);
     /// let (_, data) = relu.train_prop(Vector::new([-1.0, 0.0, 1.0]));
-    /// let out_grad = Tensor::new([1.0, 1.0, 1.0]);
-    /// let in_grad = relu.backprop(out_grad, data, ());
-    /// panic!("{:?}", in_grad);
+    /// let out_grad = Tensor::new([3.0, 3.0, 3.0]);
+    /// let in_grad = relu.backprop(out_grad, data, TensorInspection::new());
+    /// assert_eq!(in_grad.tensor, [0.0, 0.0, 3.0]);
     /// ```
     #[inline]
     fn backprop_inplace(&self, out_grad: Tensor<X, S>, data: Self::StoredData, grad: &mut PREV::Grad) {
@@ -138,6 +139,7 @@ where PREV: fmt::Display
     }
 }
 
+/// The leaky ReLU activation function.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LeakyReLU<X, PREV> {
     pub(super) prev: PREV,
@@ -164,13 +166,13 @@ where
     #[inline]
     fn prop(&self, input: Tensor<X, NNIN>) -> Tensor<X, S> {
         let input = self.prev.prop(input);
-        input.map_inplace(|x| leaky_relu(x, self.leak_rate))
+        input.map(|x| leaky_relu(x, self.leak_rate))
     }
 
     #[inline]
     fn train_prop(&self, input: Tensor<X, NNIN>) -> (Tensor<X, S>, Self::StoredData) {
         let (input, prev_data) = self.prev.train_prop(input);
-        let out = input.map_inplace(|x| leaky_relu(x, self.leak_rate));
+        let out = input.map(|x| leaky_relu(x, self.leak_rate));
         let data = out.map_clone(|x| x > X::ZERO);
         (out, Data { data, prev: prev_data })
     }

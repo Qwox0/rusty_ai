@@ -1,13 +1,12 @@
-use crate::{tensor, Element, Float, Len, Num, Shape, Tensor};
-use std::{
-    io::Write,
-    mem::{self, MaybeUninit},
-    ops::{Deref, DerefMut, Neg},
-};
+use crate::{Element, Float, Num};
+use std::{iter, mem, ops::DerefMut};
 
+/// represents an object containing multiple [`Element`]s.
 pub trait Multidimensional<X: Element>: Sized {
+    /// Type of an [`Iterator`] over references to the inner [`Element`]s.
     type Iter<'a>: Iterator<Item = &'a X>
     where Self: 'a;
+    /// Type of an [`Iterator`] over mutable references to the inner [`Element`]s.
     type IterMut<'a>: Iterator<Item = &'a mut X> + 'a
     where Self: 'a;
 
@@ -172,7 +171,6 @@ pub trait Multidimensional<X: Element>: Sized {
     #[inline]
     fn recip_elem_mut(&mut self)
     where X: Float {
-        use num::Float;
         for x in self.iter_elem_mut() {
             *x = x.recip();
         }
@@ -199,6 +197,19 @@ pub trait Multidimensional<X: Element>: Sized {
     }
 }
 
+impl<X: Element> Multidimensional<X> for () {
+    type Iter<'a> = iter::Empty<&'a X>;
+    type IterMut<'a> = iter::Empty<&'a mut X>;
+
+    fn iter_elem(&self) -> Self::Iter<'_> {
+        iter::empty()
+    }
+
+    fn iter_elem_mut(&mut self) -> Self::IterMut<'_> {
+        iter::empty()
+    }
+}
+
 /// An owned multidimensional structure.
 ///
 /// This is implemented for [`Tensor`], but this can be implemented for tensor like structure:
@@ -212,9 +223,12 @@ pub trait Multidimensional<X: Element>: Sized {
 /// impl Multidimensional for MyLayer { ... }
 /// ```
 pub trait MultidimensionalOwned<X: Element>: Sized + DerefMut<Target = Self::Data> {
+    /// Type of the Data of this owned multidimensional object.
     type Data: Multidimensional<X>;
+    /// this type but with possibly uninitialized values.
     type Uninit: MultidimensionalOwned<crate::maybe_uninit::MaybeUninit<X>>;
 
+    /// Creates a new uninitialized multidimensional object.
     fn new_uninit() -> Self::Uninit;
 
     /// Creates a new Tensor filled with the values in `iter`.
@@ -232,7 +246,6 @@ pub trait MultidimensionalOwned<X: Element>: Sized + DerefMut<Target = Self::Dat
     /// Creates a new Tensor filled with the scalar value.
     #[inline]
     fn full(val: X) -> Self {
-        //Self::from_1d(Vector::new([val; LEN])) // TODO: bench
         let mut t = Self::new_uninit();
         for x in t.iter_elem_mut() {
             x.write(val);
@@ -258,7 +271,7 @@ pub trait MultidimensionalOwned<X: Element>: Sized + DerefMut<Target = Self::Dat
     /// Applies a function to every element of the tensor.
     // TODO: bench vs tensor::map_clone
     #[inline]
-    fn map_inplace(mut self, mut f: impl FnMut(X) -> X) -> Self {
+    fn map(mut self, mut f: impl FnMut(X) -> X) -> Self {
         self.map_mut(|x| *x = f(*x));
         self
     }
@@ -367,29 +380,5 @@ pub trait MultidimensionalOwned<X: Element>: Sized + DerefMut<Target = Self::Dat
     where X: Float {
         self.lerp_mut(other, blend);
         self
-    }
-}
-
-pub trait MultidimensionalOwned2<X: Element>: Multidimensional<X> {
-    fn add_elem2(mut self: Box<Self>, other: &Self) -> Box<Self>
-    where X: Num {
-        self.add_elem_mut(other);
-        self
-    }
-}
-
-impl<X: Element, S: Shape> MultidimensionalOwned2<X> for tensor<X, S> {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test() {
-        let t = crate::vector::new_boxed([1, 2, 3, 4]);
-
-        let t = Tensor::from(t.add_elem2(crate::vector::literal([4, 3, 2, 1])));
-
-        assert_eq!(t, [5, 5, 5, 6]);
     }
 }

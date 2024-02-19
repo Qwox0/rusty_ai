@@ -12,25 +12,24 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-pub mod bias;
 pub mod clip_gradient_norm;
-pub mod data;
 pub mod initializer;
 pub mod loss_function;
 pub mod nn;
 mod norm;
 pub mod optimizer;
-mod propagation;
+mod pair;
 pub mod reexport;
+pub mod test_result;
+pub mod test_util;
 pub mod trainer;
-pub mod training;
-mod traits;
 mod util;
 
-pub use const_tensor::{self, Element, Float, Num};
-pub use nn::{NNBuilder, Pair, NN};
+pub use const_tensor::{self, Element, Float, Multidimensional, MultidimensionalOwned, Num};
+pub use nn::{NNBuilder, NN};
 pub use norm::Norm;
 pub use optimizer::Optimizer;
+pub use pair::Pair;
 pub use reexport::half::{bf16, f16};
 
 /// # `rusty_ai` prelude

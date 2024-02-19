@@ -18,9 +18,6 @@ mod maybe_uninit;
 mod multidim_arr;
 mod multidimensional;
 mod owned;
-mod serde_wrapper;
-mod shape;
-mod shape_data;
 
 pub use aliases::*;
 pub use data::tensor;
@@ -28,9 +25,9 @@ pub use element::{Element, Float, MoreNumOps, Num};
 pub use multidim_arr::{Len, MultidimArr};
 pub use multidimensional::{Multidimensional, MultidimensionalOwned};
 pub use owned::Tensor;
-//pub use shape::{Len, Shape};
 use std::mem;
 
+/// trait alias for `MultidimArr<Element = ()>`.
 pub trait Shape: MultidimArr<Element = ()> {}
 impl<S: MultidimArr<Element = ()>> Shape for S {}
 
@@ -65,28 +62,15 @@ impl<X: Num, const LEN: usize> Vector<X, LEN> {
     }
 }
 
-pub fn span_mat<X: Num, const LEN: usize, const LEN2: usize>(
-    s: &vector<X, LEN>,
-    other: &vector<X, LEN2>,
-) -> matrix<X, LEN2, LEN> {
-    let mut mat = matrix::new([[X::ZERO; LEN2]; LEN]);
-    for (row, &y) in s.iter_elem().enumerate() {
-        for (col, &x) in other.iter_elem().enumerate() {
-            mat[row][col].set(x * y);
-        }
-    }
-    mat
-}
-
 impl<X: Num, const W: usize, const H: usize> matrix<X, W, H> {
     /// Multiplies the [`matrix`] `self` by the [`vector`] `vec` and returns a newly allocated
     /// [`Vector`] containing the result.
     pub fn mul_vec(&self, vec: &vector<X, W>) -> Vector<X, H> {
-        let mut out = Vector::new([X::ZERO; H]);
-        for (row, out) in self.iter_sub_tensors().zip(out.iter_sub_tensors_mut()) {
-            out.set(row.dot_product(vec));
+        let mut out = Vector::<X, H>::new_uninit();
+        for (row, out) in self.iter_sub_tensors().zip(out.iter_elem_mut()) {
+            out.write(row.dot_product(vec));
         }
-        out
+        unsafe { mem::transmute(out) }
     }
 }
 
@@ -104,6 +88,7 @@ impl<X: Num, const W: usize, const H: usize> Matrix<X, W, H> {
 }
 
 impl<X: Num, const N: usize> Matrix<X, N, N> {
+    /// Creates a new identity [`Matrix`] of dimension `N`.
     pub fn identity() -> Matrix<X, N, N> {
         let mut id = Matrix::<X, N, N>::zeros();
         for idx in 0..N {
