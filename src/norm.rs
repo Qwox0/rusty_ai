@@ -1,4 +1,4 @@
-use matrix::{Float, Num};
+use const_tensor::{Float, Num};
 use serde::{Deserialize, Serialize};
 
 /// see <https://en.wikipedia.org/wiki/Norm_(mathematics)>

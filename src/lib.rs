@@ -1,3 +1,4 @@
+#![allow(incomplete_features)]
 #![feature(array_windows)]
 #![feature(test)]
 #![feature(type_changing_struct_update)]
@@ -6,57 +7,38 @@
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(associated_type_defaults)]
 #![feature(exact_size_is_empty)]
+#![feature(generic_const_exprs)]
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-mod activation_function;
-pub mod bias;
 pub mod clip_gradient_norm;
-pub mod data;
-pub mod gradient;
-mod initializer;
-mod input;
-pub mod layer;
+pub mod initializer;
 pub mod loss_function;
 pub mod nn;
 mod norm;
 pub mod optimizer;
-mod propagation;
+mod pair;
 pub mod reexport;
+pub mod test_result;
+pub mod test_util;
 pub mod trainer;
-pub mod training;
-mod traits;
 mod util;
 
-pub use activation_function::{ActivationFn, ActivationFunction};
-pub use gradient::{Gradient, GradientLayer};
-pub use initializer::Initializer;
-pub use input::Input;
-pub use matrix::{self, Element, Float, Num};
-pub use nn::{BuildLayer, NNBuilder, NeuralNetwork};
+pub use const_tensor::{self, Element, Float, Multidimensional, MultidimensionalOwned, Num};
+pub use nn::{NNBuilder, NN};
 pub use norm::Norm;
-pub use optimizer::{Optimizer, OptimizerValues};
-pub use propagation::VerbosePropagation;
+pub use optimizer::Optimizer;
+pub use pair::Pair;
 pub use reexport::half::{bf16, f16};
-pub use traits::ParamsIter;
 
 /// # `rusty_ai` prelude
 ///
 /// includes everything
 pub mod prelude {
     pub use crate::{
-        bias::LayerBias,
-        clip_gradient_norm::ClipGradientNorm,
-        data::{DataBuilder, Pair, PairList},
-        gradient::aliases::*,
-        loss_function::*,
-        matrix::*,
-        nn::builder::{markers::*, BuilderNoParts, BuilderWithParts},
-        optimizer::{adam::*, sgd::*, *},
-        trainer::{markers::*, *},
-        training::*,
-        *,
+        clip_gradient_norm::*, const_tensor::*, initializer::*, loss_function::*,
+        nn::builder::markers::*, optimizer::*, *,
     };
 }
 

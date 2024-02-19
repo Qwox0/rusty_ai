@@ -1,65 +1,70 @@
 #![feature(test)]
 #![feature(iter_array_chunks)]
 
-use matrix::{Float, Num};
-use rand::Rng;
+use const_tensor::{vector, Float, Num, Tensor, Vector};
+use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use rand_distr::{Bernoulli, Distribution};
 use rusty_ai::{
-    data::PairList,
+    initializer::PytorchDefault,
     loss_function::{LossFunction, SquaredError},
-    optimizer::{self, sgd::SGD_},
-    trainer::NNTrainer,
-    ActivationFn, BuildLayer, Initializer, NNBuilder, Norm,
+    optimizer,
+    trainer::Trainable,
+    NNBuilder, Norm, Pair, NN,
 };
-use std::borrow::Borrow;
 
 const LOSS_FUNCTION: SquaredError = SquaredError;
 #[derive(Debug)]
 struct XorLoss;
 
-impl<F: Float> LossFunction<F, 1> for XorLoss {
+impl<X: Float> LossFunction<X, [(); 1]> for XorLoss {
     type ExpectedOutput = bool;
 
-    fn propagate(&self, output: &[F; 1], expected_output: impl Borrow<Self::ExpectedOutput>) -> F {
-        LOSS_FUNCTION.propagate(output, [F::from_bool(expected_output.borrow().clone())])
+    fn propagate(&self, output: &vector<X, 1>, expected_output: &Self::ExpectedOutput) -> X {
+        let expected_output = Vector::new([X::from_bool(*expected_output)]);
+        LOSS_FUNCTION.propagate(output, &expected_output)
     }
 
-    fn backpropagate_arr(
+    fn backpropagate(
         &self,
-        output: &[F; 1],
-        expected_output: impl Borrow<Self::ExpectedOutput>,
-    ) -> rusty_ai::prelude::OutputGradient<F> {
-        LOSS_FUNCTION.backpropagate_arr(output, [F::from_bool(expected_output.borrow().clone())])
+        output: &vector<X, 1>,
+        expected_output: &Self::ExpectedOutput,
+    ) -> Vector<X, 1> {
+        let expected_output = Vector::new([X::from_bool(*expected_output)]);
+
+        LOSS_FUNCTION.backpropagate(output, &expected_output)
     }
 }
 
-fn get_nn<F: Float>(hidden_neurons: usize) -> NNTrainer<F, 2, 1, XorLoss, SGD_<F>>
-where rand_distr::StandardNormal: Distribution<F> {
+fn get_nn<X: Float, const NEURONS: usize>(
+    rng: &mut impl Rng,
+) -> impl Trainable<X, [(); 2], [(); 1], EO = bool> {
     NNBuilder::default()
-        .double_precision()
-        .element_type::<F>()
-        .input::<2>()
-        .layer(hidden_neurons, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::ReLU)
-        .layer(1, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .activation_function(ActivationFn::Sigmoid)
-        .build::<1>()
+        .element_type::<X>()
+        .rng(rng)
+        .input_shape::<[(); 2]>()
+        .layer::<NEURONS>(PytorchDefault, PytorchDefault)
+        .relu()
+        .layer::<1>(PytorchDefault, PytorchDefault)
+        .sigmoid()
+        .build()
         .to_trainer()
         .loss_function(XorLoss)
         .optimizer(optimizer::sgd::SGD::default())
         .retain_gradient(true)
-        .new_clip_gradient_norm(5.0, Norm::Two)
+        .new_clip_gradient_norm(X::lit(5), Norm::Two)
         .build()
 }
 
-fn gen_data<X: Num>(rng: &mut impl Rng, count: usize) -> PairList<X, 2, bool> {
+fn gen_data<'a, X: Num>(
+    rng: &'a mut impl Rng,
+    count: usize,
+) -> impl Iterator<Item = Pair<X, [(); 2], bool>> + 'a {
     Bernoulli::new(0.5)
         .unwrap()
         .sample_iter(rng)
         .array_chunks()
         .take(count)
-        .map(|[in1, in2]| ([X::from_bool(in1), X::from_bool(in2)], in1 ^ in2))
-        .collect()
+        .map(|[in1, in2]| Pair::new(Tensor::new([in1, in2]).map_clone(X::from_bool), in1 ^ in2))
 }
 
 fn main() {
@@ -67,19 +72,22 @@ fn main() {
     const TRAINING_DATA_COUNT: usize = 1000;
     const EPOCHS: usize = 1000;
 
-    let mut ai = get_nn::<f64>(HIDDEN_NEURONS);
+    let mut rng = StdRng::seed_from_u64(69420);
+    let mut ai = get_nn::<f64, HIDDEN_NEURONS>(&mut rng);
 
-    let mut rng = rand::thread_rng();
+    let mut training_data = gen_data(&mut rng, TRAINING_DATA_COUNT).collect::<Vec<_>>();
+    let test_data = gen_data(&mut rng, 30).collect::<Vec<_>>();
 
-    let mut training_data = gen_data(&mut rng, TRAINING_DATA_COUNT);
-    let test_data = gen_data(&mut rng, 30);
+    let loss_sum: f64 = ai.test_batch(&test_data).map(|r| r.get_loss()).sum();
+    println!("epoch: {:>4}, loss: {:<20}", 0, loss_sum);
 
     for epoch in 1..=EPOCHS {
-        ai.train(&training_data).execute();
-        training_data.shuffle_rng(&mut rng);
+        ai.train_single_thread(&training_data);
+        //ai.train_rayon(&training_data);
+        training_data.shuffle(&mut rng);
 
         if epoch % 100 == 0 {
-            let loss_sum: f64 = ai.test_batch(test_data.iter()).map(|t| t.1).sum();
+            let loss_sum: f64 = ai.test_batch(test_data.iter()).map(|r| r.get_loss()).sum();
             println!("epoch: {:>4}, loss: {:<20}", epoch, loss_sum);
         }
     }
@@ -88,6 +96,41 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusty_ai::test_result::TestResult;
+
+    #[test]
+    fn seeded_test() {
+        let mut rng = StdRng::seed_from_u64(3);
+        let mut ai = get_nn::<f32, 5>(&mut rng);
+
+        let nn_params = ai.get_network().iter_param().copied().collect::<Vec<_>>();
+        #[rustfmt::skip]
+        let expected = [0.20864576, -0.5724608, 0.67966837, -0.20861408, -0.50551707, -0.44711044, 0.28708225, -0.10395467, 0.14460564, -0.36693484, -0.49184257, -0.13523221, -0.1413005, -0.20470047, 0.70528835, 0.12746763, -0.42766398, -0.017448157, -0.16920936, 0.4134671, 0.027382761];
+        assert_eq!(nn_params, expected);
+
+        let mut training_data = gen_data(&mut rng, 10).collect::<Vec<_>>();
+
+        for e in 1..=1000 {
+            ai.train_single_thread(&training_data);
+            training_data.shuffle(&mut rng);
+
+            if e % 100 == 0 {
+                let test_data = gen_data(&mut rng, 10).collect::<Vec<_>>();
+                let loss: f32 = ai.test_batch(&test_data).map(|r| r.get_loss()).sum();
+                println!("epoch: {:>4}, loss: {}", e, loss);
+            }
+        }
+
+        for p in gen_data(&mut rng, 30) {
+            let (_, loss) = ai.test(&p).into_tuple();
+            assert!(
+                loss < 1e-5,
+                "assertion failed: loss < 1e-8 (loss: {}). This test contains rng. Please repeat \
+                 the test to ensure that it has failed.",
+                loss
+            )
+        }
+    }
 
     #[test]
     fn test() {
@@ -95,18 +138,18 @@ mod tests {
         const TRAINING_DATA_COUNT: usize = 500;
         const EPOCHS: usize = 500;
 
-        let mut ai = get_nn::<f32>(HIDDEN_NEURONS);
-
         let mut rng = rand::thread_rng();
-        let mut training_data = gen_data(&mut rng, TRAINING_DATA_COUNT);
+        let mut ai = get_nn::<f32, HIDDEN_NEURONS>(&mut rng);
+
+        let mut training_data = gen_data(&mut rng, TRAINING_DATA_COUNT).collect::<Vec<_>>();
 
         for _ in 1..=EPOCHS {
-            ai.train(&training_data).execute();
-            training_data.shuffle_rng(&mut rng);
+            ai.train_single_thread(&training_data);
+            training_data.shuffle(&mut rng);
         }
 
-        for (input, eo) in gen_data(&mut rng, 30) {
-            let (_, loss) = ai.test(&input, &eo);
+        for p in gen_data(&mut rng, 30) {
+            let (_, loss) = ai.test(&p).into_tuple();
             assert!(
                 loss < 1e-5,
                 "assertion failed: loss < 1e-8 (loss: {}). This test contains rng. Please repeat \
@@ -122,15 +165,15 @@ macro_rules! _bench_example_epoch {
     ( $( $bench_name:ident : $neurons:expr, $data_count:expr );* $(;)? ) => { $(
         #[bench]
         fn $bench_name(b: &mut Bencher) {
-            let mut ai = get_nn::<f32>($neurons);
             let mut rng = rand::thread_rng();
-            let mut training_data = gen_data(&mut rng, $data_count);
+            let mut ai = get_nn::<f32, $neurons>(&mut rng);
+            let mut training_data = gen_data(&mut rng, $data_count).collect::<Vec<_>>();
             b.iter(|| {
-                black_box(Training::execute(black_box(NNTrainer::train(
+                black_box(Trainable::train_rayon(
                     black_box(&mut ai),
                     black_box(&training_data),
-                ))));
-                training_data.shuffle_rng(&mut rng);
+                ));
+                training_data.shuffle(&mut rng);
             })
         }
     )* };
@@ -140,134 +183,104 @@ pub use _bench_example_epoch as bench_example_epoch;
 /// # Results (f64)
 ///
 /// ```
-/// test benches::epoch_datacount_100_neurons_003 ... bench:      31,245 ns/iter (+/- 4,383)
-/// test benches::epoch_datacount_100_neurons_005 ... bench:      30,120 ns/iter (+/- 8,429)
-/// test benches::epoch_datacount_100_neurons_010 ... bench:      34,837 ns/iter (+/- 3,500)
-/// test benches::epoch_datacount_100_neurons_100 ... bench:     109,016 ns/iter (+/- 28,412)
-/// test benches::epoch_datacount_100_neurons_500 ... bench:     431,355 ns/iter (+/- 110,238)
-/// test benches::epoch_datacount_100_neurons_900 ... bench:     758,352 ns/iter (+/- 221,523)
-/// test benches::epoch_datacount_500_neurons_003 ... bench:     147,573 ns/iter (+/- 30,456)
-/// test benches::epoch_datacount_500_neurons_005 ... bench:     140,617 ns/iter (+/- 17,428)
-/// test benches::epoch_datacount_500_neurons_010 ... bench:     183,356 ns/iter (+/- 23,351)
-/// test benches::epoch_datacount_500_neurons_030 ... bench:     267,253 ns/iter (+/- 30,388)
-/// test benches::epoch_datacount_500_neurons_050 ... bench:     349,008 ns/iter (+/- 35,042)
-/// test benches::epoch_datacount_500_neurons_070 ... bench:     435,233 ns/iter (+/- 76,669)
-/// test benches::epoch_datacount_500_neurons_090 ... bench:     490,954 ns/iter (+/- 66,953)
-/// test benches::epoch_datacount_500_neurons_100 ... bench:     601,599 ns/iter (+/- 170,455)
-/// test benches::epoch_datacount_500_neurons_200 ... bench:     978,337 ns/iter (+/- 1,711,630)
-/// test benches::epoch_datacount_500_neurons_300 ... bench:   1,345,359 ns/iter (+/- 123,731)
-/// test benches::epoch_datacount_500_neurons_400 ... bench:   1,762,124 ns/iter (+/- 333,995)
-/// test benches::epoch_datacount_500_neurons_500 ... bench:   2,108,879 ns/iter (+/- 351,741)
-/// test benches::epoch_datacount_500_neurons_600 ... bench:   2,654,988 ns/iter (+/- 494,224)
-/// test benches::epoch_datacount_500_neurons_700 ... bench:   2,861,289 ns/iter (+/- 429,318)
-/// test benches::epoch_datacount_500_neurons_800 ... bench:   3,406,868 ns/iter (+/- 870,594)
-/// test benches::epoch_datacount_500_neurons_900 ... bench:   3,705,758 ns/iter (+/- 653,876)
-/// test benches::epoch_datacount_900_neurons_003 ... bench:     251,537 ns/iter (+/- 67,355)
-/// test benches::epoch_datacount_900_neurons_005 ... bench:     244,351 ns/iter (+/- 14,767)
-/// test benches::epoch_datacount_900_neurons_010 ... bench:     297,827 ns/iter (+/- 25,308)
-/// test benches::epoch_datacount_900_neurons_100 ... bench:     975,830 ns/iter (+/- 313,410)
-/// test benches::epoch_datacount_900_neurons_500 ... bench:   3,930,385 ns/iter (+/- 587,206)
-/// test benches::epoch_datacount_900_neurons_900 ... bench:   6,668,852 ns/iter (+/- 985,858)
+/// test benches::epoch_datacount_100_neurons_100 ... bench:     105,449 ns/iter (+/- 8,709)
+/// test benches::epoch_datacount_100_neurons_500 ... bench:     421,027 ns/iter (+/- 375,106)
+/// test benches::epoch_datacount_100_neurons_900 ... bench:     697,514 ns/iter (+/- 39,467)
+/// test benches::epoch_datacount_500_neurons_100 ... bench:     520,097 ns/iter (+/- 33,921)
+/// test benches::epoch_datacount_500_neurons_500 ... bench:   2,027,946 ns/iter (+/- 267,714)
+/// test benches::epoch_datacount_500_neurons_900 ... bench:   3,461,679 ns/iter (+/- 344,771)
+/// test benches::epoch_datacount_900_neurons_100 ... bench:     917,680 ns/iter (+/- 10,399)
+/// test benches::epoch_datacount_900_neurons_500 ... bench:   3,620,987 ns/iter (+/- 167,507)
+/// test benches::epoch_datacount_900_neurons_900 ... bench:   6,214,099 ns/iter (+/- 338,313)
 /// ```
 ///
 /// # Results with rayon (f64)
 ///
 /// ```
-/// test benches::epoch_datacount_100_neurons_003 ... bench:      44,367 ns/iter (+/- 3,261)
-/// test benches::epoch_datacount_100_neurons_005 ... bench:      47,409 ns/iter (+/- 7,531)
-/// test benches::epoch_datacount_100_neurons_010 ... bench:      58,925 ns/iter (+/- 4,591)
-/// test benches::epoch_datacount_100_neurons_100 ... bench:     161,681 ns/iter (+/- 34,975)
-/// test benches::epoch_datacount_100_neurons_500 ... bench:     424,835 ns/iter (+/- 86,984)
-/// test benches::epoch_datacount_100_neurons_900 ... bench:     800,583 ns/iter (+/- 131,383)
-/// test benches::epoch_datacount_500_neurons_003 ... bench:     143,521 ns/iter (+/- 19,674)
-/// test benches::epoch_datacount_500_neurons_005 ... bench:     144,590 ns/iter (+/- 22,819)
-/// test benches::epoch_datacount_500_neurons_010 ... bench:     166,325 ns/iter (+/- 15,133)
-/// test benches::epoch_datacount_500_neurons_030 ... bench:     237,854 ns/iter (+/- 39,518)
-/// test benches::epoch_datacount_500_neurons_050 ... bench:     303,969 ns/iter (+/- 58,847)
-/// test benches::epoch_datacount_500_neurons_070 ... bench:     423,059 ns/iter (+/- 121,634)
-/// test benches::epoch_datacount_500_neurons_090 ... bench:     452,006 ns/iter (+/- 140,686)
-/// test benches::epoch_datacount_500_neurons_100 ... bench:     536,609 ns/iter (+/- 198,314)
-/// test benches::epoch_datacount_500_neurons_200 ... bench:     920,333 ns/iter (+/- 349,582)
-/// test benches::epoch_datacount_500_neurons_300 ... bench:   1,354,631 ns/iter (+/- 610,535)
-/// test benches::epoch_datacount_500_neurons_400 ... bench:   1,362,134 ns/iter (+/- 414,454)
-/// test benches::epoch_datacount_500_neurons_500 ... bench:   1,371,858 ns/iter (+/- 227,611)
-/// test benches::epoch_datacount_500_neurons_600 ... bench:   1,624,216 ns/iter (+/- 283,872)
-/// test benches::epoch_datacount_500_neurons_700 ... bench:   1,945,982 ns/iter (+/- 438,969)
-/// test benches::epoch_datacount_500_neurons_800 ... bench:   2,148,179 ns/iter (+/- 314,916)
-/// test benches::epoch_datacount_500_neurons_900 ... bench:   2,401,087 ns/iter (+/- 414,738)
-/// test benches::epoch_datacount_900_neurons_003 ... bench:     231,682 ns/iter (+/- 60,844)
-/// test benches::epoch_datacount_900_neurons_005 ... bench:     237,438 ns/iter (+/- 62,057)
-/// test benches::epoch_datacount_900_neurons_010 ... bench:     242,021 ns/iter (+/- 49,833)
-/// test benches::epoch_datacount_900_neurons_100 ... bench:     644,834 ns/iter (+/- 145,178)
-/// test benches::epoch_datacount_900_neurons_500 ... bench:   2,303,908 ns/iter (+/- 543,419)
-/// test benches::epoch_datacount_900_neurons_900 ... bench:   3,728,160 ns/iter (+/- 476,066)
+/// test benches::epoch_datacount_100_neurons_100 ... bench:     154,521 ns/iter (+/- 145,971)
+/// test benches::epoch_datacount_100_neurons_500 ... bench:     451,887 ns/iter (+/- 94,258)
+/// test benches::epoch_datacount_100_neurons_900 ... bench:     684,421 ns/iter (+/- 148,162)
+/// test benches::epoch_datacount_500_neurons_100 ... bench:     395,819 ns/iter (+/- 96,634)
+/// test benches::epoch_datacount_500_neurons_500 ... bench:   1,472,725 ns/iter (+/- 405,848)
+/// test benches::epoch_datacount_500_neurons_900 ... bench:   1,983,029 ns/iter (+/- 452,357)
+/// test benches::epoch_datacount_900_neurons_100 ... bench:     634,512 ns/iter (+/- 118,611)
+/// test benches::epoch_datacount_900_neurons_500 ... bench:   1,759,568 ns/iter (+/- 501,777)
+/// test benches::epoch_datacount_900_neurons_900 ... bench:   3,660,244 ns/iter (+/- 947,533)
 /// ```
 ///
-/// # Rayon (better grad init) (f64)
+/// # Results with rayon (f32)
 ///
 /// ```
-/// test benches::epoch_datacount_500_neurons_700 ... bench:   1,582,812 ns/iter (+/- 203,955)
-/// test benches::epoch_datacount_500_neurons_800 ... bench:   1,867,005 ns/iter (+/- 529,016)
-/// test benches::epoch_datacount_500_neurons_900 ... bench:   2,055,371 ns/iter (+/- 236,685)
-/// test benches::epoch_datacount_900_neurons_003 ... bench:     174,620 ns/iter (+/- 19,028)
-/// test benches::epoch_datacount_900_neurons_005 ... bench:     177,043 ns/iter (+/- 25,889)
-/// test benches::epoch_datacount_900_neurons_010 ... bench:     200,987 ns/iter (+/- 27,207)
-/// test benches::epoch_datacount_900_neurons_100 ... bench:     555,309 ns/iter (+/- 138,537)
-/// test benches::epoch_datacount_900_neurons_500 ... bench:   1,781,902 ns/iter (+/- 577,616)
-/// test benches::epoch_datacount_900_neurons_900 ... bench:   3,185,829 ns/iter (+/- 1,289,502)
+/// test benches::epoch_datacount_100_neurons_100 ... bench:     156,445 ns/iter (+/- 225,424)
+/// test benches::epoch_datacount_100_neurons_500 ... bench:     417,356 ns/iter (+/- 88,478)
+/// test benches::epoch_datacount_100_neurons_900 ... bench:     731,473 ns/iter (+/- 170,163)
+/// test benches::epoch_datacount_500_neurons_100 ... bench:     411,928 ns/iter (+/- 57,390)
+/// test benches::epoch_datacount_500_neurons_500 ... bench:   1,360,821 ns/iter (+/- 308,288)
+/// test benches::epoch_datacount_500_neurons_900 ... bench:   2,323,408 ns/iter (+/- 503,524)
+/// test benches::epoch_datacount_900_neurons_100 ... bench:     581,157 ns/iter (+/- 113,416)
+/// test benches::epoch_datacount_900_neurons_500 ... bench:   2,481,336 ns/iter (+/- 855,139)
+/// test benches::epoch_datacount_900_neurons_900 ... bench:   3,320,163 ns/iter (+/- 956,815)
 /// ```
 ///
-/// # Rayon (better grad init) (f32)
+/// -----
+///
+/// # Results const_tensor single thread (f64)
 ///
 /// ```
-/// test benches::epoch_datacount_500_neurons_700 ... bench:   1,240,364 ns/iter (+/- 197,929)
-/// test benches::epoch_datacount_500_neurons_800 ... bench:   1,374,512 ns/iter (+/- 140,880)
-/// test benches::epoch_datacount_500_neurons_900 ... bench:   1,533,832 ns/iter (+/- 132,534)
-/// test benches::epoch_datacount_900_neurons_003 ... bench:     170,590 ns/iter (+/- 19,448)
-/// test benches::epoch_datacount_900_neurons_005 ... bench:     179,512 ns/iter (+/- 17,479)
-/// test benches::epoch_datacount_900_neurons_010 ... bench:     186,440 ns/iter (+/- 21,873)
-/// test benches::epoch_datacount_900_neurons_100 ... bench:     438,279 ns/iter (+/- 108,114)
-/// test benches::epoch_datacount_900_neurons_500 ... bench:   1,401,092 ns/iter (+/- 149,090)
-/// test benches::epoch_datacount_900_neurons_900 ... bench:   2,356,569 ns/iter (+/- 414,852)
+/// test benches::epoch_datacount_100_neurons_100 ... bench:      65,421 ns/iter (+/- 21,530)
+/// test benches::epoch_datacount_100_neurons_500 ... bench:     251,345 ns/iter (+/- 11,503)
+/// test benches::epoch_datacount_100_neurons_900 ... bench:     419,846 ns/iter (+/- 22,974)
+/// test benches::epoch_datacount_500_neurons_100 ... bench:     322,083 ns/iter (+/- 3,204)
+/// test benches::epoch_datacount_500_neurons_500 ... bench:   1,236,425 ns/iter (+/- 74,324)
+/// test benches::epoch_datacount_500_neurons_900 ... bench:   2,088,645 ns/iter (+/- 112,973)
+/// test benches::epoch_datacount_900_neurons_100 ... bench:     618,036 ns/iter (+/- 206,855)
+/// test benches::epoch_datacount_900_neurons_500 ... bench:   2,238,599 ns/iter (+/- 95,940)
+/// test benches::epoch_datacount_900_neurons_900 ... bench:   3,750,461 ns/iter (+/- 242,631)
+/// ```
+///
+/// # Results const_tensor rayon (f64)
+///
+/// ```
+/// test benches::epoch_datacount_100_neurons_100 ... bench:      90,561 ns/iter (+/- 19,783)
+/// test benches::epoch_datacount_100_neurons_500 ... bench:     204,930 ns/iter (+/- 26,895)
+/// test benches::epoch_datacount_100_neurons_900 ... bench:     523,425 ns/iter (+/- 160,540)
+/// test benches::epoch_datacount_500_neurons_100 ... bench:     210,831 ns/iter (+/- 51,745)
+/// test benches::epoch_datacount_500_neurons_500 ... bench:     741,334 ns/iter (+/- 122,110)
+/// test benches::epoch_datacount_500_neurons_900 ... bench:   1,121,656 ns/iter (+/- 229,572)
+/// test benches::epoch_datacount_900_neurons_100 ... bench:     364,944 ns/iter (+/- 108,910)
+/// test benches::epoch_datacount_900_neurons_500 ... bench:   1,032,378 ns/iter (+/- 270,824)
+/// test benches::epoch_datacount_900_neurons_900 ... bench:   1,686,858 ns/iter (+/- 233,635)
+/// ```
+///
+/// # Results const_tensor rayon (f32)
+///
+/// ```
+/// test benches::epoch_datacount_100_neurons_100 ... bench:      65,585 ns/iter (+/- 8,662)
+/// test benches::epoch_datacount_100_neurons_500 ... bench:     136,510 ns/iter (+/- 17,128)
+/// test benches::epoch_datacount_100_neurons_900 ... bench:     203,447 ns/iter (+/- 32,356)
+/// test benches::epoch_datacount_500_neurons_100 ... bench:     181,386 ns/iter (+/- 27,219)
+/// test benches::epoch_datacount_500_neurons_500 ... bench:     371,093 ns/iter (+/- 83,309)
+/// test benches::epoch_datacount_500_neurons_900 ... bench:     702,488 ns/iter (+/- 226,175)
+/// test benches::epoch_datacount_900_neurons_100 ... bench:     243,149 ns/iter (+/- 32,538)
+/// test benches::epoch_datacount_900_neurons_500 ... bench:     620,403 ns/iter (+/- 783,641)
+/// test benches::epoch_datacount_900_neurons_900 ... bench:     914,991 ns/iter (+/- 220,716)
 /// ```
 #[cfg(test)]
 mod benches {
     use super::*;
 
     extern crate test;
-    use rusty_ai::training::Training;
     use test::*;
 
     bench_example_epoch! {
-        /*
-        epoch_datacount_100_neurons_003: 3, 100;
-        epoch_datacount_100_neurons_005: 5, 100;
-        epoch_datacount_100_neurons_010: 10, 100;
         epoch_datacount_100_neurons_100: 100, 100;
         epoch_datacount_100_neurons_500: 500, 100;
         epoch_datacount_100_neurons_900: 900, 100;
 
-        epoch_datacount_500_neurons_003: 3, 500;
-        epoch_datacount_500_neurons_005: 5, 500;
-        epoch_datacount_500_neurons_010: 10, 500;
-        epoch_datacount_500_neurons_030: 30, 500;
-        epoch_datacount_500_neurons_050: 50, 500;
-        epoch_datacount_500_neurons_070: 70, 500;
-        epoch_datacount_500_neurons_090: 90, 500;
         epoch_datacount_500_neurons_100: 100, 500;
-        epoch_datacount_500_neurons_200: 200, 500;
-        epoch_datacount_500_neurons_300: 300, 500;
-        epoch_datacount_500_neurons_400: 400, 500;
         epoch_datacount_500_neurons_500: 500, 500;
-        epoch_datacount_500_neurons_600: 600, 500;
-        */
-        epoch_datacount_500_neurons_700: 700, 500;
-        epoch_datacount_500_neurons_800: 800, 500;
         epoch_datacount_500_neurons_900: 900, 500;
 
-        epoch_datacount_900_neurons_003: 3, 900;
-        epoch_datacount_900_neurons_005: 5, 900;
-        epoch_datacount_900_neurons_010: 10, 900;
         epoch_datacount_900_neurons_100: 100, 900;
         epoch_datacount_900_neurons_500: 500, 900;
         epoch_datacount_900_neurons_900: 900, 900;

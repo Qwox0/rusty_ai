@@ -1,28 +1,32 @@
-use rusty_ai::*;
+use rusty_ai::{initializer::PytorchDefault, NNBuilder, NN};
+use serde::de::DeserializeOwned;
+
+const IN: usize = 2;
+const OUT: usize = 3;
+
+fn get_nn() -> impl NN<f32, [(); IN], [(); OUT]> + DeserializeOwned {
+    NNBuilder::default()
+        .default_rng()
+        .input_shape::<[(); IN]>()
+        .layer::<6>(PytorchDefault, PytorchDefault)
+        .relu()
+        .layer::<6>(PytorchDefault, PytorchDefault)
+        .relu()
+        .layer::<OUT>(PytorchDefault, PytorchDefault)
+        .sigmoid()
+        .build()
+}
 
 fn main() -> Result<(), serde_json::Error> {
-    const IN: usize = 2;
-    const OUT: usize = 3;
+    let nn = get_nn();
 
-    let ai = NNBuilder::default()
-        .input::<IN>()
-        .layer(6, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .relu()
-        .layer(6, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .relu()
-        .layer(OUT, Initializer::PytorchDefault, Initializer::PytorchDefault)
-        .sigmoid()
-        .build::<OUT>();
-    println!("AI: {}", ai);
+    let json = serde_json::to_string(&nn)?;
+    println!("JSON: {}", json);
 
-    let json = serde_json::to_string(&ai)?;
-    println!("\nJSON: {}", json);
+    let new_nn = nn.deserialize_hint(serde_json::from_str(&json)?);
 
-    let new_ai: NeuralNetwork<f32, IN, OUT> = serde_json::from_str(&json)?;
-    println!("\nNEW_AI: {}", new_ai);
-
-    assert_eq!(ai, new_ai);
-    println!("\nAI and NEW_AI are equal!");
+    assert_eq!(nn, new_nn);
+    println!("\nNN and NEW_NN are equal!");
 
     Ok(())
 }

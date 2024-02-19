@@ -1,9 +1,74 @@
 //! Module containing the [`SGD_`] [`Optimizer`].
-use super::{OptimizerValues, DEFAULT_LEARNING_RATE};
+
+use super::{Optimizer, DEFAULT_LEARNING_RATE};
+use const_tensor::{Element, Multidimensional, MultidimensionalOwned, Num, Shape, Tensor};
+use core::fmt;
+use serde::{Deserialize, Serialize};
+
+/// Stochastic gradient descent [`Optimizer`]
+///
+/// this type implements [`Optimizer`]
+///
+/// use [`OptimizerValues::init_with_layers`] on [`SGD`] to create this
+/// optimizer.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SGD<X> {
+    /// The learning rate used by the sgd optimizer.
+    pub learning_rate: X,
+    /// The `momentum` constant used by the sgd optimizer.
+    pub momentum: X,
+}
+
+impl<X: Num> Default for SGD<X> {
+    fn default() -> Self {
+        Self { learning_rate: DEFAULT_LEARNING_RATE.cast(), momentum: X::ZERO }
+    }
+}
+
+/// State of the Stochastic gradient descent [`Optimizer`].
+pub struct SGDState<X: Element, S: Shape> {
+    prev_grad: Tensor<X, S>,
+}
+
+impl<X: Num> Optimizer<X> for SGD<X> {
+    type State<S: Shape> = SGDState<X, S>;
+
+    fn optimize_tensor<S: Shape>(
+        &self,
+        tensor: &mut Tensor<X, S>,
+        gradient: &const_tensor::tensor<X, S>,
+        state: &mut Self::State<S>,
+    ) {
+        state.prev_grad.scalar_mul_mut(self.momentum);
+        state
+            .prev_grad
+            .sub_elem_mut(&gradient.to_owned().scalar_mul(self.learning_rate));
+        tensor.add_elem_mut(&state.prev_grad);
+    }
+
+    fn new_state<S: Shape>(tensor: Tensor<X, S>) -> Self::State<S> {
+        SGDState { prev_grad: tensor }
+    }
+}
+
+impl<X: Num> fmt::Display for SGD<X> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let SGD { learning_rate, momentum } = self;
+        write!(f, "SGD {{ learning_rate: {:?}", learning_rate)?;
+        if *momentum != X::ZERO {
+            write!(f, ", momentum: {:?}", momentum)?;
+        }
+        write!(f, " }}")
+    }
+}
+
+/*
+use super::{Optimizer, OptimizerValues, DEFAULT_LEARNING_RATE};
 use crate::{layer::Layer, *};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
+/*
 /// configuration values for the stochastic gradient descent optimizer [`SGD_`].
 ///
 /// use [`OptimizerValues::init_with_layers`] to create the optimizer: [`SGD_`]
@@ -29,6 +94,7 @@ impl<X: Float> OptimizerValues<X> for SGD {
         SGD_ { val: self, prev_change }
     }
 }
+*/
 
 /// Stochastic gradient descent optimizer
 ///
@@ -43,6 +109,18 @@ pub struct SGD_<X> {
 }
 
 impl<X: Num> Optimizer<X> for SGD_<X> {
+    type State;
+
+    fn optimize<IN: const_tensor::Tensor<X>, OUT: const_tensor::Tensor<X>, C: nn::NNComponent<X, IN, OUT>>(
+        &self,
+        nn: C,
+        gradient: C::Grad,
+        state: Self::State,
+    ) -> C {
+        todo!()
+    }
+
+    /*
     fn optimize<'a, const IN: usize, const OUT: usize>(
         &mut self,
         nn: &mut NeuralNetwork<X, IN, OUT>,
@@ -55,6 +133,7 @@ impl<X: Num> Optimizer<X> for SGD_<X> {
             *x += *change;
         }
     }
+    */
 }
 
 impl<X> Display for SGD_<X> {
@@ -67,3 +146,4 @@ impl<X> Display for SGD_<X> {
         write!(f, " }}")
     }
 }
+*/

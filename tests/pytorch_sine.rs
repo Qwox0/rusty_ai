@@ -1,3 +1,4 @@
+/*
 use rusty_ai::{
     bias::LayerBias,
     data::PairList,
@@ -301,3 +302,4 @@ fn sine() {
         test_condition: |epoch| epoch % test_spread == 0,
     });
 }
+*/

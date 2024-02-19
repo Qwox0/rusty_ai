@@ -1,0 +1,16 @@
+[package]
+name = "const_tensor"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+half.workspace = true
+inline_closure.workspace = true
+num.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
+serde.workspace = true
+serde_arrays = "0.1.0"
+
+[dev-dependencies]
+serde_json = "1.0"

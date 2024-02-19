@@ -2,6 +2,16 @@
 
 A small Rust Library for Creating and Training Artificial Neural Networks.
 
+This is a personal project and might not be useful for you.
+
+## Needed feature
+
+```rust
+#![feature(generic_const_exprs)]
+```
+
+Binaries using this library require the `generic_const_exprs` feature annotation because the feature is incomplete.
+
 ## Add as a dependency
 
 Add the `rusty_ai` crate to your project's `Cargo.toml`:

@@ -1,74 +1,108 @@
 //! # NN module
 
-#[allow(unused_imports)]
-use crate::trainer::NNTrainer;
 use crate::{
-    gradient::aliases::OutputGradient,
-    layer::Layer,
-    matrix::Matrix,
-    prelude::LossFunction,
+    loss_function::LossFunction,
+    optimizer::Optimizer,
+    test_result::TestResult,
     trainer::{
         markers::{NoLossFunction, NoOptimizer},
         NNTrainerBuilder,
     },
-    Gradient, Input, ParamsIter, VerbosePropagation,
+    Pair,
 };
-use matrix::{Element, Float};
-use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Cow,
-    fmt::{Debug, Display},
-    iter::Map,
-};
+use const_tensor::{Element, Num, Shape, Tensor};
+use core::fmt;
+use serde::Serialize;
+use std::{borrow::Borrow, iter::Map};
 
 pub mod builder;
-pub use builder::{BuildLayer, NNBuilder};
+mod flatten;
+mod head;
+mod linear;
+mod relu;
+mod sigmoid;
+mod softmax;
 
-/// layers contains all Hidden Layers and the Output Layers
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NeuralNetwork<X, const IN: usize, const OUT: usize> {
-    layers: Vec<Layer<X>>,
-}
+pub use builder::NNBuilder;
+pub use flatten::Flatten;
+pub use head::NNHead;
+pub use linear::Linear;
+pub use relu::{leaky_relu, relu, LeakyReLU, ReLU};
+pub use sigmoid::{sigmoid, Sigmoid};
+pub use softmax::{LogSoftmax, Softmax};
 
-impl<X, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
-    /// use [`NNBuilder`] instead!
-    #[inline]
-    fn new(layers: Vec<Layer<X>>) -> NeuralNetwork<X, IN, OUT> {
-        NeuralNetwork { layers }
-    }
+/// A neural network.
+///
+/// The neural network is represented by nested component types implementing this trait.
+///
+/// The innermost type is the first component of the network (usually [`NNHead`]) and the outermost
+/// type `Self` is the last component of the network.
+///
+/// `NNIN`: input [`Shape`] of the first component.
+/// `OUT`: output [`Shape`] of this component.
+pub trait NN<X: Element, NNIN: Shape, OUT: Shape>:
+    Sized + fmt::Debug + fmt::Display + PartialEq + Serialize + Send + Sync + 'static
+{
+    /// Gradient component
+    type Grad: GradComponent<X>;
 
-    /// Converts `self` to a [`NNTrainerBuilder`] that can be used to create a [`NNTrainer`]
+    /// Shape of this components Input tensor.
     ///
-    /// Used to
+    /// currently unused
+    type In: Shape;
+
+    /// not the best implementation but has to work for now.
+    type OptState<O: Optimizer<X>>: Sized + Send + Sync + 'static;
+
+    /// The data which is saved during `train_prop` and used in `backprop`.
+    type StoredData: TrainData;
+
+    /// Propagates the `input` [`Tensor`] through the entire sub network and then through this
+    /// component.
+    fn prop(&self, input: Tensor<X, NNIN>) -> Tensor<X, OUT>;
+
+    /// Like `prop` but also returns the required data for backpropagation.
+    fn train_prop(&self, input: Tensor<X, NNIN>) -> (Tensor<X, OUT>, Self::StoredData);
+
+    /// Backpropagates the output gradient through this component and then backwards through the
+    /// previous components.
+    fn backprop_inplace(
+        &self,
+        out_grad: Tensor<X, OUT>,
+        data: Self::StoredData,
+        grad: &mut Self::Grad,
+    );
+
+    /// Backpropagates the output gradient through this component and then backwards through the
+    /// previous components.
     #[inline]
-    pub fn to_trainer(self) -> NNTrainerBuilder<X, IN, OUT, NoLossFunction, NoOptimizer> {
-        NNTrainerBuilder::new(self)
+    fn backprop(
+        &self,
+        out_grad: Tensor<X, OUT>,
+        data: Self::StoredData,
+        mut grad: Self::Grad,
+    ) -> Self::Grad {
+        self.backprop_inplace(out_grad, data, &mut grad);
+        grad
     }
 
-    /// Returns the layers of `self` as a slice.
-    #[inline]
-    pub fn get_layers(&self) -> &[Layer<X>] {
-        &self.layers
-    }
-}
+    /// Optimizes the nn/nn component.
+    fn optimize<O: Optimizer<X>>(
+        &mut self,
+        grad: &Self::Grad,
+        optimizer: &O,
+        opt_state: &mut Self::OptState<O>,
+    );
 
-impl<X: Float, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
-    /// Creates a [`Gradient`] with the same dimensions as `self` and every element initialized to
-    /// `0.0`
-    pub fn init_zero_gradient(&self) -> Gradient<X> {
-        self.layers.iter().map(Layer::init_zero_gradient).collect()
-    }
+    /// Creates a gradient with the same dimensions as `self` and every element initialized to
+    /// `0.0`.
+    fn init_zero_grad(&self) -> Self::Grad;
 
-    /// Propagates an [`Input`] through the neural network and returns its output.
-    pub fn propagate(&self, input: &Input<X, IN>) -> [X; OUT] {
-        let input = Cow::from(input.as_slice());
-        self.layers
-            .iter()
-            .fold(input, |acc, layer| layer.propagate(&acc).into())
-            .into_owned()
-            .try_into()
-            .expect("last layer should have `OUT` neurons")
-    }
+    /// Creates a new State for the [`Optimizer`] `O`.
+    fn init_opt_state<O: Optimizer<X>>(&self) -> Self::OptState<O>;
+
+    /// Creates an [`Iterator`] over the parameters of `self`.
+    fn iter_param(&self) -> impl Iterator<Item = &X>;
 
     /// Iterates over a `batch` of inputs, propagates them and returns an [`Iterator`] over the
     /// outputs.
@@ -78,66 +112,28 @@ impl<X: Float, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
     /// If you also want to calculate losses use `test` or `prop_with_test`.
     #[must_use = "`Iterators` must be consumed to do work."]
     #[inline]
-    pub fn propagate_batch<'a, B>(
+    fn prop_batch<'a, B, I>(
         &'a self,
         batch: B,
-    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> [X; OUT] + 'a>
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> Tensor<X, OUT> + 'a>
     where
-        B: IntoIterator<Item = &'a Input<X, IN>>,
+        B: IntoIterator<Item = &'a I>,
+        I: ToOwned<Owned = Tensor<X, NNIN>> + 'a,
     {
-        batch.into_iter().map(|i| self.propagate(i))
-    }
-
-    /// Propagates an [`Input`] through the neural network and returns the input and the outputs of
-    /// every layer.
-    ///
-    /// If only the final output is needed, use `propagate` instead.
-    ///
-    /// This is used internally during training.
-    pub fn verbose_propagate(&self, input: &Input<X, IN>) -> VerbosePropagation<X, OUT> {
-        let mut outputs = Vec::with_capacity(self.layers.len() + 1);
-        let nn_out = self.layers.iter().fold(input.to_vec(), |input, layer| {
-            let out = layer.propagate(&input);
-            outputs.push(input);
-            out
-        });
-        outputs.push(nn_out);
-        VerbosePropagation::new(outputs)
-    }
-
-    /// # Params
-    ///
-    /// `verbose_prop`: input and activation of every layer
-    /// `nn_output_gradient`: gradient of the loss with respect to the network output (input to
-    /// loss function)
-    /// `gradient`: stores the changes to each parameter. Has to have the same dimensions as
-    /// `self`.
-    pub fn backpropagate(
-        &self,
-        verbose_prop: &VerbosePropagation<X, OUT>,
-        nn_output_gradient: OutputGradient<X>,
-        gradient: &mut Gradient<X>,
-    ) {
-        self.layers
-            .iter()
-            .zip(&mut gradient.layers)
-            .zip(verbose_prop.iter_layers())
-            .rev()
-            .fold(nn_output_gradient, |output_gradient, ((layer, gradient), [input, output])| {
-                layer.backpropagate(input, output, output_gradient, gradient)
-            });
+        batch.into_iter().map(|i: &I| self.prop(i.to_owned()))
     }
 
     /// Tests the neural network.
-    pub fn test<L: LossFunction<X, OUT>>(
+    #[inline]
+    fn test<L: LossFunction<X, OUT>>(
         &self,
-        input: &Input<X, IN>,
-        expected_output: &L::ExpectedOutput,
+        pair: &Pair<X, NNIN, impl Borrow<L::ExpectedOutput>>,
         loss_function: &L,
-    ) -> ([X; OUT], X) {
-        let out = self.propagate(input);
-        let loss = loss_function.propagate(&out, expected_output);
-        (out, loss)
+    ) -> TestResult<X, OUT> {
+        let (input, expected_output) = pair.as_tuple();
+        let out = self.prop(input.to_owned());
+        let loss = loss_function.propagate(&out, expected_output.borrow());
+        TestResult::new(out, loss)
     }
 
     /// Iterates over a `batch` of input-label-pairs and returns an [`Iterator`] over the network
@@ -147,57 +143,89 @@ impl<X: Float, const IN: usize, const OUT: usize> NeuralNetwork<X, IN, OUT> {
     ///
     /// If you also want to get the outputs use `prop_with_test`.
     #[must_use = "`Iterators` must be consumed to do work."]
-    pub fn test_batch<'a, B, L, EO: 'a>(
+    fn test_batch<'a, B, L, EO>(
         &'a self,
         batch: B,
         loss_fn: &'a L,
-    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> ([X; OUT], X) + 'a>
+    ) -> Map<B::IntoIter, impl FnMut(B::Item) -> TestResult<X, OUT>>
     where
-        B: IntoIterator<Item = (&'a Input<X, IN>, &'a EO)>,
-        L: LossFunction<X, OUT, ExpectedOutput = EO>,
+        B: IntoIterator<Item = &'a Pair<X, NNIN, EO>>,
+        L: LossFunction<X, OUT>,
+        EO: Borrow<L::ExpectedOutput> + 'a,
     {
-        batch.into_iter().map(|(input, eo)| self.test(input, eo, loss_fn))
-    }
-}
-
-impl<X: Element, const IN: usize, const OUT: usize> ParamsIter<X> for NeuralNetwork<X, IN, OUT> {
-    fn iter<'a>(&'a self) -> impl DoubleEndedIterator<Item = &'a X> {
-        self.layers.iter().map(Layer::iter).flatten()
+        batch.into_iter().map(|p| self.test(p, loss_fn))
     }
 
-    fn iter_mut<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = &'a mut X> {
-        self.layers.iter_mut().map(Layer::iter_mut).flatten()
-    }
-}
-
-impl<'a, X, const IN: usize, const OUT: usize> Default for NeuralNetwork<X, IN, OUT>
-where
-    X: Float,
-    rand_distr::StandardNormal: rand_distr::Distribution<X>,
-{
-    /// creates a [`NeuralNetwork`] with one layer. Every parameter is equal to `0.0`.
+    /// Converts `self` to a [`NNTrainerBuilder`] that can be used to create a [`NNTrainer`]
     ///
-    /// This is probably only useful for testing.
-    fn default() -> Self {
-        NNBuilder::default()
-            .element_type()
-            .input()
-            .layer_from_parameters(Matrix::with_zeros(IN, OUT), vec![X::zero(); OUT].into())
-            .build()
+    /// Used to
+    #[inline]
+    fn to_trainer(self) -> NNTrainerBuilder<X, NNIN, OUT, NoLossFunction, NoOptimizer, Self> {
+        NNTrainerBuilder::new(self)
+    }
+
+    /// TODO: lazy
+    #[inline]
+    fn deserialize_hint(&self, deserialized: Self) -> Self {
+        deserialized
     }
 }
 
-impl<X: Display, const IN: usize, const OUT: usize> Display for NeuralNetwork<X, IN, OUT> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let get_plural_s = |x: usize| if x == 1 { "" } else { "s" };
-        writeln!(
-            f,
-            "Neural Network: {IN} Input{} -> {OUT} Output{}",
-            get_plural_s(IN),
-            get_plural_s(OUT),
-        )?;
-        let layers_text =
-            self.layers.iter().map(ToString::to_string).collect::<Vec<String>>().join("\n");
-        write!(f, "{}", layers_text)
+macro_rules! component_new {
+    ($ty:ident) => {
+        component_new! { $ty<PREV> -> }
+    };
+    ($ty:ident < $( $gen:ident),+ > -> $( $param:ident : $paramty:ty ),* ) => {
+        impl<$($gen),+> $ty<$($gen),+> {
+            /// Creates a new nn component.
+            pub fn new( $($param : $paramty ,)* prev: PREV) -> Self {
+                $ty { $($param , )* prev }
+            }
+        }
+    };
+}
+pub(crate) use component_new;
+
+/// see [`const_tensor::Multidimensional`]
+pub trait GradComponent<X: Element>: Sized + Send + Sync + 'static {
+    /// see [`const_tensor::Multidimensional`]
+    fn iter_elem(&self) -> impl Iterator<Item = &X>;
+    /// see [`const_tensor::Multidimensional`]
+    fn iter_elem_mut(&mut self) -> impl Iterator<Item = &mut X>;
+
+    /// see [`const_tensor::Multidimensional`]
+    fn fill_zero(&mut self)
+    where X: Num {
+        for x in self.iter_elem_mut() {
+            *x = X::ZERO;
+        }
+    }
+
+    /// see [`const_tensor::Multidimensional`]
+    fn add_elem_mut(&mut self, other: impl Borrow<Self>)
+    where X: Num {
+        for (x, y) in self.iter_elem_mut().zip(other.borrow().iter_elem()) {
+            *x += *y;
+        }
+    }
+
+    /// see [`const_tensor::Multidimensional`]
+    fn add_elem(mut self, other: impl Borrow<Self>) -> Self
+    where X: Num {
+        self.add_elem_mut(other);
+        self
     }
 }
+
+/// Marker for the data calculated in [`NN::train_prop`].
+pub trait TrainData: Sized + Send + Sync + 'static {}
+
+/// Nested type for storing the data calculated in [`NN::train_prop`].
+pub struct Data<T, PREV: TrainData> {
+    /// stored data for the previous components
+    pub prev: PREV,
+    /// stored data for this component.
+    pub data: T,
+}
+
+impl<T: Sized + Send + Sync + 'static, PREV: TrainData> TrainData for Data<T, PREV> {}
